@@ -177,7 +177,7 @@ row is a legitimate way to persist an empty set, and the third new test pins tha
 |---|---|---|
 | `SidebarRootCellViewModel` 的 `lazy _children` 后台/主线程竞争 | `PR88R2.14` 复核段 | 已提级登记，「建议随 `PR88R2.15` 一并处理」 |
 | 根过滤每趟重建全树聚合串 + 双 O(N) 主线程遍历 | `PR88R2.15` (a)(b) | **新增的半条**：搜索流缺 `distinctUntilChanged`。复核确认 `NSSearchField.rx.stringValue` 只能落到 RxAppKit `HasTargeAction+Rx.swift:30` 的 dynamicMember ControlProperty（target/action、无 dedup）——RxCocoa macOS 的具体成员是 `text` 而非 `stringValue`，RxAppKit 的 `NSTextField+Rx` 里 `stringValue` 的 controlProperty 是**被注释掉的**。与 `PR88.1` 的排查顺序结论不冲突：那条讲 `rx.state` 有 RxCocoa 兜底，这条没有 |
-| `FilterContext.isCaseInsensitive` 等大小写默认值极性 | `PR88R3`「已被前两轮覆盖」段 | 已裁决「照 `PR88.8` 加注释即可，不必排期」。**新增的半条**：`SidebarRuntimeObjectListViewModel` 里 Open Quickly 硬编码的 `FilterContext(..., isCaseInsensitive: false, mode: .fuzzySearch)` 是第三个带旧极性的默认值；今天不活（`.fuzzySearch` 不读该标志），但一旦把 `appDefaults.filterMode` 接进 Open Quickly 就无声变成区分大小写 |
+| `FilterContext.isCaseInsensitive` 等大小写默认值极性 | `PR88R3`「已被前两轮覆盖」段 | 已裁决「照 `PR88.8` 加注释即可，不必排期」。**新增的半条**：`SidebarRuntimeObjectListViewModel` 里 Open Quickly 硬编码的 `FilterContext(..., isCaseInsensitive: false, mode: .fuzzySearch)` 是第三个带旧极性的默认值；今天不活（`.fuzzySearch` 不读该标志），但一旦把 `appDefaults.filterMode` 接进 Open Quickly 就无声变成区分大小写。2026-11-21 起这个硬编码在 `OpenQuicklyCatalog.matches(for:limit:)`，侧栏那份已删，结论不变 |
 | 测试基建重复（`pollUntil` 7 份、`makeRuntimeObject` 多份、等价续体门三份） | `PR88R4`「遗留观察」 | 已归入 `PR88.12` / `PR88.13` 批次。本轮 `07deb0a` 顺带把新增的 `makeLoadedImageNode` 收进 `TestSupport` 而非再开第 7 份拷贝 |
 
 ## 暂不修（backlog，后续拾起）
@@ -185,7 +185,7 @@ row is a legitimate way to persist an empty set, and the third new test pins tha
 | ID | 严重度 | 摘要 | 状态与理由 |
 |---|---|---|---|
 | PR100.7 | Minor | 两条过滤管线的取消检查覆盖不到最大的那个工作块：`stampMatches` 对整个顶层做**一次** `FilterEngine.match`，fuzzy 分支是 map+filter+sorted、零取消点 | **是对 `PR88R3.6` 的正当补充而非重报**：`PR88R3.6` 记的是根管线（forest 恒为 2），并明确写了「对象树顶层是数千个对象，那边的取消检查是有效的」。复核确认对象管线**确实**把整个顶层一次性喂给 `match`，所以那句只对 `verdictNode` 递归阶段成立。精确表述：**递归阶段可取消（子树粒度），顶层那一次 aggregate match 不可取消**——而对象管线的顶层 haystack 是名字+全部后代拼接，那次调用要重扫整棵树的文本，是单个最大的工作块。随 `PR88R2.15` 批次一并处理 |
-| PR100.8 | Minor | `openQuicklyCellViewModelsByRowIndex` 只在 `invalidateNodeDerivedState` 清空，跨查询累积，上界是全行数——会话越长常驻内存越高 | cap 部分已由 `PR88R2.11` + `PR100.2` 覆盖；**暖缓存无上限**这半条未被记过。最简修法是面板关闭时清一次。随下一轮 Open Quickly 工作拾起 |
+| PR100.8 | Minor | `openQuicklyCellViewModelsByRowIndex` 只在 `invalidateNodeDerivedState` 清空，跨查询累积，上界是全行数——会话越长常驻内存越高 | cap 部分已由 `PR88R2.11` + `PR100.2` 覆盖；**暖缓存无上限**这半条未被记过。最简修法是面板关闭时清一次。随下一轮 Open Quickly 工作拾起。**2026-11-21 已不适用**：提案 `editor-start-page` 第 7 步把侧栏自己的 Open Quickly 连同这张物化表整个删掉；⇧⌘O 改用 `OpenQuicklySearch`，目录在浮动条关掉时就丢掉（`Documentations/KnownIssues/2026-11-21-editor-start-page-review-findings.md`） |
 | PR100.14 | Minor | 提案 0005 在实现提交 `70733b9` 里首版即 `状态: Implemented`（跳过 `Accepted`）；`Documentations/Evolutions/` 与既有 `Documentations/Evolution/` 双目录并存，0005 指向 0004 的相对链接解析不到；两个目录都没有 README 状态总表 | 目录并存与死链靠 merge 时的 rename 检测自愈；**缺索引行与批准顺序违规不自愈**。补索引行随文档批次做；批准顺序无法回溯修复，记档即止。相关：`PR88.15` 记过文档落位，`PR88R4` 记过 0005 缺「与提案的差异」节 |
 
 ## 对本批次修复自身的复审（2026-08-16，落地后立即执行）

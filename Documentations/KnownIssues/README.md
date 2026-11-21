@@ -319,3 +319,14 @@ when picking up follow-up work.
   left as they are with the reasons recorded. A second pass over the fixes
   added `SP.7` (a waiting Return fired for text typed after it; fixed) and
   `SP.8` (arrow keys moved through the older results while waiting; left).
+  The review of the later step that gave ⇧⌘O the start page's search added
+  `SP.9` (closing the bar left the term being answered to read a new catalog),
+  `SP.10` (an answer from the engine the window left came out as the new
+  one's) and `SP.11` (an empty catalog read before the image tree was kept),
+  all fixed with regression tests, and `SP.12` (the page and the bar each read
+  a catalog) and `SP.13` (the bar's per-term check has no test), both left.
+  Reviewing those fixes and the removal of the sidebar's own Open Quickly added
+  `SP.14` (keystrokes before the image tree each started a read; fixed),
+  `SP.15` (two of the new tests passed without the checks they named; one
+  covered, the engine check left untested) and `SP.16` (the `.notLoaded`
+  outcome's clearing lost its test; covered again).

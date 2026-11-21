@@ -17,18 +17,10 @@ final class SidebarRuntimeObjectListViewController: SidebarRuntimeObjectViewCont
         super.setupBindings(for: viewModel)
 
         let input = SidebarRuntimeObjectListViewModel.Input(
-            runtimeObjectClickedForOpenQuickly: .empty(),
-            searchStringForOpenQuickly: .empty(),
             addBookmark: addToBookmarkRelay.asSignal()
         )
 
         let output = viewModel.transform(input)
-
-        output.selectRuntimeObject.emitOnNextMainActor { [weak self] item in
-            guard let self else { return }
-            outlineView.selectRowBringingIntoView(outlineView.row(forItem: item))
-        }
-        .disposed(by: rx.disposeBag)
 
         output.selectCell.emitOnNextMainActor { [weak self] result in
             guard let self else { return }

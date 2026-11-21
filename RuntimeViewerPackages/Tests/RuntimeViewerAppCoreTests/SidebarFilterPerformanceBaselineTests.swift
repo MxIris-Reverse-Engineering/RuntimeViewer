@@ -36,7 +36,7 @@ struct SidebarFilterPerformanceBaselineTests {
 
         var cellViewModels: [SidebarRuntimeObjectCellViewModel] = []
         measure("construct \(Self.flatListCount) flat cell view models") {
-            cellViewModels = runtimeObjects.map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0, forOpenQuickly: false) }
+            cellViewModels = runtimeObjects.map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0) }
         }
 
         let counter = TitleRebuildCounter(observing: cellViewModels)
@@ -92,59 +92,6 @@ struct SidebarFilterPerformanceBaselineTests {
         #expect(counter.titleRebuildCount == 0)
     }
 
-    // MARK: - Flat list, fuzzy mode (Open Quickly configuration)
-
-    @Test("flat list, fuzzy mode: rebuilds scale with matches, not rows")
-    func flatListFuzzyModeKeystrokeCost() {
-        let runtimeObjects = makeFlatRuntimeObjects(count: Self.flatListCount)
-
-        var cellViewModels: [SidebarRuntimeObjectCellViewModel] = []
-        measure("construct \(Self.flatListCount) flat cell view models (open quickly)") {
-            cellViewModels = runtimeObjects.map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0, forOpenQuickly: true) }
-        }
-
-        let counter = TitleRebuildCounter(observing: cellViewModels)
-
-        // Narrow fuzzy query: only the matched rows gain a highlight.
-        counter.reset()
-        var narrowMatches: [SidebarRuntimeObjectCellViewModel] = []
-        measure("fuzzy filter 'Needle' over \(Self.flatListCount) rows") {
-            narrowMatches = FilterEngine.filter(
-                context: FilterContext(query: "Needle", isCaseInsensitive: false, mode: .fuzzySearch),
-                items: cellViewModels
-            )
-        }
-        #expect(!narrowMatches.isEmpty)
-        #expect(counter.titleRebuildCount == narrowMatches.count)
-        print("[baseline] fuzzy narrow: \(narrowMatches.count) matches, \(counter.titleRebuildCount) title rebuilds")
-
-        // Broad fuzzy query — every matched row genuinely changes
-        // highlight, so this transition legitimately pays per-match.
-        counter.reset()
-        var broadMatches: [SidebarRuntimeObjectCellViewModel] = []
-        measure("fuzzy filter 'Type' over \(Self.flatListCount) rows") {
-            broadMatches = FilterEngine.filter(
-                context: FilterContext(query: "Type", isCaseInsensitive: false, mode: .fuzzySearch),
-                items: cellViewModels
-            )
-        }
-        #expect(!broadMatches.isEmpty)
-        #expect(counter.titleRebuildCount == broadMatches.count)
-        print("[baseline] fuzzy broad: \(broadMatches.count) matches, \(counter.titleRebuildCount) title rebuilds")
-
-        // Clear after a broad match: every highlighted row must un-highlight
-        // (real work), but no more than that.
-        counter.reset()
-        measure("fuzzy filter '' (clear search)") {
-            _ = FilterEngine.filter(
-                context: FilterContext(query: "", isCaseInsensitive: false, mode: .fuzzySearch),
-                items: cellViewModels
-            )
-        }
-        #expect(counter.titleRebuildCount == broadMatches.count)
-        print("[baseline] fuzzy clear title rebuilds: \(counter.titleRebuildCount)")
-    }
-
     // MARK: - Tree (parents with children): didSet cascade cost
 
     @Test("tree: contains-mode keystrokes rebuild zero titles")
@@ -157,7 +104,7 @@ struct SidebarFilterPerformanceBaselineTests {
 
         var parentCellViewModels: [SidebarRuntimeObjectCellViewModel] = []
         measure("construct \(totalNodeCount) tree cell view models") {
-            parentCellViewModels = runtimeObjects.map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0, forOpenQuickly: false) }
+            parentCellViewModels = runtimeObjects.map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0) }
         }
 
         let allCellViewModels = flatten(parentCellViewModels)
@@ -238,8 +185,8 @@ struct SidebarFilterPerformanceBaselineTests {
         for context in contexts {
             for activeScope in [RuntimeObjectScope(), scope] {
                 let runtimeObjects = makeTreeRuntimeObjects(parentCount: 200, childrenPerParent: 3)
-                let pipelineCells = runtimeObjects.map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0, forOpenQuickly: false) }
-                let cascadeCells = runtimeObjects.map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0, forOpenQuickly: false) }
+                let pipelineCells = runtimeObjects.map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0) }
+                let cascadeCells = runtimeObjects.map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0) }
 
                 // Pipeline path (what the view model runs).
                 let snapshotForest = SidebarRuntimeObjectFilterPipeline.snapshot(of: pipelineCells, scope: activeScope)
@@ -277,7 +224,7 @@ struct SidebarFilterPerformanceBaselineTests {
         let grandchild = makeRuntimeObject(displayName: "TestFramework.Parent.Child.Grandchild")
         let child = makeRuntimeObject(displayName: "TestFramework.Parent.Child", children: [grandchild])
         let parent = makeRuntimeObject(displayName: "TestFramework.Parent", children: [child])
-        let parentCellViewModel = SidebarRuntimeObjectCellViewModel(runtimeObject: parent, forOpenQuickly: false)
+        let parentCellViewModel = SidebarRuntimeObjectCellViewModel(runtimeObject: parent)
         let childCellViewModel = try #require(parentCellViewModel.children.first)
 
         // Warm every level's cache.

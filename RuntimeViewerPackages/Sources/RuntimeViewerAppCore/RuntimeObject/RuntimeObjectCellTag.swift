@@ -32,13 +32,14 @@ public struct RuntimeObjectCellTag: Hashable, Sendable {
         self.isClickable = isClickable
     }
 
-    /// `Private`, after the name of a type that runs through a private declaration.
-    public static func privateDeclaration(isClickable: Bool) -> RuntimeObjectCellTag {
+    /// `Private`, after the name of a type that runs through a private declaration. A click shows
+    /// the discriminators of the declarations.
+    public static var privateDeclaration: RuntimeObjectCellTag {
         RuntimeObjectCellTag(
             identifier: .privateDeclaration,
             title: "Private",
-            toolTip: isClickable ? "Show Private Declaration Details" : "Private Declaration",
-            isClickable: isClickable
+            toolTip: "Show Private Declaration Details",
+            isClickable: true
         )
     }
 

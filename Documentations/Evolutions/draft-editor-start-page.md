@@ -133,11 +133,17 @@ IDEKit（`/Applications/Xcode.app`，27.2 27B52，Swift 接口导出在 `/Volume
 | `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Content/ContentStartPageItemCellView.swift` · `ContentStartPageItemCellView` | 新增 | 原起始页控制器的私有 `ItemCellView` 提为 App 里的共用视图 | 起始页与 ⇧⌘O 浮动条两处用 | 6 |
 | `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Main/MainWindowController.swift`、`MainCoordinator.swift`、`App/MainMenuController.swift` | 修改 | ⇧⌘O 的命令、浮动条与绑定挪到窗口；协调器创建 `OpenQuicklyViewModel`；菜单项指向窗口的命令 | 有文档窗口时总可用 | 6 |
 | `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Sidebar/RuntimeObject/SidebarRuntimeObjectListViewController.swift` | 修改 | 去掉它自己的 `QuickActionBar` 与 `openQuickly(_:)` | 命令归窗口 | 6 |
-| `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/Filtering/OpenQuicklyRanking.swift` · `OpenQuicklyRanking` | 新增 | 从 `SidebarRuntimeObjectListViewModel.rankByRelevance` 抽出的排序 | 两处 Open Quickly 同一排序 | 4 |
-| `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/Sidebar/RuntimeObject/SidebarRuntimeObjectListViewModel.swift` | 修改 | 改调 `OpenQuicklyRanking`，行为不变 | 去重 | 4 |
+| `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/OpenQuickly/OpenQuicklyRanking.swift`（第 7 步从 `Filtering/` 挪来） · `OpenQuicklyRanking` | 新增 | 从 `SidebarRuntimeObjectListViewModel.rankByRelevance` 抽出的排序 | 两处 Open Quickly 同一排序 | 4、7 |
+| `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/Sidebar/RuntimeObject/SidebarRuntimeObjectListViewModel.swift` | 修改 | 第 4 步改调 `OpenQuicklyRanking`；第 7 步删掉 Open Quickly 的输入输出（`runtimeObjectClickedForOpenQuickly`、`searchStringForOpenQuickly`、`runtimeObjectsForOpenQuickly`、`selectRuntimeObject`）与按需物化机制（字符串索引、物化表、过滤任务、`HaystackBuilder`） | 侧栏不再有自己的 Open Quickly | 4、7 |
+| `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/Sidebar/RuntimeObject/SidebarRuntimeObjectViewModel.swift` | 修改 | 删掉只为 Open Quickly 存在的 `invalidateNodeDerivedState()` 钩子；重载失败或镜像未加载时照旧清空 `nodes`；「镜像是否已加载」抽成可覆写的 `isImageLoaded()`，供测试走 `.notLoaded` | 同上 | 7 |
+| `RuntimeViewerPackages/Tests/RuntimeViewerAppTestingSupport/TestRuntimeEngine.swift` · `makeUnconnected(engineID:)` | 新增 | 还没连接的私有本地 Engine | 测「Engine 还没列出镜像时」的搜索 | 7 |
+| `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/Sidebar/RuntimeObject/SidebarRuntimeObjectCellViewModel.swift` | 修改 | 删掉 `forOpenQuickly`（16 pt 字号、24 pt 图标、不可点的 Private tag）与 `haystack(for:)` | 同上 | 7 |
+| `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/RuntimeObject/RuntimeObjectCellTag.swift` | 修改 | `privateDeclaration(isClickable:)` 收成 `privateDeclaration`（只剩可点的一种） | 同上 | 7 |
+| `RuntimeViewerPackages/Tests/RuntimeViewerAppCoreTests/OpenQuicklyMaterializationBoundsTests.swift`、`OpenQuicklyLazyConstructionTests.swift` | 删除 | 只测侧栏 Open Quickly 的物化 | 被测的代码已删 | 7 |
+| `RuntimeViewerPackages/Tests/RuntimeViewerAppCoreTests/SidebarRuntimeObjectListViewModelTests.swift`、`SidebarReloadInvalidationTests.swift`、`SidebarPrivateDeclarationTagTests.swift`、`SidebarFilterPerformanceBaselineTests.swift`、`SidebarCellAppearanceTests.swift` | 修改 | 去掉 Open Quickly 的用例与实参；重载失败的那条改为直接断言 `nodes` 被清空；单元格「模糊模式」的性能基线删掉（侧栏没有模糊匹配） | 同上 | 7 |
 | `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Content/ContentCoordinator.swift` · `ContentCoordinator` | 修改 | 建占位 VM 时传 `editorPaneID` | 打开前聚焦这一栏 | 1 |
 | `RuntimeViewerPackages/Tests/RuntimeViewerAppCoreTests/…` | 新增 | `ContentStartPageItemCellViewModelTests.swift`（第 1 步）、`RecentRuntimeObjectsTests.swift`（含 `RecentRuntimeObjectsRecorderTests` 一组）、`ContentStartPageViewModelTests.swift`、`OpenQuicklyCatalogTests.swift`（含加载一组） | 每步的行为清单 | 1–4 |
-| `RuntimeViewerUsingAppKit/AGENTS.md` | 修改 | 编辑区一节加一句：空标签显示起始页、最近列表按 Engine 记 | 规则随代码 | 5 |
+| `RuntimeViewerUsingAppKit/AGENTS.md` | 修改 | 编辑区一节加一句：空标签显示起始页、最近列表按 Engine 记（第 5 步）；「大数据集的惰性 cell ViewModel」一节去掉侧栏 Open Quickly 的物化写法，改述「先搜值索引、只为列出的行建 cell ViewModel」，cell 复用的示例换成现行代码（第 7 步） | 规则随代码 | 5、7 |
 | `Documentations/Evolutions/README.md`、`Documentations/README.md` | 修改 | 登记草案 | 索引 | 0 |
 
 ## 架构图
@@ -148,20 +154,32 @@ IDEKit（`/Applications/Xcode.app`，27.2 27B52，Swift 接口导出在 `/Volume
 RuntimeViewerAppCore
 ├── Content/
 │   ├── ContentPlaceholderViewModel        ~ + editorPaneID, recents, search, open
-│   ├── ContentStartPageItemCellViewModel  + row appearance (object | image)
-│   └── OpenQuicklyCatalog                 + images + objects of indexed images, match
+│   └── ContentStartPageItemCellViewModel  + row appearance (object | image), ContentStartPageItemOpening
+├── OpenQuickly/
+│   ├── OpenQuicklyCatalog                 + images + objects of indexed images, match
+│   ├── OpenQuicklyRanking                 + ranking (taken from the sidebar)
+│   ├── OpenQuicklySearch                  + one search: catalog on first match, end()
+│   └── OpenQuicklyViewModel               + ⇧⌘O bar: matches per term, open, dismiss (macOS)
 ├── EditorArea/
+│   ├── EditorArea                         ~ + shownForm(of:)
 │   ├── RecentRuntimeObjects               + record / dedupe / cap
 │   └── RecentRuntimeObjectsRecorder       + follows $selectedRuntimeObject
-├── Filtering/OpenQuicklyRanking           + shared ranking
-├── Sidebar/RuntimeObject/SidebarRuntimeObjectListViewModel  ~ uses OpenQuicklyRanking
+├── Sidebar/RuntimeObject/
+│   ├── SidebarRuntimeObjectListViewModel  − its own Open Quickly (inputs, outputs, materialization)
+│   ├── SidebarRuntimeObjectViewModel      − invalidateNodeDerivedState()
+│   └── SidebarRuntimeObjectCellViewModel  − forOpenQuickly, haystack(for:)
+├── RuntimeObject/RuntimeObjectCellTag     ~ privateDeclaration(isClickable:) → privateDeclaration
 ├── Document/DocumentSession               ~ open() starts the recorder (macOS)
 └── Storage/AppDefaults                    ~ + recentRuntimeObjectsByEngine
 RuntimeViewerUsingAppKit (app)
 ├── Content/ContentPlaceholderViewController  ~ start page layout and bindings
-│   ├── OpenQuicklyField                      + Xcode-sized rounded query field (private)
-│   └── ItemCellView                          + icon, name, path row (private)
-└── Content/ContentCoordinator                ~ passes editorPaneID
+│   └── OpenQuicklyField                      + Xcode-sized rounded query field (private)
+├── Content/ContentStartPageItemCellView      + icon, name, path row (start page and ⇧⌘O bar)
+├── Content/ContentCoordinator                ~ passes editorPaneID
+├── Main/MainWindowController                 ~ + ⇧⌘O command and QuickActionBar
+├── Main/MainCoordinator                      ~ + OpenQuicklyViewModel
+├── App/MainMenuController                    ~ Open Quickly… targets the window
+└── Sidebar/RuntimeObject/SidebarRuntimeObjectListViewController  − QuickActionBar, openQuickly(_:)
 ```
 
 数据流：
@@ -402,10 +420,10 @@ public struct OpenQuicklyCatalog: Sendable {
    - 行为：选中一项在焦点栏的当前标签打开（⌥ 下一栏、⇧⌥ 新标签），镜像打开镜像页
    - 行为：浮动条关掉、打开了一项或窗口换到别的 Engine 时结束这次搜索：还在作答的那个词一并丢掉，目录不会被重新读起来
    - 行为：从别的 Engine 读来的结果不会标成当前 Engine 的
-   - 行为：Engine 还没列出任何镜像时读到的空目录不留着，之后的输入重新读
+   - 行为：Engine 还没列出任何镜像时什么也不读、没有匹配，之后的输入再读
    - 行为：浮动条只把与它当前这个词对应的结果交给 `QuickActionBar`（窗口控制器里按词核对，目视）
    - 行为：起始页的搜索照旧（既有测试照旧通过）
-7. **删掉侧栏自己的 Open Quickly** —— `SidebarRuntimeObjectListViewController` 的 `QuickActionBar` 与命令、`SidebarRuntimeObjectListViewModel` 的 Open Quickly 输入输出与按需物化机制、只为它存在的测试与文档段落
+7. **删掉侧栏自己的 Open Quickly**（已完成） —— `SidebarRuntimeObjectListViewController` 的 `QuickActionBar` 与命令、`SidebarRuntimeObjectListViewModel` 的 Open Quickly 输入输出与按需物化机制、只为它存在的测试与文档段落
    - 行为：侧栏对象列表的其余行为不变（既有测试照旧通过）
 
 只能在界面上看到的行为（布局、尺寸、颜色、焦点环、结果浮层的位置）在 ViewModel 层测不到，列为目视验证。
@@ -450,3 +468,5 @@ public struct OpenQuicklyCatalog: Sendable {
 | 2026-11-21 | 实现完成，待用户看过后收尾 | 五步都已完成并推送功能分支。文档判断：不另写使用指南或实现说明——调用方契约只在 App 内部，维护要知道的「一栏一页、要复位」「度量照 Xcode」两条写进了 `RuntimeViewerUsingAppKit/AGENTS.md`；新术语「起始页」登记进 `Documentations/Glossary.md`。没做的验证：界面目视（布局、颜色、焦点、结果板）与 macOS 27 上的点击取焦点都没有在 App 里实测——这次没有启动 App 做界面操作，只编过 App、跑了 ViewModel 层的测试，留给用户看效果时确认。 |
 | 2026-11-21 | 用户要求 ⇧⌘O 与起始页统一范围 | 用户看过初版后问 Xcode 的两个 Open Quickly 是否同一个：逆向显示起始页的搜索框与 ⇧⌘O 的窗口用同一套输入框、结果列表与按键处理，只是起始页嵌在页面里、自己持有一份结果；⇧⌘O 由 App 级的 `IDEApplicationCommands.openQuickly:` 打开浮动窗口。RV 原先的 ⇧⌘O 只搜侧栏当前镜像，与起始页范围不同，用户要求改成一样。加第 6 步（统一范围）与第 7 步（删掉侧栏那套从此没人用的 Open Quickly 机制）；浮动条从一个字符起就搜，因为 Xcode 只给起始页写死了 3 个字符。 |
 | 2026-11-21 | 第 6 步审查后调整 | 审查者指出：关掉浮动条只结束了目录、没丢掉还在作答的词，那次搜索会把目录重新读起来并一直留着；切换 Engine 时旧 Engine 的结果会被标成新 Engine 的；镜像树还没出来时读到的空目录会被留用一整次搜索。改为关掉、打开一项、切换 Engine 都经同一条流复位（与起始页的做法相同），结果带上它来自的 Engine、落地时核对，`OpenQuicklySearch` 在调用方已取消时不再读目录、镜像树为空时不缓存目录；三条各带回归测试。另记为已知：起始页与浮动条各持有一个 `OpenQuicklySearch`，同一窗口里先后用两者会各读一份目录。 |
+| 2026-11-21 | 第 7 步的两处取舍 | 删掉侧栏的 Open Quickly 之后，`RuntimeObjectCellTag.privateDeclaration(isClickable:)` 只剩传 `true` 的调用，收成无参数的 `privateDeclaration`；单元格在「模糊模式」下的性能基线测的是侧栏 Open Quickly 的配置（侧栏自己的过滤不用模糊匹配，生产代码里只剩 `OpenQuicklyCatalog` 用），一并删掉。`SidebarReloadInvalidationTests` 原来经 Open Quickly 的索引验证「重载失败要丢掉上次的列表」，改为直接断言 `nodes` 被清空，去掉清空那一行它会变红；「镜像未加载时也要调钩子」那条随钩子删掉。 |
+| 2026-11-21 | 第 6 步修复与第 7 步审查后调整 | 审查者指出：镜像树为空时不缓存目录，于是每敲一个键都新起一次读取、`end()` 也取消不到，改为此时什么也不读；为 SP.9、SP.10 写的测试有一部分覆盖不到它们点名的检查，取消检查补了测试，结果上的 Engine 核对没有接缝可测、登记为不补；删掉钩子后「镜像未加载也清空列表」没人测了，给重载加了可覆写的 `isImageLoaded()` 补上。另外，全量测试里起始页一条挂起回车的测试在负载下偶尔失败，是测试先于「搜索结束」那一拍断言，改为等到搜索结束。裁决见 `Documentations/KnownIssues/2026-11-21-editor-start-page-review-findings.md` 的 SP.14–SP.16；旧清单里 PR100.8（侧栏 Open Quickly 物化表无上限）随第 7 步不再适用，已在原处注明。 |

@@ -36,8 +36,6 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
         }
     }
 
-    public let forOpenQuickly: Bool
-
     /// Sidebar-tree parent. Weak to avoid retain cycles since the parent
     /// strongly holds its children via `_children`. Only the cell's own
     /// position in the sidebar uses this — `RuntimeObject` itself stays
@@ -109,32 +107,6 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
             cell.cachedCurrentAndChildrenNames = nil
             currentCell = cell.parent
         }
-    }
-
-    /// Pure-value replica of `currentAndChildrenNames`, computed straight
-    /// from a `RuntimeObject` tree so callers can match against the
-    /// haystack without materializing a cell view model first (Open
-    /// Quickly matches all rows this way, then materializes cells only
-    /// for hits).
-    ///
-    /// What `composedTitle()` depends on is the *prefix*: both this and
-    /// `currentAndChildrenNames` put the node's own `displayName` first, so
-    /// a fuzzy range below `displayName.count` addresses the same
-    /// characters in the title as it does in the haystack it was scored
-    /// against. Byte-for-byte parity between the two builders is no longer
-    /// load-bearing — nothing crosses a range from one to the other — but
-    /// both still sort children by `displayName` and join with single
-    /// spaces, and `OpenQuicklyLazyConstructionTests` keeps them honest so
-    /// the sidebar and Open Quickly rank identical trees identically.
-    static func haystack(for runtimeObject: RuntimeObject) -> String {
-        let sortedChildren = runtimeObject.children.sorted { leftChild, rightChild in
-            leftChild.displayName < rightChild.displayName
-        }
-        let childrenNames = sortedChildren.map { haystack(for: $0) }.joined(separator: " ")
-        if childrenNames.isEmpty {
-            return runtimeObject.displayName
-        }
-        return "\(runtimeObject.displayName) \(childrenNames)"
     }
 
     private var filterContextStorage = FilterContext()
@@ -239,12 +211,11 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
             return defaultTitle()
         }
 
-        let title = RowText(runtimeObject.displayName, role: forOpenQuickly ? .secondary : .tertiary, fontSize: fontSize)
+        let title = RowText(runtimeObject.displayName, role: .tertiary, fontSize: Self.fontSize)
 
         // This row's own name is the prefix of its subtree haystack by
         // construction — `currentAndChildrenNames` builds
-        // "displayName child1 child2 …" and `haystack(for:)` matches it
-        // byte for byte. Searching the haystack for the name rediscovered
+        // "displayName child1 child2 …". Searching the haystack for the name rediscovered
         // offset 0 by scanning the entire subtree string, on every row of
         // every keystroke; `ranges(of:)` collects *all* occurrences, so it
         // could not even stop at the first hit.
@@ -264,13 +235,7 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
         currentAndChildrenNames
     }
 
-    private static let normalFontSize: CGFloat = 13
-
-    private static let openQuicklyFontSize: CGFloat = 16
-
-    private var fontSize: CGFloat {
-        forOpenQuickly ? SidebarRuntimeObjectCellViewModel.openQuicklyFontSize : SidebarRuntimeObjectCellViewModel.normalFontSize
-    }
+    private static let fontSize: CGFloat = 13
 
     /// All visual state in one stream: one subject + lock per row instead of
     /// five, and every refresh publishes atomically (proposal 0005).
@@ -287,12 +252,11 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
     }
 
     private func defaultTitle() -> RowText {
-        RowText(runtimeObject.displayName, fontSize: fontSize)
+        RowText(runtimeObject.displayName, fontSize: Self.fontSize)
     }
 
-    public init(runtimeObject: RuntimeObject, forOpenQuickly: Bool, parent: SidebarRuntimeObjectCellViewModel? = nil) {
+    public init(runtimeObject: RuntimeObject, parent: SidebarRuntimeObjectCellViewModel? = nil) {
         self.runtimeObject = runtimeObject
-        self.forOpenQuickly = forOpenQuickly
         super.init()
         self.parent = parent
         rebuildChildren()
@@ -315,7 +279,7 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
                 recycledChild.runtimeObject = childRuntimeObject // recurses via didSet
                 return recycledChild
             }
-            return Self(runtimeObject: childRuntimeObject, forOpenQuickly: forOpenQuickly, parent: self)
+            return Self(runtimeObject: childRuntimeObject, parent: self)
         }
         .sorted { leftChild, rightChild in
             leftChild.runtimeObject.displayName < rightChild.runtimeObject.displayName
@@ -355,7 +319,7 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
     /// flipping the parent's `properties` bookkeeping). Composes the full
     /// appearance and publishes it as one event.
     private func refreshAppearance() {
-        let iconSize = forOpenQuickly ? 24 : RuntimeObjectIcon.defaultIconSize
+        let iconSize = RuntimeObjectIcon.defaultIconSize
         var refreshedAppearance = RuntimeObjectCellAppearance(
             primaryIcon: .runtimeObject(runtimeObject.kind, size: iconSize),
             primaryTooltip: RuntimeObjectIcon.tooltip(for: runtimeObject.kind),
@@ -378,9 +342,8 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
             refreshedAppearance.tags.append(.localType(isPositionNamed: runtimeObject.properties.contains(.isPositionNamedLocalType)))
         }
 
-        // Open Quickly opens a row on any click, so its tag only shows.
         if !runtimeObject.privateDeclarations.isEmpty {
-            refreshedAppearance.tags.append(.privateDeclaration(isClickable: !forOpenQuickly))
+            refreshedAppearance.tags.append(.privateDeclaration)
         }
 
         publishAppearance(refreshedAppearance)

@@ -22,7 +22,7 @@ struct SidebarPrivateDeclarationTagTests {
     func privateTypeRowShowsNameAndTag() {
         let cellViewModel = makeCell(for: Self.object("SwiftUI.EnabledKey", privateDeclarations: [Self.enabledKey]))
         #expect(cellViewModel.appearance.title.string == "SwiftUI.EnabledKey")
-        #expect(cellViewModel.appearance.tags == [.privateDeclaration(isClickable: true)])
+        #expect(cellViewModel.appearance.tags == [.privateDeclaration])
     }
 
     @Test("a row whose object carries no private declaration has no tag")
@@ -36,13 +36,7 @@ struct SidebarPrivateDeclarationTagTests {
     func nestedPrivateTypeTagsItsOwnRow() {
         let cellViewModel = makeCell(for: Self.object("SwiftUI.Parent", children: [Self.object("SwiftUI.Parent.EnabledKey", privateDeclarations: [Self.enabledKey])]))
         #expect(cellViewModel.appearance.tags.isEmpty)
-        #expect(cellViewModel.children.map(\.appearance.tags) == [[.privateDeclaration(isClickable: true)]])
-    }
-
-    @Test("in Open Quickly the tag only shows, so a click on it opens the row")
-    func openQuicklyTagIsNotClickable() {
-        let cellViewModel = makeCell(for: Self.object("SwiftUI.EnabledKey", privateDeclarations: [Self.enabledKey]), forOpenQuickly: true)
-        #expect(cellViewModel.appearance.tags == [.privateDeclaration(isClickable: false)])
+        #expect(cellViewModel.children.map(\.appearance.tags) == [[.privateDeclaration]])
     }
 
     // MARK: - Local Types
@@ -54,7 +48,7 @@ struct SidebarPrivateDeclarationTagTests {
             properties: [.isLocalType],
             privateDeclarations: [.init(name: "readEntryList", discriminator: "_030667BFE09FD674B7612731735E240E")]
         ))
-        #expect(cellViewModel.appearance.tags == [.localType(isPositionNamed: false), .privateDeclaration(isClickable: true)])
+        #expect(cellViewModel.appearance.tags == [.localType(isPositionNamed: false), .privateDeclaration])
     }
 
     @Test("a local type the binary names no function for says so in its tag")
@@ -75,16 +69,10 @@ struct SidebarPrivateDeclarationTagTests {
         #expect(cellViewModel.children.map(\.appearance.tags) == [[]])
     }
 
-    @Test("in Open Quickly the Local tag shows too")
-    func openQuicklyShowsLocalTag() {
-        let cellViewModel = makeCell(for: Self.object("Visitor #1 in TableDataSource.performDrop(to:)", properties: [.isLocalType]), forOpenQuickly: true)
-        #expect(cellViewModel.appearance.tags == [.localType(isPositionNamed: false)])
-    }
-
     // MARK: - Helpers
 
-    private func makeCell(for runtimeObject: RuntimeObject, forOpenQuickly: Bool = false) -> SidebarRuntimeObjectCellViewModel {
-        environment.make { SidebarRuntimeObjectCellViewModel(runtimeObject: runtimeObject, forOpenQuickly: forOpenQuickly) }
+    private func makeCell(for runtimeObject: RuntimeObject) -> SidebarRuntimeObjectCellViewModel {
+        environment.make { SidebarRuntimeObjectCellViewModel(runtimeObject: runtimeObject) }
     }
 
     private static func object(_ displayName: String, properties: RuntimeObject.Properties = [], privateDeclarations: [RuntimePrivateDeclaration] = [], children: [RuntimeObject] = []) -> RuntimeObject {

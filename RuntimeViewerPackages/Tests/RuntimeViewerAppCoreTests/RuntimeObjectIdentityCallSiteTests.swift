@@ -54,7 +54,7 @@ struct RuntimeObjectIdentityCallSiteTests {
     func findCellFindsDespitePropertiesDifference() {
         let environment = ViewModelTestEnvironment()
         let cell = environment.make {
-            SidebarRuntimeObjectCellViewModel(runtimeObject: Self.authoritative, forOpenQuickly: false)
+            SidebarRuntimeObjectCellViewModel(runtimeObject: Self.authoritative)
         }
 
         #expect(SidebarRuntimeObjectListViewModel.findCell(for: Self.payloadWithExtraProperties, in: [cell])?.cell === cell)
@@ -66,7 +66,7 @@ struct RuntimeObjectIdentityCallSiteTests {
     func findCellFindsDespiteDisplayNameDifference() {
         let environment = ViewModelTestEnvironment()
         let cell = environment.make {
-            SidebarRuntimeObjectCellViewModel(runtimeObject: Self.authoritative, forOpenQuickly: false)
+            SidebarRuntimeObjectCellViewModel(runtimeObject: Self.authoritative)
         }
 
         #expect(SidebarRuntimeObjectListViewModel.findCell(for: Self.payloadWithQualifiedDisplayName, in: [cell])?.cell === cell)
@@ -78,7 +78,7 @@ struct RuntimeObjectIdentityCallSiteTests {
     func findCellFindsDespiteChildrenDifference() {
         let environment = ViewModelTestEnvironment()
         let cell = environment.make {
-            SidebarRuntimeObjectCellViewModel(runtimeObject: Self.authoritativeWithChildren, forOpenQuickly: false)
+            SidebarRuntimeObjectCellViewModel(runtimeObject: Self.authoritativeWithChildren)
         }
 
         #expect(SidebarRuntimeObjectListViewModel.findCell(for: Self.payloadWithoutChildren, in: [cell])?.cell === cell)
@@ -90,7 +90,7 @@ struct RuntimeObjectIdentityCallSiteTests {
     func findCellFindsTheSameObject() throws {
         let environment = ViewModelTestEnvironment()
         let cell = environment.make {
-            SidebarRuntimeObjectCellViewModel(runtimeObject: Self.authoritative, forOpenQuickly: false)
+            SidebarRuntimeObjectCellViewModel(runtimeObject: Self.authoritative)
         }
 
         let lookup = try #require(SidebarRuntimeObjectListViewModel.findCell(for: Self.authoritative, in: [cell]))
@@ -108,7 +108,7 @@ struct RuntimeObjectIdentityCallSiteTests {
         let environment = ViewModelTestEnvironment()
         let parent = Fixtures.runtimeObject(name: "Box", kind: .swift(.type(.struct)), properties: [.isGeneric])
         let cell = environment.make {
-            SidebarRuntimeObjectCellViewModel(runtimeObject: parent, forOpenQuickly: false)
+            SidebarRuntimeObjectCellViewModel(runtimeObject: parent)
         }
         #expect(cell.children.isEmpty)
 
@@ -127,7 +127,7 @@ struct RuntimeObjectIdentityCallSiteTests {
     func identicalAssignmentKeepsChildCells() {
         let environment = ViewModelTestEnvironment()
         let cell = environment.make {
-            SidebarRuntimeObjectCellViewModel(runtimeObject: Self.authoritativeWithChildren, forOpenQuickly: false)
+            SidebarRuntimeObjectCellViewModel(runtimeObject: Self.authoritativeWithChildren)
         }
         let childBefore = cell.children.first
 
@@ -145,8 +145,8 @@ struct RuntimeObjectIdentityCallSiteTests {
         let environment = ViewModelTestEnvironment()
         let (plain, bridged) = environment.make {
             (
-                SidebarRuntimeObjectCellViewModel(runtimeObject: Self.authoritative, forOpenQuickly: false),
-                SidebarRuntimeObjectCellViewModel(runtimeObject: Self.payloadWithExtraProperties, forOpenQuickly: false)
+                SidebarRuntimeObjectCellViewModel(runtimeObject: Self.authoritative),
+                SidebarRuntimeObjectCellViewModel(runtimeObject: Self.payloadWithExtraProperties)
             )
         }
 

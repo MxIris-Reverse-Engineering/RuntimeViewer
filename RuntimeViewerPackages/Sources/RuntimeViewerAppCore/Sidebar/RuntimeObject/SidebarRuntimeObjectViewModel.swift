@@ -186,7 +186,6 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
             } catch {
                 self.loadState = .loadError(error)
                 self.nodes = []
-                self.invalidateNodeDerivedState()
                 #log(.error, "\(error)")
             }
             if self.currentReloadGeneration == myGeneration {
@@ -280,7 +279,7 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         /// Same objects as `runtimeObjects`, grouped into kind sections. The
         /// sectioned sidebar (AppKit outline / UIKit collection view) binds this
         /// instead of the flat `runtimeObjects`; the flat form is still used by
-        /// platforms / views that present a single layer (Open Quickly, iOS).
+        /// platforms / views that present a single layer (iOS).
         public let runtimeObjectSections: Driver<[SidebarRuntimeObjectSection]>
         public let loadState: Driver<RuntimeImageLoadState>
         public let notLoadedText: Driver<String>
@@ -532,6 +531,12 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
             .map { SidebarRuntimeObjectSection(kind: $0, objects: objectsByKind[$0] ?? []) }
     }
 
+    /// Whether the engine has the image loaded, which decides between the `.notLoaded` outcome
+    /// of a reload and the others. A seam for tests, as `buildRuntimeObjects()` is.
+    func isImageLoaded() async throws -> Bool {
+        try await runtimeEngine.isImageLoaded(path: imagePath)
+    }
+
     func reloadData() async throws {
         // `MainActor.run` blocks are not natural cancellation points (they
         // run synchronously once they reach the main actor), so explicit
@@ -539,24 +544,17 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         // `scheduleReload` must throw before publishing partial results
         // that the successor task would otherwise re-publish on top of.
         try Task.checkCancellation()
-        let imageLoadState: RuntimeImageLoadState = try await runtimeEngine.isImageLoaded(path: imagePath) ? .loaded : .notLoaded
+        let imageLoadState: RuntimeImageLoadState = try await isImageLoaded() ? .loaded : .notLoaded
 
         if case .notLoaded = imageLoadState {
             try Task.checkCancellation()
             await MainActor.run {
                 self.loadState = .notLoaded
-                // The reload ends here too. A subclass whose derived state
-                // is keyed on the previous object list must still drop it,
-                // or an Open Quickly pass scheduled before the reload keeps
-                // its generation token valid and publishes rows for an image
-                // the engine no longer reports as loaded.
-                //
-                // The node list has to go with it. The hook re-derives from
-                // `nodes`, and only the success path assigns them, so
-                // leaving the previous load's cells in place makes the
-                // invalidation re-seed the very index it just cleared.
+                // The reload ends here too, and the node list goes with it:
+                // only the success path assigns new nodes, and the previous
+                // load's cells would otherwise stay listed for an image the
+                // engine no longer reports as loaded.
                 self.nodes = []
-                self.invalidateNodeDerivedState()
             }
             return
         }
@@ -604,34 +602,13 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
             // indexing, while the user may be filtering, and the field still
             // shows the filter.
             if isSorted {
-                self.nodes = runtimeObjects.sorted().map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0, forOpenQuickly: false) }
+                self.nodes = runtimeObjects.sorted().map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0) }
             } else {
-                self.nodes = runtimeObjects.map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0, forOpenQuickly: false) }
+                self.nodes = runtimeObjects.map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0) }
             }
-            self.invalidateNodeDerivedState()
             scheduleRefilter()
         }
     }
-
-    /// Hook for subclass state derived from `nodes`, called inside the same
-    /// synchronous main-actor block that settles the load state.
-    ///
-    /// Invalidating derived state in a *later* `MainActor.run` leaves a
-    /// window: `reloadData()` suspends at every one of its `MainActor.run`
-    /// blocks, so an in-flight pass can resume between the install and the
-    /// invalidation, find its generation token still current, and publish
-    /// results built from the pre-reload list. Doing both in one critical
-    /// section removes the window rather than narrowing it — the same shape
-    /// `installRebuiltNodes(_:)` uses on the root sidebar.
-    ///
-    /// Every terminal outcome of a reload calls this, not only the one that
-    /// installs nodes: `.notLoaded` and `.loadError` end the reload just as
-    /// definitively, and skipping them leaves a filter pass alive against a
-    /// list the document has stopped standing behind. Cancellation is the
-    /// one exception — the reload that superseded this one runs the
-    /// invalidation itself.
-    @MainActor
-    func invalidateNodeDerivedState() {}
 
     /// Single entry point for every filter trigger (initial load, search
     /// change, scope change, specialization splice). Snapshots the tree on

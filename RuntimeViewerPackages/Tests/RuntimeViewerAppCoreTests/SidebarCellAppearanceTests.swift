@@ -15,8 +15,7 @@ struct SidebarCellAppearanceTests {
     @Test("fuzzy filter transitions publish one appearance event each; identical reapplication publishes none")
     func filterTransitionsPublishAtomically() {
         let cellViewModel = SidebarRuntimeObjectCellViewModel(
-            runtimeObject: makeRuntimeObject(displayName: "TestFramework.NeedleGeneratedType"),
-            forOpenQuickly: false
+            runtimeObject: makeRuntimeObject(displayName: "TestFramework.NeedleGeneratedType")
         )
         let counter = AppearanceEmissionCounter(observing: cellViewModel)
 
@@ -46,8 +45,7 @@ struct SidebarCellAppearanceTests {
     @Test("a runtimeObject change publishes icons and title in a single event")
     func runtimeObjectChangePublishesOneEvent() {
         let cellViewModel = SidebarRuntimeObjectCellViewModel(
-            runtimeObject: makeRuntimeObject(displayName: "TestFramework.GenericType"),
-            forOpenQuickly: false
+            runtimeObject: makeRuntimeObject(displayName: "TestFramework.GenericType")
         )
         #expect(cellViewModel.appearance.tertiaryIcon == nil)
         let counter = AppearanceEmissionCounter(observing: cellViewModel)
@@ -68,7 +66,7 @@ struct SidebarCellAppearanceTests {
     func displayNeutralSplicePublishesNoEvent() {
         let child = makeRuntimeObject(displayName: "TestFramework.Parent.Child")
         let parent = makeRuntimeObject(displayName: "TestFramework.Parent", children: [child])
-        let parentCellViewModel = SidebarRuntimeObjectCellViewModel(runtimeObject: parent, forOpenQuickly: false)
+        let parentCellViewModel = SidebarRuntimeObjectCellViewModel(runtimeObject: parent)
         let counter = AppearanceEmissionCounter(observing: parentCellViewModel)
 
         let splicedChild = makeRuntimeObject(displayName: "TestFramework.Parent.SplicedChild")

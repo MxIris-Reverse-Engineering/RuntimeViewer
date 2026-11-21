@@ -182,7 +182,7 @@ struct SidebarRuntimeObjectCellViewModelTests {
         withDependencies {
             $0.appDefaults = appDefaults
         } operation: {
-            SidebarRuntimeObjectCellViewModel(runtimeObject: runtimeObject, forOpenQuickly: false)
+            SidebarRuntimeObjectCellViewModel(runtimeObject: runtimeObject)
         }
     }
 
