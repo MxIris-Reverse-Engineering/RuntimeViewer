@@ -163,7 +163,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
   <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">Draft</span></p>
   <h1><span class="proposal-number">Draft</span> 欢迎窗口（接入 UIFoundation 的 WelcomePanel）</h1>
   <dl class="meta">
-    <div><dt>状态</dt><dd><span class="status status-accepted">Accepted</span></dd></div>
+    <div><dt>状态</dt><dd><span class="status status-in-progress">In Progress</span></dd></div>
     <div><dt>最后更新</dt><dd>2026-11-21</dd></div>
     <div><dt>项目类型</dt><dd>App（macOS，AppKit）</dd></div>
     <div><dt>原文</dt><dd><code>draft-welcome-window.md</code></dd></div>
@@ -286,7 +286,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
       <tr><td><code>UIFoundation Tests/…/WelcomePanelTests.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>默认文字不变、配置的文字生效</td><td>回归</td><td class="numeric">1</td></tr>
       <tr><td><code>UIFoundation Documentations/WelcomePanel.md</code></td><td><span class="tag tag-changed">修改</span></td><td>§1 的配置说明加这一项</td><td>文档同批</td><td class="numeric">1</td></tr>
       <tr><td><code>RuntimeViewerPackages/Package.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>uiFoundationTraits</code> 加 <code>"WelcomePanel"</code>；下限 <code>from: "0.50.0"</code></td><td>编进组件、拿到新属性</td><td class="numeric">2</td></tr>
-      <tr><td>三个 <code>Package.resolved</code></td><td><span class="tag tag-changed">修改</span></td><td>只把 UIFoundation 抬到 0.50.0</td><td>锁文件跟上下限</td><td class="numeric">2</td></tr>
+      <tr><td>四个 <code>Package.resolved</code>（两个 workspace 与两个包）</td><td><span class="tag tag-changed">修改</span></td><td>只把 UIFoundation 抬到 0.50.0</td><td>锁文件跟上下限</td><td class="numeric">2</td></tr>
       <tr><td>根 <code>AGENTS.md</code> · Dependency floors</td><td><span class="tag tag-changed">修改</span></td><td>UIFoundation 下限 0.50.0 与理由</td><td>下限的理由要留档</td><td class="numeric">2</td></tr>
       <tr><td><code>RuntimeViewerSettings/Settings+Types.swift</code> · <code>Settings.General</code></td><td><span class="tag tag-changed">修改</span></td><td><code>@Default(true) showsWelcomeWindowAtLaunch</code></td><td>开关</td><td class="numeric">3</td></tr>
       <tr><td><code>RuntimeViewerSettingsUI/…/GeneralSettingsView.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>Windows 一节加 Toggle，改写说明文字</td><td>开关的界面</td><td class="numeric">3</td></tr>
@@ -297,7 +297,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
       <tr><td><code>App/WelcomeController.swift</code> · <code>WelcomeController</code></td><td><span class="tag tag-added">新增</span></td><td>持有面板、data source / delegate、启动与 Dock 决策、关窗观察</td><td>生命周期职责独立成控制器</td><td class="numeric">5</td></tr>
       <tr><td><code>App/AppDelegate.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>applicationShouldOpenUntitledFile</code>、<code>start()</code>、<code>showWelcomeWindow(_:)</code></td><td>一行转发</td><td class="numeric">5</td></tr>
       <tr><td><code>App/WindowLifecycleController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>最后一支改调 <code>showInsteadOfUntitledDocument()</code></td><td>Dock 点击也弹欢迎窗口</td><td class="numeric">5</td></tr>
-      <tr><td><code>App/MainMenuController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>Window 菜单 Zoom 之后插 Welcome to RuntimeViewer（⇧⌘1）</td><td>随时能叫出来</td><td class="numeric">5</td></tr>
+      <tr><td><code>App/MainMenuController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>Window 菜单 Bring All to Front 之前插 Welcome to RuntimeViewer（⇧⌘1）与分隔线</td><td>随时能叫出来</td><td class="numeric">5</td></tr>
       <tr><td><code>RuntimeViewerUsingAppKit/AGENTS.md</code></td><td><span class="tag tag-changed">修改</span></td><td>控制器清单加 <code>WelcomeController</code> 与关窗时机</td><td>规则留档</td><td class="numeric">6</td></tr>
       <tr><td>两份索引</td><td><span class="tag tag-changed">修改</span></td><td>登记本提案；落地时改编号与状态</td><td>索引</td><td class="numeric">6</td></tr>
     </tbody>
@@ -350,13 +350,13 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
     <summary><code>WelcomeController</code>（App target）与接线</summary>
     <div class="details-body">
       <ul>
-        <li>懒创建 <code>WelcomePanelController</code>（<code>.xcode26</code>）：标题取 <code>CFBundleDisplayName</code>（Debug 版的 <code>CFBundleName</code> 是 <code>RuntimeViewer-Debug-arm64e</code>），空列表文字 No Recent Files；动作 New Window on My Mac（<code>newDocument</code>，图标取来源选择器给本机的那个）与 Open File…（<code>openDocument</code>，SF Symbol <code>folder</code>）。</li>
+        <li>懒创建 <code>WelcomePanelController</code>（<code>.xcode26</code>）：标题取 <code>CFBundleDisplayName</code>（Debug 版的 <code>CFBundleName</code> 是 <code>RuntimeViewer-Debug-arm64e</code>），空列表文字 No Recent Files；动作 New Window on My Mac（<code>newDocument</code>，SF Symbol <code>plus.square</code>，即 Xcode 的 Create New Project… 那个）与 Open File…（<code>openDocument</code>，SF Symbol <code>folder</code>）。</li>
         <li>data source 用 <code>recentDocumentURLs</code>；双击（先排除 <code>-1</code>）调 <code>openDocument(withContentsOf:display:)</code>，交给 <code>DocumentController</code> 与 <code>FileController</code>，出错时由后者报。</li>
         <li><code>shouldOpenUntitledDocument()</code> 回答 <code>applicationShouldOpenUntitledFile(_:)</code>；没读完设置时记下请求、回 <code>false</code>。<code>start()</code> 注册主窗口观察，再等 <code>waitUntilLoaded()</code> 处理记下的请求。</li>
         <li>文档窗口（<code>windowController?.document != nil</code>）成为主窗口时关面板。不在 <code>addDocument</code> 里关：那时文档窗口还没上屏，开着「Quit After Closing Last Window」会让 App 退出。</li>
         <li><code>SettingsLifecycleController</code> 存下 load 的 <code>Task</code>，补 <code>isLoaded</code> 与 <code>waitUntilLoaded()</code>。</li>
         <li><code>AppDelegate</code> 三处一行转发；<code>WindowLifecycleController</code> 最后一支改调 <code>showInsteadOfUntitledDocument()</code>；「有没有文档窗口」的表达式两处共用一个小扩展。</li>
-        <li>Window 菜单在 Zoom 之后插分隔线与 Welcome to RuntimeViewer（⇧⌘1，同 Xcode 的 Welcome to Xcode）。</li>
+        <li>Window 菜单在 Bring All to Front 之前插 Welcome to RuntimeViewer（⇧⌘1，同 Xcode 的 Welcome to Xcode）与分隔线。</li>
       </ul>
     </div>
   </details>
@@ -437,7 +437,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <section id="log">
   <h2>决策日志</h2>
   <details>
-    <summary>5 条，最近一条：用户批准，开始实现</summary>
+    <summary>10 条，最近一条：实现完成，待用户看过后收尾</summary>
     <div class="details-body">
       <div class="table-wrap">
       <table>
@@ -448,6 +448,11 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
           <tr><td class="numeric">2026-11-21</td><td>空列表文字先改上游</td><td>用户选择先给 UIFoundation 加可配置的占位文字并发版。</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>只放两个动作；用 <code>.xcode26</code>；不配 ViewModel</td><td>未询问用户的默认决定；UIFoundation 一侧只加一个可选属性，不另写提案。</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>Accepted</td><td>用户批准，开始实现。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>动作图标用 <code>plus.square</code> 与 <code>folder</code></td><td>偏离提案：不取 My Mac 的设备字形（要碰引擎管理器、字形自带配色），改用 Xcode 欢迎窗口自己的符号。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>菜单项放在 Bring All to Front 之前</td><td>偏离提案：原定 Zoom 之后；改到 Xcode 里 Welcome to Xcode 所在的那一组位置。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td><code>Tuist.swift</code> 缺 <code>SwiftSectionTestingMacros</code> 不在本分支修</td><td>check 报的这一项来自 next 上已有的 MachOSwiftSection pin，与本提案无关；trait 比对通过。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>设置测试合并为一条往返测试加一句旧文件断言</td><td>覆盖的行为不变。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>实现完成，待用户看过后收尾</td><td>包级测试与 Tuist 的 App 构建通过；目视验收交给用户；不另写指南或实现说明，没有新术语。</td></tr>
         </tbody>
       </table>
       </div>

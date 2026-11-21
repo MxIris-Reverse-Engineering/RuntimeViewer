@@ -27,6 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @Dependency(\.sourceEditorBridgeProvider) private var sourceEditorBridgeProvider
     @Dependency(\.tabMenuController) private var tabMenuController
     @Dependency(\.updaterService) private var updaterService
+    @Dependency(\.welcomeController) private var welcomeController
     @Dependency(\.simulatorInstallerWindowController) private var simulatorInstallerWindowController
     @Dependency(\.windowLifecycleController) private var windowLifecycleController
 
@@ -88,6 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         CustomToolTipManager.install()
 
         settingsLifecycleController.loadOnLaunch()
+        welcomeController.start()
         runtimeConnectionNotificationService.start()
         sourceEditorBridgeProvider.startPrewarming()
         appearanceController.start()
@@ -124,8 +126,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         windowLifecycleController.handleReopen(for: sender)
     }
 
+    func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
+        welcomeController.shouldOpenUntitledDocument()
+    }
+
     @objc func showSettings(_ sender: Any?) {
         appRouter.trigger(.settings)
+    }
+
+    @objc func showWelcomeWindow(_ sender: Any?) {
+        welcomeController.showWindow()
     }
 
     @objc func showSimulatorInstaller(_ sender: Any?) {

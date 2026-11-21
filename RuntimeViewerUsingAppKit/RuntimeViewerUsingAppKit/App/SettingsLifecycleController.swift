@@ -34,10 +34,25 @@ final class SettingsLifecycleController {
     /// then: `load()` replaces the object a tracking started earlier would
     /// have followed.
     func loadOnLaunch() {
-        Task {
+        loadTask = Task {
             await settings.load()
+            isLoaded = true
             runtimeEngineManagerSettingsFollower.startFollowing()
         }
+    }
+
+    /// Whether the stored settings have been read. Until then a value read
+    /// from `\.settings` is its default, not the user's choice.
+    private(set) var isLoaded = false
+
+    private var loadTask: Task<Void, Never>?
+
+    /// Returns once the stored settings are read. For launch-time decisions
+    /// that hang on a setting — the Welcome window's — and so have to wait
+    /// out `loadOnLaunch()`. Called after it; before it there is nothing to
+    /// wait for, and it returns at once.
+    func waitUntilLoaded() async {
+        await loadTask?.value
     }
 
     /// Backs `applicationShouldTerminate(_:)`.

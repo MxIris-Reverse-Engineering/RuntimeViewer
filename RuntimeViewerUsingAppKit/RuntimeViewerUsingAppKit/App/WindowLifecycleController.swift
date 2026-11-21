@@ -12,7 +12,9 @@ import DependenciesMacros
 /// window) still on screen it therefore does nothing, and a Dock click on an
 /// app whose document windows are all closed appears to be ignored. This
 /// controller decides on document windows alone, which is the window kind the
-/// Dock icon stands for here.
+/// Dock icon stands for here. When there is none to bring back,
+/// `WelcomeController` shows the Welcome window, or opens a window on My Mac
+/// when Settings › General › Show Welcome Window at Launch is off.
 ///
 /// Following the `AppDelegate` convention, `AppDelegate` only forwards the two
 /// delegate callbacks to the methods below.
@@ -21,6 +23,7 @@ final class WindowLifecycleController {
     fileprivate static let shared = WindowLifecycleController()
 
     @Dependency(\.settings) private var settings
+    @Dependency(\.welcomeController) private var welcomeController
 
     private init() {}
 
@@ -39,9 +42,7 @@ final class WindowLifecycleController {
         // here, and AppKit already does it.
         guard !application.isHidden else { return true }
 
-        let documentWindows = NSDocumentController.shared.documents
-            .flatMap(\.windowControllers)
-            .compactMap(\.window)
+        let documentWindows = NSDocumentController.shared.documentWindows
 
         // Something is already on screen — let AppKit order it front.
         if documentWindows.contains(where: \.isVisible) { return true }
@@ -60,12 +61,16 @@ final class WindowLifecycleController {
             return false
         }
 
-        do {
-            try NSDocumentController.shared.openUntitledDocumentAndDisplay(true)
-        } catch {
-            application.presentError(error)
-        }
+        welcomeController.showInsteadOfUntitledDocument()
         return false
+    }
+}
+
+extension NSDocumentController {
+    /// The windows of the open documents: the window kind the Dock icon stands
+    /// for, and the one whose appearance closes the Welcome window.
+    var documentWindows: [NSWindow] {
+        documents.flatMap(\.windowControllers).compactMap(\.window)
     }
 }
 
