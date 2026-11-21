@@ -3,22 +3,21 @@ import RuntimeViewerApplication
 import RuntimeViewerCore
 
 final class Document: NSDocument {
-    private static var nextDocumentNumber = 1
-    
-    let mcpIdentifier: String = {
-        let id = "document\(Document.nextDocumentNumber)"
-        Document.nextDocumentNumber += 1
-        return id
-    }()
-    
-    let documentState: DocumentState
+    /// The document's state and its two lifecycle steps, which the iOS
+    /// apps' windows take the same way.
+    private let session: DocumentSession
+
+    /// How MCP clients name this document: by the order its session was made.
+    var mcpIdentifier: String { "document\(session.number)" }
+
+    var documentState: DocumentState { session.documentState }
 
     private lazy var mainCoordinator = MainCoordinator(documentState: documentState)
 
     /// A document whose window starts on `runtimeEngine`: a file's
     /// engine for a file the user opened, `.local` for a new window.
     init(runtimeEngine: RuntimeEngine) {
-        documentState = DocumentState(runtimeEngine: runtimeEngine)
+        session = DocumentSession(runtimeEngine: runtimeEngine)
         super.init()
     }
 
@@ -38,18 +37,16 @@ final class Document: NSDocument {
     override class var autosavesInPlace: Bool { false }
 
     override func makeWindowControllers() {
-        // First, before any page binds: the engine's background work — its
-        // indexing, its interface corpus and its prepared cross references,
-        // shared with every document on the engine — which the pages show and
-        // this document's Find session follows, and the activity that keeps
-        // the app out of App Nap while any of it is in progress.
-        documentState.startBackgroundWork()
+        // First, before any page binds: the engine's background work, with
+        // the activity that keeps the app out of App Nap while any of it is
+        // in progress.
+        session.open()
         addWindowController(mainCoordinator.windowController)
     }
 
     override func close() {
         // Closes only the members this document brought into being.
-        documentState.documentWillClose()
+        session.close()
         super.close()
     }
 

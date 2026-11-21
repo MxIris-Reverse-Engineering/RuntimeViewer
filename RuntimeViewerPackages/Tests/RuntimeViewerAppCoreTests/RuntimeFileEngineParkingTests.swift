@@ -24,22 +24,34 @@ struct RuntimeFileEngineParkingTests {
         let host: RuntimeFileServiceHost
     }
 
-    private static func makeFixture() throws -> Fixture {
+    /// - Parameter readingInThisProcess: Read files as the iOS apps do, in
+    ///   this process, rather than in a file service instance.
+    private static func makeFixture(readingInThisProcess: Bool = false) throws -> Fixture {
         let manager = RuntimeEngineManager(configuration: .application, startupHandler: { _ in })
         let (listener, endpoint) = try RuntimeXPCServiceListenerConnection.anonymous()
         let host = RuntimeFileServiceHost(connection: listener)
         host.activate()
-        manager.fileReading = .inFileService { file in
-            .xpcService(.anonymousListener(endpoint.carryingLaunchPayload(try RuntimeFileService.launchPayload(for: file))))
+        if readingInThisProcess {
+            manager.fileReading = .inThisProcess
+        } else {
+            manager.fileReading = .inFileService { file in
+                .xpcService(.anonymousListener(endpoint.carryingLaunchPayload(try RuntimeFileService.launchPayload(for: file))))
+            }
         }
         return try withDependencies {
             $0.runtimeEngineManager = manager
         } operation: {
-            @Dependency(\.runtimeEngineBackgroundWorkRegistry) var registry
-            let parking = RuntimeFileEngineParking()
-            parking.gracePeriod = .milliseconds(100)
-            parking.start()
-            return Fixture(manager: manager, parking: parking, registry: registry, host: host)
+            // The parking lets a file go through the opener, on the same manager.
+            let opener = RuntimeFileOpener()
+            return try withDependencies {
+                $0.runtimeFileOpener = opener
+            } operation: {
+                @Dependency(\.runtimeEngineBackgroundWorkRegistry) var registry
+                let parking = RuntimeFileEngineParking()
+                parking.gracePeriod = .milliseconds(100)
+                parking.start()
+                return Fixture(manager: manager, parking: parking, registry: registry, host: host)
+            }
         }
     }
 
@@ -85,6 +97,24 @@ struct RuntimeFileEngineParkingTests {
 
         fixture.registry.occupancyChanges.send(.vacated(engine))
 
+        #expect(!fixture.parking.isSuspensionPending(for: engine))
+    }
+
+    /// The iOS apps read files in their own process, where an engine cannot
+    /// be suspended: a closed file would hold its parsed images and file
+    /// descriptors until the app quit (proposal `window-model-on-ios`).
+    @Test("A file engine that read its file in this process is taken off the list once the grace period is over")
+    func inProcessEngineIsTakenOffTheList() async throws {
+        let fixture = try Self.makeFixture(readingInThisProcess: true)
+        defer { Task { await fixture.host.stop() } }
+        let engine = try await fixture.manager.runtimeEngine(reading: try Self.file())
+        #expect(fixture.manager.fileRuntimeEngines.contains { $0 === engine })
+
+        fixture.registry.occupancyChanges.send(.vacated(engine))
+
+        let takenOff = await pollUntil { !fixture.manager.fileRuntimeEngines.contains { $0 === engine } }
+        #expect(takenOff, "the engine was still listed after the grace period")
+        #expect(fixture.manager.file(of: engine) == nil)
         #expect(!fixture.parking.isSuspensionPending(for: engine))
     }
 }

@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 
 import UIKit
+import Dependencies
 import RuntimeViewerCore
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
@@ -17,21 +18,36 @@ public enum MainRoute: Routable {
 
 typealias MainTransition = Transition<MainSplitViewController>
 
+/// Whoever holds a window opened for a file, and closes it.
+protocol MainCoordinatorDelegate: AnyObject {
+    /// The window's close button was pressed.
+    func mainCoordinatorDidRequestClose(_ mainCoordinator: MainCoordinator)
+}
+
 class MainCoordinator: BaseCoordinator<MainRoute, MainTransition> {
     let documentState: DocumentState
 
+    /// Whether the window was opened for a file: its sidebar has a close
+    /// button.
+    let isFileWindow: Bool
+
+    weak var delegate: MainCoordinatorDelegate?
+
     let completeTransition: PublishRelay<SidebarRoute> = .init()
 
-    lazy var sidebarCoordinator = SidebarCoordinator(documentState: documentState, delegate: self)
+    @Dependency(\.fileController) private var fileController
+
+    lazy var sidebarCoordinator = SidebarCoordinator(documentState: documentState, showsCloseButton: isFileWindow, delegate: self)
 
     lazy var contentCoordinator = ContentCoordinator(documentState: documentState)
 
-    lazy var compactSidebarCoordinator = SidebarCoordinator(documentState: documentState, delegate: self)
+    lazy var compactSidebarCoordinator = SidebarCoordinator(documentState: documentState, showsCloseButton: isFileWindow, delegate: self)
 
     lazy var inspectorCoordinator = InspectorCoordinator(documentState: documentState)
 
-    init(documentState: DocumentState) {
+    init(documentState: DocumentState, isFileWindow: Bool = false) {
         self.documentState = documentState
+        self.isFileWindow = isFileWindow
         super.init(rootViewController: .init(style: .doubleColumn), initialRoute: nil)
         rootViewController.delegate = self
     }
@@ -84,6 +100,18 @@ extension MainCoordinator: SidebarCoordinatorDelegate {
 
     func sidebarCoordinatorDidRequestSettings(_ sidebarCoordinator: SidebarCoordinator) {
         trigger(.settings)
+    }
+
+    func sidebarCoordinatorDidRequestFileChoice(_ sidebarCoordinator: SidebarCoordinator) {
+        fileController.chooseFile(presentingFrom: rootViewController)
+    }
+
+    func sidebarCoordinatorDidRequestPathEntry(_ sidebarCoordinator: SidebarCoordinator) {
+        fileController.enterPath(presentingFrom: rootViewController)
+    }
+
+    func sidebarCoordinatorDidRequestClose(_ sidebarCoordinator: SidebarCoordinator) {
+        delegate?.mainCoordinatorDidRequestClose(self)
     }
 }
 

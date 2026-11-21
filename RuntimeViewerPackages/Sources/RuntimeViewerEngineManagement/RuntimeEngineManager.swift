@@ -108,6 +108,15 @@ public final class RuntimeEngineManager {
     /// to serve the file from an anonymous listener, or to read it here.
     var fileReading = FileReading.live
 
+    /// Whether files are read in this process (iOS, visionOS) rather than in
+    /// instances of a file service (macOS). An engine that read its file in
+    /// this process cannot be suspended, only taken off the list
+    /// (``terminateRuntimeEngine(for:because:)``).
+    public var readsFilesInThisProcess: Bool {
+        if case .inThisProcess = fileReading { return true }
+        return false
+    }
+
     /// Where framework instances run: in instances of the app's framework
     /// service on the Mac, nowhere elsewhere. Tests replace it to serve an
     /// instance from an anonymous listener.

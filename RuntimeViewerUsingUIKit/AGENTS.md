@@ -16,8 +16,56 @@ says why at each step:
    command extensions, before any engine exists (root `AGENTS.md`, *Injection commands*).
 3. `SuspensionPreventionRegistrar.registerIfAvailable()`.
 4. `.local`, then the engine manager, which advertises this device to a Mac.
+5. `runtimeEngineManagerSettingsFollower.startFollowing()` — the settings the manager takes, as on the
+   Mac. Not in the settings lifecycle controller, which runs first: reading the manager there would bring
+   the engines up before the command extensions are registered.
+6. `fileController.start()` — lets a file read from disk go thirty seconds after its last window left.
 
 A new step goes where its comment can say what it has to come before.
+
+## Windows and their documents
+
+Every window — a `UIScene` — has a `DocumentSession` (RuntimeViewerAppCore), the type the macOS app's
+`Document` holds too: it owns the window's `DocumentState` and opens before anything binds, joining the
+engine's background work, and closes when the window goes. **Never make a `DocumentState` in the app, and
+never call `startBackgroundWork()` or `documentWillClose()` yourself.**
+
+- **`DocumentSessionRegistry` hands each scene its session**, by `UISceneSession.persistentIdentifier`:
+  `SceneDelegate` asks for it as the scene connects. A window keeps its session while the process lives —
+  the system disconnects background scenes to save memory, and one connecting again finds its document as
+  it left it — and the session closes only when the user closes the window
+  (`application(_:didDiscardSceneSessions:)` → `discardSessions(forWindows:)`).
+- **A window opened for a file** is requested with the file's engine reserved in the registry under a
+  request identifier, which travels in the scene's `NSUserActivity` (`FileWindowActivity`, of the type
+  `<bundle identifier>.fileWindow` each `Info.plist` lists under `NSUserActivityTypes`). A window whose
+  request is unknown — one the system restores after a relaunch, or the New Window an iPad offers — starts
+  on this device: nothing of a window is restored, as on the Mac.
+- iOS and the jailbroken app support multiple scenes (`UIApplicationSupportsMultipleScenes`), as visionOS
+  always did; an iPhone still shows one.
+
+## Opening files
+
+The apps open Mach-O files, bundles, folders and dyld shared caches from disk through `FileController`
+(`App/FileController.swift`), the counterpart of the macOS app's: the open button beside the gear on the
+sidebar's root page (a document picker), Open Path… on the jailbroken app, and Open In from Files
+(`CFBundleDocumentTypes` for `public.data` and `public.directory`, opened in place).
+
+- **The shared part is RuntimeViewerAppCore's `RuntimeFileOpener`**, the one the Mac's File › Open… uses:
+  it picks the dependency cache — this device's own for a file built for this platform, the file alone when
+  that cache cannot be opened — and reads the file **in this process**, so an unreadable file throws before
+  any window opens, and `FileController` says why over the window it was opened from. The opener holds a
+  security-scoped URL's access while the engine reads the file, and `RuntimeFileEngineParking` takes the
+  engine off the list thirty seconds after its last window left, ending the access.
+- **Where a file opens**: in a window of its own where the device shows several
+  (`UIApplication.supportsMultipleScenes`: iPad, visionOS), and on an iPhone over the window it was opened
+  from, full screen, held by `FileController`. A file window's sidebar has a close button
+  (`MainCoordinator(documentState:isFileWindow:)`); it destroys the scene, or on an iPhone dismisses the
+  stacked window back to the one under it.
+- **Open Path… exists where the app has no container** (`FileController.opensAbsolutePaths`, decided at
+  run time from the home directory — the jailbroken variant): a document picker cannot reach the system's
+  paths or another app's binaries. No compile-time flag decides it.
+
+Background: `Documentations/Evolutions/draft-window-model-on-ios.md`.
 
 ## Settings
 

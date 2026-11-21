@@ -163,7 +163,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
   <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">Draft</span></p>
   <h1><span class="proposal-number">Draft</span> iOS 的窗口模型与打开文件</h1>
   <dl class="meta">
-    <div><dt>状态</dt><dd><span class="status status-accepted">Accepted</span></dd></div>
+    <div><dt>状态</dt><dd><span class="status status-in-progress">In Progress</span></dd></div>
     <div><dt>最后更新</dt><dd>2026-11-21</dd></div>
     <div><dt>创建日期</dt><dd>2026-11-21</dd></div>
     <div><dt>作者</dt><dd>JH</dd></div>
@@ -298,7 +298,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
   <table>
     <thead><tr><th>文件 / 类型</th><th>动作</th><th>改什么</th><th>为什么</th><th>步骤</th></tr></thead>
     <tbody>
-      <tr><td><code>RuntimeViewerPackages/<wbr>Package.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>AppCore 对 <code>RuntimeViewerEngineManagement</code> 的依赖去掉 <code>condition</code></td><td>打开文件、跟随设置的共用逻辑要用管理器</td><td class="numeric">1</td></tr>
+      <tr><td><code>RuntimeViewerPackages/<wbr>Package.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>对 <code>RuntimeViewerEngineManagement</code> 的四处依赖（AppCore、AppUI、SettingsUI、引擎管理的测试）都去掉 <code>condition</code></td><td>打开文件、跟随设置的共用逻辑要用管理器；守卫测试把清单里任何一处带平台条件的模块都当作 macOS 专属</td><td class="numeric">1</td></tr>
       <tr><td><code>RuntimeViewerAppCore/<wbr>Document/<wbr>DocumentSession.swift</code></td><td><span class="tag tag-added">新增</span></td><td>编号、<code>documentState</code>、<code>open()</code>、<code>close()</code>，各只生效一次</td><td>两端共用的文档会话</td><td class="numeric">1</td></tr>
       <tr><td><code>RuntimeViewerUsingAppKit/<wbr>…/App/<wbr>Document.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>持有 <code>DocumentSession</code>；<code>makeWindowControllers</code> 调 <code>open()</code>，<code>close()</code> 调会话的 <code>close()</code>；<code>mcpIdentifier</code> 由编号拼出</td><td>Mac 改用共用会话，行为不变</td><td class="numeric">1</td></tr>
       <tr><td><code>…/App/<wbr>AppMCPBridgeDocumentProvider.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>只要 <code>Document</code> 的两个属性形状不变就不动</td><td>同上</td><td class="numeric">1</td></tr>
@@ -310,9 +310,9 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
       <tr><td><code>RuntimeViewerUsingUIKit/<wbr>…/App/<wbr>SceneDelegate.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>从注册表取会话，先 <code>open()</code> 再建界面；去掉直接 <code>DocumentState()</code></td><td>iOS 的窗口模型</td><td class="numeric">2</td></tr>
       <tr><td><code>RuntimeViewerUsingUIKit/<wbr>…/App/<wbr>AppDelegate.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>didDiscardSceneSessions</code> 交给注册表关会话</td><td>窗口关掉时收尾</td><td class="numeric">2</td></tr>
       <tr><td><code>RuntimeViewerEngineManagement/<wbr>RuntimeEngineManager.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>公开只读的 <code>readsFilesInThisProcess</code></td><td>放走文件引擎时分两种做法</td><td class="numeric">3</td></tr>
-      <tr><td><code>RuntimeViewerAppCore/<wbr>File/<wbr>RuntimeFileOpener.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>startReading(fileAt:)</code>、<code>letGoOfFile(readBy:)</code>、安全作用域访问；<code>runtimeFileOpener</code> 依赖</td><td>打开文件的共用部分</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerAppCore/<wbr>Engine/<wbr>RuntimeFileOpener.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>startReading(fileAt:)</code>、<code>letGoOfFile(readBy:)</code>、安全作用域访问；<code>runtimeFileOpener</code> 依赖</td><td>打开文件的共用部分</td><td class="numeric">3</td></tr>
       <tr><td><code>RuntimeViewerAppCore/<wbr>Engine/<wbr>RuntimeFileEngineParking.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>去掉 <code>#if os(macOS)</code>；放走引擎改调 <code>letGoOfFile(readBy:)</code></td><td>iOS 上关掉的文件也释放</td><td class="numeric">3</td></tr>
-      <tr><td><code>RuntimeViewerSettings/<wbr>Settings+File.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>platformNamesPairedWithThisMac</code> 改名 <code>platformNamesPairedWithThisDevice</code>、按平台取值；iOS 与 visionOS 上本机缓存打不开时不配对</td><td>iOS 的二进制配上设备自己的缓存</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerSettings/<wbr>Settings+File.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>platformNamesPairedWithThisMac</code> 改名 <code>platformNamesPairedWithThisDevice</code>、按平台取值；<code>canPairWithThisMacsCache(_:)</code> 改名 <code>canPairWithThisDevicesCache(_:)</code></td><td>iOS 的二进制配上设备自己的缓存</td><td class="numeric">3</td></tr>
       <tr><td><code>RuntimeViewerUsingAppKit/<wbr>…/App/<wbr>FileController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>读文件头、选缓存、<code>startReading</code> 改调 <code>runtimeFileOpener</code>；其余不变</td><td>Mac 改用共用部分</td><td class="numeric">3</td></tr>
       <tr><td><code>RuntimeFileOpenerTests</code>、<code>RuntimeFileEngineParking</code> 的已有测试</td><td><span class="tag tag-added">新增</span> / <span class="tag tag-changed">修改</span></td><td>见步骤 3 的行为清单</td><td>打开与放走的契约</td><td class="numeric">3</td></tr>
       <tr><td><code>Settings.File</code> 的已有测试</td><td><span class="tag tag-changed">修改</span></td><td>跟着改名；macOS 上配对不变</td><td>防回归</td><td class="numeric">3</td></tr>
@@ -321,10 +321,10 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
       <tr><td><code>…/Main/<wbr>MainCoordinator.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>把两个新请求转给 <code>FileController</code> / 文件窗口的持有者</td><td>同上</td><td class="numeric">4</td></tr>
       <tr><td>iOS、越狱版的 <code>Info.plist</code></td><td><span class="tag tag-changed">修改</span></td><td><code>CFBundleDocumentTypes</code>（<code>public.data</code>、<code>public.directory</code>，<code>Alternate</code>）、<code>LSSupportsOpeningDocumentsInPlace</code></td><td>「用其他 App 打开」</td><td class="numeric">4</td></tr>
       <tr><td><code>…/App/<wbr>SceneDelegate.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>连接时的 <code>urlContexts</code> 与 <code>scene(_:openURLContexts:)</code> 交给 <code>FileController</code></td><td>同上</td><td class="numeric">4</td></tr>
-      <tr><td><code>RuntimeViewerAppCore/<wbr>Diagnostics/<wbr>ApplicationLogs.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>formattedEntries(since:)</code></td><td>导出日志的共用部分</td><td class="numeric">5</td></tr>
+      <tr><td><code>RuntimeViewerAppCore/<wbr>App/<wbr>ApplicationLogs.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>formattedEntries(since:)</code></td><td>导出日志的共用部分</td><td class="numeric">5</td></tr>
       <tr><td><code>…/App/<wbr>DebugMenuController.swift</code>（macOS）</td><td><span class="tag tag-changed">修改</span></td><td>改用 <code>ApplicationLogs</code></td><td>Mac 改用共用部分</td><td class="numeric">5</td></tr>
-      <tr><td><code>RuntimeViewerAppCore/<wbr>Settings/<wbr>RuntimeEngineManagerSettingsFollower.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>startFollowing()</code></td><td>两端共用</td><td class="numeric">5</td></tr>
-      <tr><td>两端的 <code>SettingsLifecycleController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>读完设置后启动 follower</td><td>iOS 跟 Mac 一样</td><td class="numeric">5</td></tr>
+      <tr><td><code>RuntimeViewerAppCore/<wbr>Engine/<wbr>RuntimeEngineManagerSettingsFollower.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>startFollowing()</code></td><td>两端共用</td><td class="numeric">5</td></tr>
+      <tr><td>Mac 的 <code>SettingsLifecycleController.swift</code>、iOS 的 <code>AppDelegate.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>Mac 读完设置后启动 follower；iOS 在引擎管理器起来之后启动</td><td>iOS 跟 Mac 一样跟随；在读设置时碰管理器会让引擎早于命令扩展起来</td><td class="numeric">5</td></tr>
       <tr><td><code>ApplicationLogsTests</code>、<code>RuntimeEngineManagerSettingsFollowerTests</code></td><td><span class="tag tag-added">新增</span></td><td>见步骤 5 的行为清单</td><td>契约</td><td class="numeric">5</td></tr>
       <tr><td><code>Tests/<wbr>RuntimeViewerAppCoreTests/<wbr>AppTargetBoundaryTests.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>两个 App target 参数化；iOS 的 <code>MainViewModel</code> 列为例外，第四步删</td><td>分层扩到 iOS</td><td class="numeric">6</td></tr>
       <tr><td>三份 <code>AGENTS.md</code>、愿景、两份索引</td><td><span class="tag tag-changed">修改</span></td><td>见方案第 10 条</td><td>文档</td><td class="numeric">7</td></tr>
@@ -336,14 +336,14 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <section id="proposal">
   <h2>提议方案</h2>
   <ol>
-    <li><strong>AppCore 在所有平台上链接引擎管理</strong>：<code>HelperClient</code>、<code>CatalystExtensions</code>、<code>Injection</code> 照旧只在 macOS；<code>MainViewModel</code>、<code>MainRoute</code> 及其依赖的那批文件仍是 <code>#if os(macOS)</code>，第四步再放开。</li>
-    <li><strong>共用的文档会话 <code>DocumentSession</code></strong>：持有 <code>DocumentState</code> 与进程内从 1 起的编号；<code>open()</code> 在界面绑定之前启动引擎的后台工作，<code>close()</code> 离开并关掉这个文档带来的成员，各只生效一次。Mac 的 <code>Document</code> 持有一个，MCP 编号写成 <code>"document\(session.number)"</code>。</li>
+    <li><strong>AppCore 在所有平台上链接引擎管理</strong>：清单里对 <code>RuntimeViewerEngineManagement</code> 的四处依赖都去掉平台条件；<code>HelperClient</code>、<code>CatalystExtensions</code>、<code>Injection</code> 照旧只在 macOS；<code>MainViewModel</code>、<code>MainRoute</code> 及其依赖的那批文件仍是 <code>#if os(macOS)</code>，第四步再放开。</li>
+    <li><strong>共用的文档会话 <code>DocumentSession</code></strong>：持有 <code>DocumentState</code> 与进程内从 1 起的编号；<code>open()</code> 在界面绑定之前启动引擎的后台工作，<code>close()</code> 离开并关掉这个文档带来的成员——开过没开过都收尾，关过之后 <code>open()</code> 不再生效；各只生效一次。Mac 的 <code>Document</code> 持有一个，MCP 编号写成 <code>"document\(session.number)"</code>。</li>
     <li><strong>iOS 的窗口模型</strong>：iOS 与越狱版打开多窗口（visionOS 本来就开着）；AppCore 的 <code>DocumentSessionRegistry</code> 按 <code>UISceneSession.persistentIdentifier</code> 给每个窗口一个会话，进程活着时一直保留，用户关掉窗口时 <code>close()</code>；为文件开的新窗口先预留引擎、拿请求号，scene 连接时取走，取不到（重启后恢复的窗口）就用本机。<code>SceneDelegate</code> 先 <code>open()</code> 再建界面。</li>
     <li><strong>打开文件的共用部分 <code>RuntimeFileOpener</code></strong>：<code>startReading(fileAt:)</code> 在主线程外读文件头，已列出的文件优先，否则配默认依赖缓存，交给管理器；带安全作用域的 URL 一直保持访问，直到引擎被放走。<code>letGoOfFile(readBy:)</code>：file service 里读的挂起，进程里读的从管理器拿掉并结束访问。Mac 的 <code>FileController</code> 改用它。</li>
     <li><strong><code>RuntimeFileEngineParking</code> 放开平台限定</strong>，经 <code>letGoOfFile(readBy:)</code> 放走；管理器公开 <code>readsFilesInThisProcess</code>。</li>
-    <li><strong>依赖缓存按本机配对</strong>：<code>platformNamesPairedWithThisDevice</code> 按平台取值；iOS 与 visionOS 上本机缓存打不开时文件单独读。</li>
+    <li><strong>依赖缓存按本机配对</strong>：<code>platformNamesPairedWithThisDevice</code>、<code>canPairWithThisDevicesCache(_:)</code> 按平台取值；在进程里读的文件按默认配了本机缓存、本机缓存却打不开时，<code>RuntimeFileOpener</code> 改为单独读。</li>
     <li><strong>iOS 的打开入口</strong>（iOS target 的 <code>FileController</code>）：齿轮旁的打开按钮（越狱版是 Choose File… 与 Open Path… 的菜单，越狱版在运行时按「没有容器」判断）；「用其他 App 打开」；读成功后多窗口设备开新窗口、iPhone 叠在上面；文件窗口有关闭按钮；读不了就不开窗口，在当前窗口提示原因。</li>
-    <li><strong>平台无关的小块逻辑进 AppCore</strong>：<code>ApplicationLogs.formattedEntries(since:)</code>、<code>RuntimeEngineManagerSettingsFollower</code>。</li>
+    <li><strong>平台无关的小块逻辑进 AppCore</strong>：<code>ApplicationLogs.formattedEntries(since:)</code>、<code>RuntimeEngineManagerSettingsFollower</code>（Mac 读完设置后启动，iOS 在引擎管理器起来之后启动）。</li>
     <li><strong>边界测试扩到 iOS target</strong>，iOS 的 <code>MainViewModel</code> 列为唯一例外，第四步删。</li>
     <li><strong>文档</strong>：<code>RuntimeViewerUsingUIKit/AGENTS.md</code> 加「窗口与文档会话」「打开文件」两节；<code>RuntimeViewerUsingAppKit/AGENTS.md</code> 与根 <code>AGENTS.md</code> 跟上；愿景表与两份索引登记本篇。</li>
   </ol>
@@ -372,7 +372,7 @@ public final class DocumentSession {
     /// Joins the engine's background work. Only the first call does anything.
     public func open()
     /// Leaves it and closes what this document brought into being.
-    /// Only the first call does anything, and only after open().
+    /// Opened or not; only the first call does anything, and open() does nothing after it.
     public func close()
 }
 
@@ -539,25 +539,25 @@ public final class RuntimeEngineManagerSettingsFollower {
 <section id="steps">
   <h2>落地步骤</h2>
   <ol>
-    <li><strong>AppCore 链接引擎管理，共用的文档会话</strong>
+    <li><strong>AppCore 链接引擎管理，共用的文档会话</strong>（已完成）
       <ul><li>行为：<code>documentSessionOpensOnlyOnce</code>、<code>documentSessionClosesOnlyOnceAndOnlyAfterOpening</code>、<code>documentSessionNumbersCountUpFromOne</code>、<code>macDocumentBehavesAsBefore</code>、<code>appCoreBuildsWithEngineManagementOnIOSAndVisionOS</code></li></ul>
     </li>
-    <li><strong>iOS 的窗口模型</strong>
+    <li><strong>iOS 的窗口模型</strong>（已完成，设备上待用户看）
       <ul><li>行为：<code>registryGivesAWindowOneSessionAndKeepsIt</code>、<code>registryHandsAReservedEngineToTheWindowThatAsksForIt</code>、<code>registryFallsBackToLocalForAnUnknownRequest</code>、<code>registryClosesTheSessionsOfDiscardedWindows</code>、<code>iOSWindowJoinsTheEngineBackgroundWork</code>（设备上看日志）、<code>iPadOpensASecondWindowOnThisDevice</code>（由用户看）</li></ul>
     </li>
-    <li><strong>打开文件的共用部分与放走</strong>
-      <ul><li>行为：<code>openerReadsTheListedFileAsTheUserPairedIt</code>、<code>openerPairsANewFileWithTheDefaultCache</code>、<code>openerEndsSecurityScopedAccessWhenReadingFails</code>、<code>parkingLetsGoOfAnInProcessFileEngineAfterTheGracePeriod</code>、<code>parkingStillSuspendsAFileServiceEngine</code>、<code>macFilesStillPairWithThisMacsCache</code>、<code>macFileModeBehavesAsBefore</code></li></ul>
+    <li><strong>打开文件的共用部分与放走</strong>（已完成）
+      <ul><li>行为：<code>openerReadsTheListedFileAsTheUserPairedIt</code>、<code>openerPairsANewFileWithTheDefaultCache</code>、<code>openerThrowsAndListsNothingForAnUnreadableFile</code>、<code>parkingLetsGoOfAnInProcessFileEngineAfterTheGracePeriod</code>、<code>parkingStillSuspendsAFileServiceEngine</code>、<code>macFilesStillPairWithThisMacsCache</code>、<code>macFileModeBehavesAsBefore</code></li></ul>
     </li>
-    <li><strong>iOS 的打开入口</strong>（以下都由用户在设备上看）
+    <li><strong>iOS 的打开入口</strong>（已完成，以下都由用户在设备上看）
       <ul><li>行为：<code>openButtonChoosesAFileAndOpensItInAFileWindow</code>、<code>openPathOpensAnAbsolutePathOnTheJailbrokenApp</code>、<code>fileWindowStacksOverTheWindowOnIPhoneAndClosesBackToThisDevice</code>、<code>unreadableFileShowsWhyAndOpensNoWindow</code>、<code>openInFromFilesOpensTheFile</code></li></ul>
     </li>
-    <li><strong>导出日志与跟随设置进 AppCore</strong>
+    <li><strong>导出日志与跟随设置进 AppCore</strong>（已完成）
       <ul><li>行为：<code>applicationLogsListsThisProcessesEntriesSinceADate</code>、<code>followerWritesTheSharedCacheSwitchIntoTheManager</code>、<code>macExportLogsBehavesAsBefore</code></li></ul>
     </li>
-    <li><strong>边界测试扩到 iOS target</strong>
+    <li><strong>边界测试扩到 iOS target</strong>（已完成）
       <ul><li>行为：<code>iOSAppTargetHoldsNoViewModelButTheOneWaitingForStep4</code>、<code>macAppTargetStillHoldsNoViewModel</code></li></ul>
     </li>
-    <li><strong>文档</strong></li>
+    <li><strong>文档</strong>（已完成）</li>
   </ol>
   <div class="callout callout-note">
     <p><strong>收尾时必须判断两件事</strong>：要不要配套专题文章（预计不需要）；有没有新术语（「文档会话」可能要登记进术语表）。</p>
@@ -567,7 +567,7 @@ public final class RuntimeEngineManagerSettingsFollower {
 <section id="log">
   <h2>决策日志</h2>
   <details>
-    <summary>15 条，最近一条：用户批准，开始实现</summary>
+    <summary>18 条，最近一条：实现完成，待用户看过后收尾</summary>
     <div class="details-body">
       <div class="table-wrap">
       <table>
@@ -588,6 +588,9 @@ public final class RuntimeEngineManagerSettingsFollower {
           <tr><td class="numeric">2026-11-21</td><td>自定：依赖缓存按本机配对，打不开就单独读</td><td>沙盒里能否打开本机缓存没验证</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>自定：这一步 AppCore 里新代码都不弹窗，暂不需要新的跨层客户端</td><td>共用部分只返回结果或抛错，提示留在各端的控制器</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>用户批准，开始实现</td><td>看过简报后批准；从 <code>next</code> 切 <code>feature/window-model-on-ios</code></td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>实现中的调整（步骤 1–3）</td><td>一、<code>RuntimeViewerEngineManagement</code> 在清单里的四处平台条件一起去掉：守卫测试把清单里任何一行带 <code>appkitPlatforms</code> 条件的模块都算作 macOS 专属；模块本身从 0099 起各平台都编。二、<code>DocumentSession.close()</code> 不要求先 <code>open()</code>：Mac 的文档没显示过就关时也要收尾，照旧。三、<code>RuntimeFileOpener</code> 放在 AppCore 的 <code>Engine/</code>，<code>ApplicationLogs</code> 放 <code>App/</code>，跟随设置的类型放 <code>Engine/</code>。四、本机缓存打不开时退回单独读，做在 <code>RuntimeFileOpener</code> 里，设置只按平台给默认配对：判断缓存能否打开要用 Core 里的 <code>FullDyldCache</code>，设置模块不该依赖它。五、<code>canPairWithThisMacsCache(_:)</code> 改名为 <code>canPairWithThisDevicesCache(_:)</code>。六、行为 <code>openerEndsSecurityScopedAccessWhenReadingFails</code> 换成 <code>openerThrowsAndListsNothingForAnUnreadableFile</code>：测试里的文件 URL 不带安全作用域；安全作用域在设备上验。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>实现中的调整（步骤 4–6）</td><td>一、iOS 上的 follower 由 <code>AppDelegate</code> 在引擎管理器起来之后启动：设置生命周期控制器在启动顺序第一步，那时读管理器会让引擎早于两个命令扩展的注册。二、是不是文件窗口，看它的引擎是不是管理器列出的文件引擎：系统断开再连回来的文件窗口没有请求号，照样要有关闭按钮。三、叠在 iPhone 窗口上的文件窗口由 <code>FileController</code> 同时持有协调器与会话。四、「越狱版」判断写成 <code>FileController.opensAbsolutePaths</code>，打开按钮在越狱版上是菜单。五、<code>ApplicationLogs.formattedEntries(since:)</code> 是非隔离的 <code>async</code> 函数。六、边界测试按 App target 参数化，例外清单里的 view model 搬走后测试就报「把例外删掉」。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>实现完成，待用户看过后收尾</td><td>验证都在 Ultra 上：AppCore 的 32 个测试与设置的 7 个测试全过；macOS App 用 Tuist workspace（Debug）编过；<code>RuntimeViewer iOS Jailbroken</code> 编过并打成越狱包，<code>RuntimeViewer visionOS</code> 编过，<code>activateSceneSession(for:)</code> 在 visionOS 上可用。没做的：普通 iOS 没单独编（与越狱版同一份源码）；设备上的行为由用户在 vphone 上看；iPad 多窗口没有设备，没验。文档判断：规则写进 <code>RuntimeViewerUsingUIKit/AGENTS.md</code>（启动顺序与两节新内容），<code>RuntimeViewerUsingAppKit/AGENTS.md</code> 与根 <code>AGENTS.md</code> 跟上；不另写使用指南或实现说明；不另立术语。</td></tr>
         </tbody>
       </table>
       </div>

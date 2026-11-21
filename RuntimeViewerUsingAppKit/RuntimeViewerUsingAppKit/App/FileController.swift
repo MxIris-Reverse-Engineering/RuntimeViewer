@@ -26,7 +26,7 @@ final class FileController {
 
     @Dependency(\.runtimeEngineManager) private var runtimeEngineManager
 
-    @Dependency(\.settings) private var settings
+    @Dependency(\.runtimeFileOpener) private var runtimeFileOpener
 
     @Dependency(\.runtimeFileEngineParking) private var runtimeFileEngineParking
 
@@ -51,8 +51,10 @@ final class FileController {
     /// closes once the user has acknowledged it, and Open Recent does not
     /// list the file.
     func openDocument(forFileAt url: URL, display: Bool) async throws -> Document {
-        let file = try await fileToRead(at: url)
-        let engine = try await runtimeEngineManager.startReading(file)
+        // The listed engine for the file, or a new one paired with the
+        // default cache: RuntimeViewerAppCore's, shared with the iOS apps.
+        let engine = try await runtimeFileOpener.startReading(fileAt: url)
+        let displayName = runtimeEngineManager.file(of: engine)?.displayName ?? url.lastPathComponent
         let document = Document(runtimeEngine: engine)
         NSDocumentController.shared.addDocument(document)
         if display {
@@ -60,25 +62,9 @@ final class FileController {
             document.showWindows()
         }
         Task { [weak self] in
-            await self?.finishOpening(document, readBy: engine, from: url, named: file.displayName)
+            await self?.finishOpening(document, readBy: engine, from: url, named: displayName)
         }
         return document
-    }
-
-    /// The file at `url` as file mode reads it: the listed one, with the
-    /// cache the user paired it with, or a new one paired with the default
-    /// cache. What is at `url` is inspected off the main thread — a header
-    /// read, but of a file that can be anywhere, a slow volume included.
-    private func fileToRead(at url: URL) async throws -> RuntimeFile {
-        var file = try await Task.detached(priority: .userInitiated) {
-            try RuntimeFile(contentsOf: url)
-        }.value
-        if let listedFile = listedFile(withSource: file.source) {
-            file = listedFile
-        } else {
-            file.dependencyCache = settings.file.defaultDependencyCache(for: file)
-        }
-        return file
     }
 
     /// Waits for `engine` to have read its file. Then the file joins Open
@@ -107,13 +93,6 @@ final class FileController {
                 document.close()
             }
         }
-    }
-
-    private func listedFile(withSource source: RuntimeSource) -> RuntimeFile? {
-        for engine in runtimeEngineManager.fileRuntimeEngines where engine.source == source {
-            return runtimeEngineManager.file(of: engine)
-        }
-        return nil
     }
 }
 

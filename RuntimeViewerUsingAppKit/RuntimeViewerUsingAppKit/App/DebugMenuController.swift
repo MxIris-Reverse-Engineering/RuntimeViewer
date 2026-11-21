@@ -1,7 +1,7 @@
 import AppKit
 import FoundationToolbox
-import OSLog
 import RuntimeViewerArchitectures
+import RuntimeViewerApplication
 import DependenciesMacros
 
 @MainActor
@@ -41,19 +41,7 @@ final class DebugMenuController: NSObject {
         UserDefaults.standard.set(savePanel.nameFieldStringValue, forKey: Self.exportLogsLastFileNameDefaultsKey)
         Task.detached {
             do {
-                let store = try OSLogStore(scope: .currentProcessIdentifier)
-                let position = await store.position(date: Self.launchDate)
-                let entries = try store.getEntries(at: position)
-
-                var content = ""
-                let formatter = DateFormatter()
-                formatter.dateFormat = "HH:mm:ss.SSS"
-
-                for entry in entries {
-                    guard let logEntry = entry as? OSLogEntryLog, logEntry.subsystem.contains("RuntimeViewer") else { continue }
-                    content.append("[\(formatter.string(from: logEntry.date))] [\(logEntry.subsystem)/\(logEntry.category)] \(logEntry.composedMessage)\n")
-                }
-
+                let content = try await ApplicationLogs.formattedEntries(since: Self.launchDate)
                 try content.write(to: url, atomically: true, encoding: .utf8)
                 await MainActor.run {
                     NSWorkspace.shared.activateFileViewerSelecting([url])

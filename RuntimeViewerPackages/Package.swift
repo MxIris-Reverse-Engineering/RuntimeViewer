@@ -419,7 +419,7 @@ let package = Package(
                 .target(name: "RuntimeViewerSimulatorInstaller", condition: .when(platforms: appkitPlatforms)),
                 // The Indexing page lists the connected engines for the
                 // Always Index rows' engine menus.
-                .target(name: "RuntimeViewerEngineManagement", condition: .when(platforms: appkitPlatforms)),
+                "RuntimeViewerEngineManagement",
                 .product(name: "UIFoundationSettings", package: "UIFoundation"),
                 .product(name: "UIFoundationSettingsUI", package: "UIFoundation"),
                 .product(name: "Dependencies", package: "swift-dependencies"),
@@ -457,7 +457,7 @@ let package = Package(
                 "RuntimeViewerArchitectures",
                 "RuntimeViewerSettings",
                 .target(name: "RuntimeViewerHelperClient", condition: .when(platforms: appkitPlatforms)),
-                .target(name: "RuntimeViewerEngineManagement", condition: .when(platforms: appkitPlatforms)),
+                "RuntimeViewerEngineManagement",
                 .target(name: "RuntimeViewerCatalystExtensions", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
                 .product(name: "RuntimeViewerCrossReferences", package: "RuntimeViewerCore"),
@@ -484,7 +484,7 @@ let package = Package(
                 "RuntimeViewerUI",
                 "RuntimeViewerArchitectures",
                 "RuntimeViewerSettingsUI",
-                .target(name: "RuntimeViewerEngineManagement", condition: .when(platforms: appkitPlatforms)),
+                "RuntimeViewerEngineManagement",
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
                 .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
                 .product(name: "UIFoundation", package: "UIFoundation"),
@@ -609,7 +609,7 @@ let package = Package(
         .testTarget(
             name: "RuntimeViewerEngineManagementTests",
             dependencies: [
-                .target(name: "RuntimeViewerEngineManagement", condition: .when(platforms: appkitPlatforms)),
+                "RuntimeViewerEngineManagement",
                 .target(name: "RuntimeViewerHelperClient", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
                 .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
