@@ -316,4 +316,6 @@ when picking up follow-up work.
   typed on the page's background (fixed), `SP.4` the row icon's slot (fixed);
   `SP.5` a catalog kept for the whole search misses images indexed meanwhile
   and `SP.6` the field's text through a relay rather than an rx accessor, both
-  left as they are with the reasons recorded.
+  left as they are with the reasons recorded. A second pass over the fixes
+  added `SP.7` (a waiting Return fired for text typed after it; fixed) and
+  `SP.8` (arrow keys moved through the older results while waiting; left).

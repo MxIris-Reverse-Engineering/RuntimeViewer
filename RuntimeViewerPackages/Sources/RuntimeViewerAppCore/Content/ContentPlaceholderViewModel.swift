@@ -86,9 +86,10 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
 
     private var resultsSearchText: String?
 
-    /// Return pressed while the newest results were still coming: it opens the selected one of
-    /// them as soon as they arrive.
-    private var pendingSearchCommitDestination: SelectionRoute.Destination?
+    /// Return pressed while the newest results were still coming, and the text it was pressed for:
+    /// it opens the selected one of that text's results as soon as they arrive, and is dropped
+    /// once the text changes again — the user is still typing.
+    private var pendingSearchCommit: (destination: SelectionRoute.Destination, searchText: String)?
 
     private let clearSearchFieldRelay = PublishRelay<Void>()
 
@@ -219,7 +220,11 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
         )
         .filter { text in text.isEmpty || text.count >= minimumSearchTextLength }
         .do(onNext: { [weak self] text in
-            self?.latestSearchText = text
+            guard let self else { return }
+            latestSearchText = text
+            if let pendingSearchCommit, pendingSearchCommit.searchText != text {
+                self.pendingSearchCommit = nil
+            }
         })
         .flatMapLatest { [weak self] text -> Observable<SearchStep> in
             guard let self else { return .empty() }
@@ -250,7 +255,7 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
         switch step {
         case .inactive:
             resultsSearchText = nil
-            pendingSearchCommitDestination = nil
+            pendingSearchCommit = nil
             search = .inactive
         case .loading:
             search = .loading
@@ -262,9 +267,9 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
             }
             resultsSearchText = searchText
             search = .results(rows, selectedIndex: rows.isEmpty ? nil : 0)
-            if let destination = pendingSearchCommitDestination, searchText == latestSearchText {
-                pendingSearchCommitDestination = nil
-                commitSearch(in: destination)
+            if let pendingSearchCommit, pendingSearchCommit.searchText == searchText, searchText == latestSearchText {
+                self.pendingSearchCommit = nil
+                commitSearch(in: pendingSearchCommit.destination)
             }
         }
     }
@@ -311,7 +316,7 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
     /// results are still coming, opens the selected one of them once they arrive.
     private func commitSearch(in destination: SelectionRoute.Destination) {
         if !latestSearchText.isEmpty, resultsSearchText != latestSearchText {
-            pendingSearchCommitDestination = destination
+            pendingSearchCommit = (destination, latestSearchText)
             return
         }
         guard case .results(let rows, let selectedIndex?) = search else { return }
@@ -322,7 +327,7 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
 
     /// Ends the search: no results, no catalog, nothing waiting to open, and the field emptied.
     private func endSearch() {
-        pendingSearchCommitDestination = nil
+        pendingSearchCommit = nil
         searchResetRelay.accept(())
         clearSearchFieldRelay.accept(())
     }

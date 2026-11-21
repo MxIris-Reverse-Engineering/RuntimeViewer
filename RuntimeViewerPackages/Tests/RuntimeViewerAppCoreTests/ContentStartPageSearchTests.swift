@@ -264,6 +264,22 @@ struct ContentStartPageSearchTests {
         #expect(startPage.viewModel.search == .inactive)
     }
 
+    @Test("Return waiting for its results is dropped once the text changes again")
+    func waitingReturnIsDroppedWhenTheTextChanges() async throws {
+        let startPage = try await makeStartPage(engineID: "ContentStartPageSearchTests.returnDropped")
+
+        startPage.searchText.accept("NSObject")
+        startPage.commits.accept(.focusedTab)
+        startPage.searchText.accept("NSObj")
+
+        _ = try await nextValue(from: startPage.output.search) { search in
+            if case .results = search { return true }
+            return false
+        }
+        #expect(startPage.documentState.selectedRuntimeObject == nil)
+        #expect(startPage.documentState.editorArea.focusedPane.activeTab.imagePath == nil)
+    }
+
     @Test("Return with nothing found opens nothing")
     func returnWithNothingFoundOpensNothing() async throws {
         let startPage = try await makeStartPage(engineID: "ContentStartPageSearchTests.nothing")
