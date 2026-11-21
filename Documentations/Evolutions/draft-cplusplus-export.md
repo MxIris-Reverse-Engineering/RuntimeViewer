@@ -12,7 +12,7 @@
 
 ## 摘要
 
-导出（单个镜像的 Export Interfaces… 与批量导出）在 Objective-C、Swift 之外写出镜像的 C++ 类与命名空间。每个 C++ 对象写成一份伪头文件，内容就是内容区打印的那一份。目录格式放进 `CPlusPlusHeaders/`，单文件格式合成 `<镜像名>.hpp`，两种格式在配置页里像 ObjC、Swift 一样单选。
+导出（单个镜像的 Export，⌘E；批量的 Export Multiple Images…，⇧⌘E）在 Objective-C、Swift 之外写出镜像的 C++ 类与命名空间。每个 C++ 对象写成一份伪头文件，内容就是内容区打印的那一份。目录格式放进 `CPlusPlusHeaders/`，单文件格式合成 `<镜像名>.hpp`，两种格式在配置页里像 ObjC、Swift 一样单选。
 
 C++ 对象是一棵树：顶层多是命名空间，类挂在下面，而打印器打印命名空间时只给其中的类写一行前向声明。所以导出要把整棵树展开，每个类与命名空间各写一份。文件名用限定名，免得不同命名空间里的同名类互相覆盖。
 
@@ -84,11 +84,11 @@ Core 指 `RuntimeViewerCore/Sources/RuntimeViewerCore/`，AppCore 指 `RuntimeVi
 | `RuntimeViewerCore/Tests/RuntimeViewerCoreTests/CPlusPlusExportTests.swift` | 新增 | 第 1 步的行为：libc++abi 上的两种格式、默认不要、文件名、展开顺序、README、计数、与内容区一致 | 第 1 步行为 | 1 |
 | AppCore `Exporting/ExportingState.swift` | 修改 | `ExportingDefaultsKey.cPlusPlusFormat`、`ExportingState.cPlusPlusFormat`；测试用的完成态带 C++ 计数 | 方案第 6 条 | 2 |
 | AppCore `Exporting/ExportingConfigurationViewModel.swift` | 修改 | 取对象带 `true`；`Input` 加 `cPlusPlusFormatSelected`，`Output` 加 `cPlusPlusCount`、`hasCPlusPlus`、`cPlusPlusFormat`；记住所选格式 | 方案第 6 条 | 2 |
-| App `Exporting/ExportingConfigurationViewController.swift` | 修改 | 「C++:」一组单选与说明，摘要加「N C++」 | 方案第 6 条 | 2 |
+| App `Exporting/ExportingConfigurationViewController.swift` | 修改 | 「C++:」一组单选与说明，摘要加「N C++」；整页放进滚动视图 | 方案第 6 条 | 2 |
 | AppCore `Exporting/ExportingProgressViewModel.swift` | 修改 | 配置带 `cPlusPlusFormat` 与 `includesCPlusPlusObjects: true` | 方案第 6 条 | 2 |
 | AppCore `Exporting/ExportingCompletionViewModel.swift` | 修改 | 摘要的语言一行在 C++ 数大于 0 时加「C++: N」 | 方案第 6 条 | 2 |
 | AppCore `BatchExporting/BatchExportingState.swift` | 修改 | `cPlusPlusFormat`；每个镜像的 `cPlusPlusCount` 与汇总的 `totalCPlusPlusCount` | 方案第 6 条 | 2 |
-| AppCore `BatchExporting/BatchExportingConfigurationViewModel.swift`、App `BatchExporting/BatchExportingConfigurationViewController.swift` | 修改 | C++ 一组单选，与单个导出共用格式键 | 方案第 6 条 | 2 |
+| AppCore `BatchExporting/BatchExportingConfigurationViewModel.swift`、App `BatchExporting/BatchExportingConfigurationViewController.swift` | 修改 | C++ 一组单选，与单个导出共用格式键；整页放进滚动视图 | 方案第 6 条 | 2 |
 | AppCore `BatchExporting/BatchExportingProgressViewModel.swift` | 修改 | `exportOne` 的配置带 C++ 格式与 `true` | 方案第 6 条 | 2 |
 | AppCore `BatchExporting/BatchExportingCompletionViewModel.swift`、App `BatchExporting/BatchExportingCompletionViewController.swift` | 修改 | `objcSwiftValue` 改名 `languageCountsValue`，三个数；卡片标签「ObjC · Swift · C++」 | 方案第 6 条 | 2 |
 | `RuntimeViewerPackages/Tests/RuntimeViewerAppCoreTests/ExportingCompletionViewModelTests.swift` | 修改 | 单个与批量完成页的 C++ 计数 | 第 2 步行为 | 2 |
@@ -296,3 +296,4 @@ for group in RuntimeInterfaceExportItem.Group.allCases {
 | 2026-11-21 | 第 2 步完成 | App 层照方案改完，新增 4 条测试放在 `ExportingLanguageCountsTests`；连同原有的导出完成页测试、C++ 展示测试和两个边界检查，App 层 22 条测试全部通过。整个 App 经 Tuist workspace 编过（Debug，不签名）：给新 worktree 做 `./TuistScript.sh install` 时，连 GitHub 的 HTTPS 先两次被对端断开（HTTP/2 流被重置、TLS 读到意外的 EOF），第三次才装上；在那之前先拿编好的包对改过的三个 App 文件做了 `swiftc -typecheck`，也通过。`./TuistScript.sh check` 只报原有的那一条（`Tuist.swift` 缺 `SwiftSectionTestingMacros`），本次没有增删 target，Tuist 描述不用跟着改。 |
 | 2026-11-21 | 文档判断 | 不写使用指南或实现说明：导出没有使用指南，规则在本提案、`AGENTS.md` 与代码注释里。没有新术语；术语表的「C++ 对象」改成导出会写出它们，`AGENTS.md` 的 RuntimeViewerCore 一段改成 App 的两条导出路径也要 C++ 对象、CLI 不要，提案索引的暂缓项改为 Find、MCP 与 CLI。`AGENTS.md` 在 `next` 上已有 72,129 字节，超过它自己定的 64 KiB 上限，是原有问题；这次只多了 224 字节。 |
 | 2026-11-21 | 实现完成，待用户看过后收尾 | 两步都已提交；在本地合进常驻检出的 `next`，不推送。界面（配置页的 C++ 一组、摘要与完成页的计数）没有目视，留给用户看。 |
+| 2026-11-21 | 用户看过，配置页改为可滚动 | 用户在 App 里看了 QuartzCore 的导出：Objective-C、Swift、C++ 三组都显示时，配置页超出窗口里的框，压到 Cancel 与 Next 上。单个导出和批量导出的配置页都把内容放进滚动视图（文档视图翻转、宽度跟随滚动区、滚动条自动隐藏），批量那页三组总是全显示，也一起改了。整个 App 重新经 Tuist 编过。之后用户确认这个功能可以收尾。编号与 Implemented 留到 `next` 推送的那次，与长类型拆行、欢迎窗口、起始页按进入 `next` 的先后一起取号。 |

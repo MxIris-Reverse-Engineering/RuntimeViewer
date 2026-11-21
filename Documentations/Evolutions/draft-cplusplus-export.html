@@ -190,7 +190,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 
 <section id="summary">
   <h2>摘要</h2>
-  <p>导出（单个镜像的 Export Interfaces… 与批量导出）在 Objective-C、Swift 之外写出镜像的 C++ 类与命名空间。每个 C++ 对象写成一份伪头文件，内容就是内容区打印的那一份。目录格式放进 <code>CPlusPlusHeaders/</code>，单文件格式合成 <code>&lt;镜像名&gt;.hpp</code>，两种格式在配置页里像 ObjC、Swift 一样单选。</p>
+  <p>导出（单个镜像的 Export，⌘E；批量的 Export Multiple Images…，⇧⌘E）在 Objective-C、Swift 之外写出镜像的 C++ 类与命名空间。每个 C++ 对象写成一份伪头文件，内容就是内容区打印的那一份。目录格式放进 <code>CPlusPlusHeaders/</code>，单文件格式合成 <code>&lt;镜像名&gt;.hpp</code>，两种格式在配置页里像 ObjC、Swift 一样单选。</p>
   <p>C++ 对象是一棵树：顶层多是命名空间，类挂在下面，而打印器打印命名空间时只给其中的类写一行前向声明。所以导出要把整棵树展开，每个类与命名空间各写一份。文件名用限定名，免得不同命名空间里的同名类互相覆盖。</p>
   <p>Core 的导出配置加一个默认关闭的 <code>includesCPlusPlusObjects</code>，只有 App 的两条导出路径打开它，所以 CLI 的 <code>export</code> 子命令输出不变。</p>
 </section>
@@ -278,7 +278,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
       <tr><td><code>RuntimeViewerCoreTests/CPlusPlusExportTests.swift</code></td><td><span class="tag tag-added">新增</span></td><td>libc++abi 上的两种格式、默认不要、文件名、展开顺序、README、计数、与内容区一致</td><td>第 1 步行为</td><td class="numeric">1</td></tr>
       <tr><td>AppCore <code>Exporting/ExportingState.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>ExportingDefaultsKey.cPlusPlusFormat</code>、<code>ExportingState.cPlusPlusFormat</code></td><td>方案第 6 条</td><td class="numeric">2</td></tr>
       <tr><td>AppCore <code>Exporting/ExportingConfigurationViewModel.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>取对象带 <code>true</code>；输入输出加 C++ 的格式、计数与显隐；记住所选格式</td><td>方案第 6 条</td><td class="numeric">2</td></tr>
-      <tr><td>App <code>Exporting/ExportingConfigurationViewController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>「C++:」一组单选与说明，摘要加「N C++」</td><td>方案第 6 条</td><td class="numeric">2</td></tr>
+      <tr><td>App <code>Exporting/ExportingConfigurationViewController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>「C++:」一组单选与说明，摘要加「N C++」；整页放进滚动视图（批量导出的配置页同样）</td><td>方案第 6 条</td><td class="numeric">2</td></tr>
       <tr><td>AppCore <code>Exporting/ExportingProgressViewModel.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>配置带 C++ 格式与 <code>includesCPlusPlusObjects: true</code></td><td>方案第 6 条</td><td class="numeric">2</td></tr>
       <tr><td>AppCore <code>Exporting/ExportingCompletionViewModel.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>C++ 数大于 0 时加「C++: N」</td><td>方案第 6 条</td><td class="numeric">2</td></tr>
       <tr><td>AppCore <code>BatchExporting/BatchExportingState.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>C++ 格式；每个镜像与汇总的 C++ 计数</td><td>方案第 6 条</td><td class="numeric">2</td></tr>
@@ -471,7 +471,7 @@ for group in RuntimeInterfaceExportItem.Group.allCases {
 <section id="log">
   <h2>决策日志</h2>
   <details>
-    <summary>7 条，最近一条：实现完成，待用户看过后收尾</summary>
+    <summary>8 条，最近一条：用户看过，配置页改为可滚动</summary>
     <div class="details-body">
       <div class="table-wrap">
       <table>
@@ -484,6 +484,7 @@ for group in RuntimeInterfaceExportItem.Group.allCases {
           <tr><td class="numeric">2026-11-21</td><td>第 2 步完成</td><td>App 层照方案改完，新增 4 条测试；App 层 22 条测试全部通过。整个 App 经 Tuist workspace 编过（<code>./TuistScript.sh install</code> 连 GitHub 前两次被对端断开，第三次才装上）；<code>check</code> 只报原有的 <code>SwiftSectionTestingMacros</code> 那一条。没有增删 target。</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>文档判断</td><td>不写使用指南或实现说明，没有新术语；术语表、<code>AGENTS.md</code> 与提案索引的暂缓项各改一句。<code>AGENTS.md</code> 本来就超过 64 KiB，是原有问题。</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>实现完成，待用户看过后收尾</td><td>两步都已提交；在本地合进常驻检出的 <code>next</code>，不推送。界面没有目视，留给用户看。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>用户看过，配置页改为可滚动</td><td>三组都显示时配置页超出框、压到按钮，单个与批量导出的配置页都放进滚动视图，App 重新编过。用户确认可以收尾；编号与 Implemented 留到 <code>next</code> 推送的那次，与长类型拆行、欢迎窗口、起始页按进入 <code>next</code> 的先后一起取号。</td></tr>
         </tbody>
       </table>
       </div>
