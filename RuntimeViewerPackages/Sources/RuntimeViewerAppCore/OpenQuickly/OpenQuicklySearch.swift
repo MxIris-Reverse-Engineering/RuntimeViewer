@@ -21,8 +21,10 @@ final class OpenQuicklySearch {
 
     /// The best `limit` entries matching `text`, best first; the catalog is read first when this
     /// search has none yet. Matching runs off the main thread: a catalog of every indexed image can
-    /// hold hundreds of thousands of names.
+    /// hold hundreds of thousands of names. A caller already cancelled — its search was dropped,
+    /// possibly by an `end()` that has just let the catalog go — gets nothing and reads nothing.
     func matches(for text: String, limit: Int) async -> [OpenQuicklyCatalog.Entry] {
+        guard !Task.isCancelled else { return [] }
         let catalogTask = catalog()
         let catalog = await catalogTask.value
         return await Self.matches(in: catalog, for: text, limit: limit)
@@ -35,7 +37,9 @@ final class OpenQuicklySearch {
     }
 
     /// The catalog of this search, read on first use: the leaves of the engine's image tree, which
-    /// only the main actor reads, and the objects of its indexed images.
+    /// only the main actor reads, and the objects of its indexed images. A catalog read while the
+    /// engine lists no image yet — a file still being read, an engine still connecting — is not
+    /// kept, so the next match reads again rather than searching nothing for the rest of the search.
     private func catalog() -> Task<OpenQuicklyCatalog, Never> {
         if let catalogTask { return catalogTask }
         let engine = documentState.runtimeEngine
@@ -43,7 +47,9 @@ final class OpenQuicklySearch {
         let catalogTask = Task.detached {
             await OpenQuicklyCatalog.load(imagePaths: imagePaths, from: engine)
         }
-        self.catalogTask = catalogTask
+        if !imagePaths.isEmpty {
+            self.catalogTask = catalogTask
+        }
         return catalogTask
     }
 

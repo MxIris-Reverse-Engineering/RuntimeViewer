@@ -45,6 +45,18 @@ public final class OpenQuicklyViewModel: ViewModel<MainRoute> {
 
     private let matchesRelay = PublishRelay<Matches>()
 
+    /// Ends the search under way — the bar closed, a match opened, the window moved to another
+    /// engine — dropping a term still being answered along with the catalog.
+    private let searchResetRelay = PublishRelay<Void>()
+
+    /// One term's answer, with the engine it was read from: an answer read from an engine the window
+    /// has since left is no answer.
+    private struct Answer {
+        let searchText: String
+        let entries: [OpenQuicklyCatalog.Entry]
+        let engine: RuntimeEngine
+    }
+
     public override init(documentState: DocumentState, router: any Router<MainRoute>) {
         super.init(documentState: documentState, router: router)
 
@@ -57,44 +69,56 @@ public final class OpenQuicklyViewModel: ViewModel<MainRoute> {
             .observeOnMainScheduler()
             .subscribeOnNext { [weak self] _ in
                 guard let self else { return }
-                openQuicklySearch.end()
+                searchResetRelay.accept(())
             }
             .disposed(by: rx.disposeBag)
     }
 
     public func transform(_ input: Input) -> Output {
-        input.searchText.asObservable()
-            .flatMapLatest { [weak self] text -> Observable<(searchText: String, entries: [OpenQuicklyCatalog.Entry])> in
-                guard let self else { return .empty() }
-                guard !text.isEmpty else { return .just((text, [])) }
-                let openQuicklySearch = openQuicklySearch
-                let maximumResultCount = Self.maximumResultCount
-                return Observable.async {
-                    (text, await openQuicklySearch.matches(for: text, limit: maximumResultCount))
-                }
+        // A reset comes through the same stream as the terms, so that it drops the term still being
+        // answered: ending only the catalog would leave that search to read a new one.
+        Observable.merge(
+            input.searchText.asObservable().map { Optional($0) },
+            searchResetRelay.asObservable().map { nil as String? }
+        )
+        .flatMapLatest { [weak self] text -> Observable<Answer> in
+            guard let self else { return .empty() }
+            let engine = documentState.runtimeEngine
+            guard let text else {
+                openQuicklySearch.end()
+                return .empty()
             }
-            .observeOnMainScheduler()
-            .subscribeOnNext { [weak self] answer in
-                guard let self else { return }
-                let engine = documentState.runtimeEngine
-                let engineName = engine.source.description
-                let items = answer.entries.map { entry in
-                    ContentStartPageItemCellViewModel(item: entry.item, engineName: engineName, engineID: engine.engineID)
-                }
-                matchesRelay.accept(Matches(searchText: answer.searchText, items: items))
+            guard !text.isEmpty else {
+                openQuicklySearch.end()
+                return .just(Answer(searchText: text, entries: [], engine: engine))
             }
-            .disposed(by: rx.disposeBag)
+            let openQuicklySearch = openQuicklySearch
+            let maximumResultCount = Self.maximumResultCount
+            return Observable.async {
+                Answer(searchText: text, entries: await openQuicklySearch.matches(for: text, limit: maximumResultCount), engine: engine)
+            }
+        }
+        .observeOnMainScheduler()
+        .subscribeOnNext { [weak self] answer in
+            guard let self, answer.engine === documentState.runtimeEngine else { return }
+            let engineName = answer.engine.source.description
+            let items = answer.entries.map { entry in
+                ContentStartPageItemCellViewModel(item: entry.item, engineName: engineName, engineID: answer.engine.engineID)
+            }
+            matchesRelay.accept(Matches(searchText: answer.searchText, items: items))
+        }
+        .disposed(by: rx.disposeBag)
 
         input.itemOpened.emitOnNext { [weak self] opening in
             guard let self else { return }
-            openQuicklySearch.end()
+            searchResetRelay.accept(())
             open(opening.item.item, in: opening.destination)
         }
         .disposed(by: rx.disposeBag)
 
         input.dismissed.emitOnNext { [weak self] in
             guard let self else { return }
-            openQuicklySearch.end()
+            searchResetRelay.accept(())
         }
         .disposed(by: rx.disposeBag)
 

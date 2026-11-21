@@ -98,3 +98,27 @@ struct OpenQuicklyCatalogLoadingTests {
         #expect(try await engine.isImageIndexed(path: unindexedImagePath) == false)
     }
 }
+
+/// One search over a document's engine (`OpenQuicklySearch`), shared by the start page and the
+/// File › Open Quickly… bar.
+@Suite("Open Quickly search", .serialized)
+@MainActor
+struct OpenQuicklySearchTests {
+    @Test("a search begun before the engine lists any image reads the catalog again once it does")
+    func searchBeforeTheImageTreeReadsAgainLater() async throws {
+        let engine = RuntimeEngine(source: .local, engineID: "OpenQuicklySearchTests.beforeImageTree")
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        let search = OpenQuicklySearch(documentState: environment.documentState)
+        #expect(engine.imageNodes.isEmpty)
+
+        #expect(await search.matches(for: "libobjc", limit: 10).isEmpty)
+
+        try await engine.connect()
+        try await waitUntil { !engine.imageNodes.isEmpty }
+        let matches = await search.matches(for: "libobjc", limit: 10)
+        #expect(matches.contains { entry in
+            if case .image(let path) = entry.item { return path.hasSuffix("libobjc.A.dylib") }
+            return false
+        })
+    }
+}

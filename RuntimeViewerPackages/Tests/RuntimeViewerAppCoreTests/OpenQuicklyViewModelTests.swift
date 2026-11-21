@@ -122,6 +122,35 @@ struct OpenQuicklyViewModelTests {
         #expect(answeredTerms == ["libobjc"])
     }
 
+    @Test("closing the bar drops the search still under way")
+    func closingDropsTheSearchUnderWay() async throws {
+        let bar = try await makeBar(engineID: "OpenQuicklyViewModelTests.closeMidSearch")
+        var answeredTerms: [String] = []
+        let disposeBag = DisposeBag()
+        bar.output.matches.emitOnNext { answeredTerms.append($0.searchText) }.disposed(by: disposeBag)
+
+        bar.searchText.accept("NSObject")
+        bar.dismissals.accept(())
+
+        // Reading libobjc's catalog and matching it takes far less than this.
+        _ = try await values(from: bar.output.matches, during: 1)
+        #expect(answeredTerms.isEmpty)
+    }
+
+    @Test("a window moved to another engine drops the search under way")
+    func engineSwitchDropsTheSearchUnderWay() async throws {
+        let bar = try await makeBar(engineID: "OpenQuicklyViewModelTests.switchMidSearch")
+        var answeredTerms: [String] = []
+        let disposeBag = DisposeBag()
+        bar.output.matches.emitOnNext { answeredTerms.append($0.searchText) }.disposed(by: disposeBag)
+
+        bar.searchText.accept("NSObject")
+        bar.documentState.selectionRouter.trigger(.switchEngine(TestRuntimeEngine.makeUnreachable()))
+
+        _ = try await values(from: bar.output.matches, during: 1)
+        #expect(answeredTerms.isEmpty)
+    }
+
     @Test("opening an object shows it in the focused pane's tab")
     func openingAnObjectShowsIt() async throws {
         let bar = try await makeBar(engineID: "OpenQuicklyViewModelTests.openObject")
