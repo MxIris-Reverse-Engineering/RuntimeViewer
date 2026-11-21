@@ -1,13 +1,13 @@
-# Draft - iOS 的窗口模型与打开文件
+# 0102 - iOS 的窗口模型与打开文件
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-11-21
 - **最后更新**: 2026-11-21
 - **所属愿景**: [iOS 版功能对齐](../Visions/IOSFeatureParity.md)（第三步「App 层逻辑下沉与 iOS 窗口模型」；`MainViewModel` / `MainRoute` 的合并按用户决定挪到第四步）
 - **关联提案**: [0099-engine-management-on-ios](0099-engine-management-on-ios.md)（引擎管理在 iOS 上可用、文件在进程里读）、[0100-settings-storage-on-ios](0100-settings-storage-on-ios.md)、[0101-settings-screen-on-ios](0101-settings-screen-on-ios.md)、[0055-engine-scoped-background-work](0055-engine-scoped-background-work.md)、[0058-runtime-engine-session](0058-runtime-engine-session.md)、[0069-file-mode](0069-file-mode.md)、[0077-file-folders](0077-file-folders.md)
-- **实现分支 / PR**: `feature/window-model-on-ios`，从 `next` 切出，worktree 在 `.worktrees/RuntimeViewer-WindowModelOnIOS`
-- **配套文档**: 待定 —— 预计无单独文档，规则写进 `RuntimeViewerUsingUIKit/AGENTS.md`
+- **实现分支 / PR**: `feature/window-model-on-ios`，从 `next` 切出
+- **配套文档**: 无单独文档；规则在 `RuntimeViewerUsingUIKit/AGENTS.md` 的「Windows and their documents」「Opening files」，越狱版要设备开着开发者模式写在 `Documentations/Guides/JailbrokenDeviceInjection.md` 的「前提」
 - **网页版**: 同目录同名的 `.html`
 
 ## 摘要
@@ -194,6 +194,10 @@ target。`MainViewModel` / `MainRoute` 的合并留到第四步。Mac 的行为�
 | `Tests/RuntimeViewerAppCoreTests/ApplicationLogsTests.swift`、`RuntimeEngineManagerSettingsFollowerTests.swift` | 新增 | 见步骤 5 的行为清单 | 契约 | 5 |
 | `Tests/RuntimeViewerAppCoreTests/AppTargetBoundaryTests.swift` | 修改 | 两个 App target 参数化（路径、最少文件数）；iOS 的 `MainViewModel` 列为例外并注明第四步删 | 分层扩到 iOS | 6 |
 | `RuntimeViewerUsingUIKit/AGENTS.md`、`RuntimeViewerUsingAppKit/AGENTS.md`、根 `AGENTS.md`、愿景、两份索引 | 修改 | 见方案第 10 条 | 文档 | 7 |
+| `RuntimeViewerUsingUIKit/.../Content/ContentTextViewController.swift` | 修改 | 视图自己的底色也跟主题走；标题改绑 `runtimeObjectName` | 验收中发现的两处旧问题：安全区外露出纯黑、导航栏没有标题 | 验收 |
+| `RuntimeViewerAppCore/Content/ContentTextViewModel.swift` · `ContentTextViewModel.Output` | 修改 | `selectedRuntimeObjectName` 改名 `runtimeObjectName`，取视图模型自己的 `runtimeObject` | 导航栈里每页一个自己的标题；只有 iOS 用 | 验收 |
+| `Tests/RuntimeViewerAppCoreTests/ContentTextViewModelTests.swift` | 修改 | 锁定旧行为的测试换成 `runtimeObjectNameIsThePanesOwn` | 回归测试 | 验收 |
+| `Documentations/Guides/JailbrokenDeviceInjection.md` | 修改 | 「前提」加一条：设备要开着开发者模式，以及没开时的现象 | 验收中在 iOS 18.7.2 虚拟机上撞到 | 验收 |
 
 ## 架构图
 
@@ -467,7 +471,7 @@ iPhone 一个窗口、文件窗口叠在上面；iPad 与 visionOS 多窗口。�
    - 行为：`documentSessionNumbersCountUpFromOne`
    - 行为：`macDocumentBehavesAsBefore`（macOS App 构建、MCP 的文档编号不变）
    - 行为：`appCoreBuildsWithEngineManagementOnIOSAndVisionOS`（三个 iOS 系 App 编过）
-2. **iOS 的窗口模型**（已完成，设备上待用户看）—— 步骤 2 的行
+2. **iOS 的窗口模型**（已完成，用户在 vphone 上看过）—— 步骤 2 的行
    - 行为：`registryGivesAWindowOneSessionAndKeepsIt`
    - 行为：`registryHandsAReservedEngineToTheWindowThatAsksForIt`
    - 行为：`registryFallsBackToLocalForAnUnknownRequest`
@@ -482,7 +486,7 @@ iPhone 一个窗口、文件窗口叠在上面；iPad 与 visionOS 多窗口。�
    - 行为：`parkingStillSuspendsAFileServiceEngine`
    - 行为：`macFilesStillPairWithThisMacsCache`
    - 行为：`macFileModeBehavesAsBefore`（macOS App 构建、文件模式的已有测试照过）
-4. **iOS 的打开入口**（已完成，设备上待用户看）—— 步骤 4 的行
+4. **iOS 的打开入口**（已完成，用户在 vphone 上看过）—— 步骤 4 的行
    - 行为：`openButtonChoosesAFileAndOpensItInAFileWindow`（由用户在设备上看）
    - 行为：`openPathOpensAnAbsolutePathOnTheJailbrokenApp`（由用户在 vphone 上看）
    - 行为：`fileWindowStacksOverTheWindowOnIPhoneAndClosesBackToThisDevice`（由用户在 vphone 上看）
@@ -526,3 +530,4 @@ iPhone 一个窗口、文件窗口叠在上面；iPad 与 visionOS 多窗口。�
 | 2026-11-21 | 实现完成，待用户看过后收尾 | 验证都在 Ultra 上：AppCore 的 32 个测试（新加的文档会话、窗口注册表、打开文件、parking 的进程内一例、导出日志、跟随设置，加上跨平台守卫、AppCore 边界与两个 App target 的边界检查）与设置的 7 个测试全过；macOS App 用 Tuist workspace（Debug）编过；`RuntimeViewer iOS Jailbroken` 用 Debug workspace 编过并打成越狱包，`RuntimeViewer visionOS`（visionOS 模拟器）编过，`activateSceneSession(for:)` 在 visionOS 上可用。没做的：普通 iOS（模拟器）没单独编（与越狱版同一份源码）；设备上的行为（打开按钮、Open Path…、iPhone 上叠放与关闭、读不了的提示、「用其他 App 打开」、安全作用域的访问）由用户在 vphone 上看；iPad 多窗口手头没有设备，没验。文档判断：规则写进 `RuntimeViewerUsingUIKit/AGENTS.md`（启动顺序第 5、6 步，新增「Windows and their documents」「Opening files」两节），`RuntimeViewerUsingAppKit/AGENTS.md` 改了三个控制器的说明，根 `AGENTS.md` 改了文档的说法与规则表一行；不另写使用指南或实现说明；「文档会话」就是类型名 `DocumentSession`，不另立术语。 |
 | 2026-11-21 | 用户在设备上看时发现的两件事 | 一、iPad 上内容区的导航栏后面与底部手势条旁露出纯黑：0101 只给文字视图上了主题底色，文字视图又只占安全区，安全区外露出的是分栏控制器的 `systemBackground`。用户同意在这条分支上一起修：`ContentTextViewController` 的视图底色也跟主题走。不是这一步引入的，iPhone 上同样有，只是不显眼。二、iOS 18.7.2 虚拟机上越狱版起不来：系统拒绝执行（`EBADEXEC`，内核日志 `AMFI: … Developer mode is disabled, task_for_pid-allow is disallowed`）。越狱版带 `task_for_pid-allow`，开发者模式关着时 AMFI 不让它执行；两台 iOS 27 虚拟机开着开发者模式，所以没遇到。与代码无关，App 一行都没跑到。那台虚拟机在设置里打开开发者模式不生效，要带补丁重新装，所以这一步不在 iOS 18 上验；前提写进了 `Documentations/Guides/JailbrokenDeviceInjection.md`「前提」。修完重新打包，装进两台 iOS 27 虚拟机。 |
 | 2026-11-21 | 用户在设备上看时发现内容页导航栏没有标题，同意在这条分支上修 | 2026-07-23 那次把 iOS 的标题改成跟 `DocumentState.selectedRuntimeObject` 走，而 iOS 的侧栏经自己的路由打开对象、不走 `SelectionRoute`，那个值一直是空的。改回每页自己的对象：`ContentTextViewModel.Output.selectedRuntimeObjectName` 改名 `runtimeObjectName`，取视图模型自己的 `runtimeObject`；只有 iOS 用它。不等第四步让 iOS 走 `SelectionRoute` 再修：导航栈里每页要有自己的标题，返回按钮显示下面那页的，跟随全局选中会让下面的页也变成当前这页的名字。原来锁定旧行为的测试换成 `runtimeObjectNameIsThePanesOwn`，修之前两处断言都红。 |
+| 2026-11-21 | Implemented | 用户在 vphone 的 iPhone-27.0 与 iPad-27.0 上看过（越狱版，含验收中修掉的内容区露黑与导航栏没标题）后收尾，编号 0102。收尾前在最终代码上重跑了这一步相关的 AppCore 测试（10 组 38 个）与设置的 7 个，全过。没做的：iOS 18 上没验（iPhone-18.7.2 虚拟机没开开发者模式，越狱版起不来，见「用户在设备上看时发现的两件事」一行）；普通 iOS 的模拟器构建没单独编（与越狱版同一份源码）。偏离方案之处都在前面几行「实现中的调整」与验收中的两次修复里。文档判断：不另写使用指南或实现说明，规则在 `RuntimeViewerUsingUIKit/AGENTS.md`；越狱版要开开发者模式补进了 `Documentations/Guides/JailbrokenDeviceInjection.md`；「文档会话」就是类型名 `DocumentSession`，不另立术语，术语表不动。`MainViewModel` / `MainRoute` 的合并与 iOS 走 `SelectionRoute` 照用户决定在第四步做。 |

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>Draft - iOS 的窗口模型与打开文件</title>
+<title>0102 - iOS 的窗口模型与打开文件</title>
 <style>
 /* Evolution proposal page, shared style (style A, "Apple documentation").
    Copy this whole <style> block verbatim. Page-specific rules, if any, go only
@@ -160,16 +160,16 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <div class="page">
 
 <header class="doc-header">
-  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">Draft</span></p>
-  <h1><span class="proposal-number">Draft</span> iOS 的窗口模型与打开文件</h1>
+  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">0102</span></p>
+  <h1><span class="proposal-number">0102</span> iOS 的窗口模型与打开文件</h1>
   <dl class="meta">
-    <div><dt>状态</dt><dd><span class="status status-in-progress">In Progress</span></dd></div>
+    <div><dt>状态</dt><dd><span class="status status-implemented">Implemented</span></dd></div>
     <div><dt>最后更新</dt><dd>2026-11-21</dd></div>
     <div><dt>创建日期</dt><dd>2026-11-21</dd></div>
     <div><dt>作者</dt><dd>JH</dd></div>
     <div><dt>项目类型</dt><dd>App（macOS，AppKit）</dd></div>
     <div><dt>实现分支</dt><dd><code>feature/window-model-on-ios</code></dd></div>
-    <div><dt>原文</dt><dd><code>draft-window-model-on-ios.md</code></dd></div>
+    <div><dt>原文</dt><dd><code>0102-window-model-on-ios.md</code></dd></div>
   </dl>
 </header>
 
@@ -200,7 +200,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
     <ul>
       <li>所属愿景：<a href="../Visions/IOSFeatureParity.md">iOS 版功能对齐</a>（第三步「App 层逻辑下沉与 iOS 窗口模型」；<code>MainViewModel</code> / <code>MainRoute</code> 的合并按用户决定挪到第四步）</li>
       <li>关联提案：<a href="0099-engine-management-on-ios.md">0099</a>（引擎管理在 iOS 上可用、文件在进程里读）、<a href="0100-settings-storage-on-ios.md">0100</a>、<a href="0101-settings-screen-on-ios.md">0101</a>、<a href="0055-engine-scoped-background-work.md">0055</a>、<a href="0058-runtime-engine-session.md">0058</a>、<a href="0069-file-mode.md">0069</a>、<a href="0077-file-folders.md">0077</a></li>
-      <li>配套文档：待定 —— 预计无单独文档，规则写进 <code>RuntimeViewerUsingUIKit/AGENTS.md</code></li>
+      <li>配套文档：无单独文档；规则在 <code>RuntimeViewerUsingUIKit/AGENTS.md</code> 的「Windows and their documents」「Opening files」，越狱版要设备开着开发者模式写在 <code>Documentations/Guides/JailbrokenDeviceInjection.md</code> 的「前提」</li>
     </ul>
   </div>
 </section>
@@ -328,6 +328,10 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
       <tr><td><code>ApplicationLogsTests</code>、<code>RuntimeEngineManagerSettingsFollowerTests</code></td><td><span class="tag tag-added">新增</span></td><td>见步骤 5 的行为清单</td><td>契约</td><td class="numeric">5</td></tr>
       <tr><td><code>Tests/<wbr>RuntimeViewerAppCoreTests/<wbr>AppTargetBoundaryTests.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>两个 App target 参数化；iOS 的 <code>MainViewModel</code> 列为例外，第四步删</td><td>分层扩到 iOS</td><td class="numeric">6</td></tr>
       <tr><td>三份 <code>AGENTS.md</code>、愿景、两份索引</td><td><span class="tag tag-changed">修改</span></td><td>见方案第 10 条</td><td>文档</td><td class="numeric">7</td></tr>
+      <tr><td><code>RuntimeViewerUsingUIKit/<wbr>…/Content/<wbr>ContentTextViewController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>视图自己的底色也跟主题走；标题改绑 <code>runtimeObjectName</code></td><td>验收中发现的两处旧问题：安全区外露出纯黑、导航栏没有标题</td><td>验收</td></tr>
+      <tr><td><code>RuntimeViewerAppCore/<wbr>Content/<wbr>ContentTextViewModel.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>selectedRuntimeObjectName</code> 改名 <code>runtimeObjectName</code>，取视图模型自己的 <code>runtimeObject</code></td><td>导航栈里每页一个自己的标题；只有 iOS 用</td><td>验收</td></tr>
+      <tr><td><code>Tests/<wbr>RuntimeViewerAppCoreTests/<wbr>ContentTextViewModelTests.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>锁定旧行为的测试换成 <code>runtimeObjectNameIsThePanesOwn</code></td><td>回归测试</td><td>验收</td></tr>
+      <tr><td><code>Documentations/<wbr>Guides/<wbr>JailbrokenDeviceInjection.md</code></td><td><span class="tag tag-changed">修改</span></td><td>「前提」加一条：设备要开着开发者模式，以及没开时的现象</td><td>验收中在 iOS 18.7.2 虚拟机上撞到</td><td>验收</td></tr>
     </tbody>
   </table>
   </div>
@@ -542,13 +546,13 @@ public final class RuntimeEngineManagerSettingsFollower {
     <li><strong>AppCore 链接引擎管理，共用的文档会话</strong>（已完成）
       <ul><li>行为：<code>documentSessionOpensOnlyOnce</code>、<code>documentSessionClosesOnlyOnceAndOnlyAfterOpening</code>、<code>documentSessionNumbersCountUpFromOne</code>、<code>macDocumentBehavesAsBefore</code>、<code>appCoreBuildsWithEngineManagementOnIOSAndVisionOS</code></li></ul>
     </li>
-    <li><strong>iOS 的窗口模型</strong>（已完成，设备上待用户看）
+    <li><strong>iOS 的窗口模型</strong>（已完成，用户在 vphone 上看过）
       <ul><li>行为：<code>registryGivesAWindowOneSessionAndKeepsIt</code>、<code>registryHandsAReservedEngineToTheWindowThatAsksForIt</code>、<code>registryFallsBackToLocalForAnUnknownRequest</code>、<code>registryClosesTheSessionsOfDiscardedWindows</code>、<code>iOSWindowJoinsTheEngineBackgroundWork</code>（设备上看日志）、<code>iPadOpensASecondWindowOnThisDevice</code>（由用户看）</li></ul>
     </li>
     <li><strong>打开文件的共用部分与放走</strong>（已完成）
       <ul><li>行为：<code>openerReadsTheListedFileAsTheUserPairedIt</code>、<code>openerPairsANewFileWithTheDefaultCache</code>、<code>openerThrowsAndListsNothingForAnUnreadableFile</code>、<code>parkingLetsGoOfAnInProcessFileEngineAfterTheGracePeriod</code>、<code>parkingStillSuspendsAFileServiceEngine</code>、<code>macFilesStillPairWithThisMacsCache</code>、<code>macFileModeBehavesAsBefore</code></li></ul>
     </li>
-    <li><strong>iOS 的打开入口</strong>（已完成，以下都由用户在设备上看）
+    <li><strong>iOS 的打开入口</strong>（已完成，用户在 vphone 上看过）
       <ul><li>行为：<code>openButtonChoosesAFileAndOpensItInAFileWindow</code>、<code>openPathOpensAnAbsolutePathOnTheJailbrokenApp</code>、<code>fileWindowStacksOverTheWindowOnIPhoneAndClosesBackToThisDevice</code>、<code>unreadableFileShowsWhyAndOpensNoWindow</code>、<code>openInFromFilesOpensTheFile</code></li></ul>
     </li>
     <li><strong>导出日志与跟随设置进 AppCore</strong>（已完成）
@@ -560,7 +564,7 @@ public final class RuntimeEngineManagerSettingsFollower {
     <li><strong>文档</strong>（已完成）</li>
   </ol>
   <div class="callout callout-note">
-    <p><strong>收尾时必须判断两件事</strong>：要不要配套专题文章（预计不需要）；有没有新术语（「文档会话」可能要登记进术语表）。</p>
+    <p><strong>收尾时的两项判断</strong>：不另写专题文章，规则在 <code>RuntimeViewerUsingUIKit/AGENTS.md</code>；「文档会话」就是类型名 <code>DocumentSession</code>，不另立术语。</p>
   </div>
 </section>
 
@@ -591,6 +595,9 @@ public final class RuntimeEngineManagerSettingsFollower {
           <tr><td class="numeric">2026-11-21</td><td>实现中的调整（步骤 1–3）</td><td>一、<code>RuntimeViewerEngineManagement</code> 在清单里的四处平台条件一起去掉：守卫测试把清单里任何一行带 <code>appkitPlatforms</code> 条件的模块都算作 macOS 专属；模块本身从 0099 起各平台都编。二、<code>DocumentSession.close()</code> 不要求先 <code>open()</code>：Mac 的文档没显示过就关时也要收尾，照旧。三、<code>RuntimeFileOpener</code> 放在 AppCore 的 <code>Engine/</code>，<code>ApplicationLogs</code> 放 <code>App/</code>，跟随设置的类型放 <code>Engine/</code>。四、本机缓存打不开时退回单独读，做在 <code>RuntimeFileOpener</code> 里，设置只按平台给默认配对：判断缓存能否打开要用 Core 里的 <code>FullDyldCache</code>，设置模块不该依赖它。五、<code>canPairWithThisMacsCache(_:)</code> 改名为 <code>canPairWithThisDevicesCache(_:)</code>。六、行为 <code>openerEndsSecurityScopedAccessWhenReadingFails</code> 换成 <code>openerThrowsAndListsNothingForAnUnreadableFile</code>：测试里的文件 URL 不带安全作用域；安全作用域在设备上验。</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>实现中的调整（步骤 4–6）</td><td>一、iOS 上的 follower 由 <code>AppDelegate</code> 在引擎管理器起来之后启动：设置生命周期控制器在启动顺序第一步，那时读管理器会让引擎早于两个命令扩展的注册。二、是不是文件窗口，看它的引擎是不是管理器列出的文件引擎：系统断开再连回来的文件窗口没有请求号，照样要有关闭按钮。三、叠在 iPhone 窗口上的文件窗口由 <code>FileController</code> 同时持有协调器与会话。四、「越狱版」判断写成 <code>FileController.opensAbsolutePaths</code>，打开按钮在越狱版上是菜单。五、<code>ApplicationLogs.formattedEntries(since:)</code> 是非隔离的 <code>async</code> 函数。六、边界测试按 App target 参数化，例外清单里的 view model 搬走后测试就报「把例外删掉」。</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>实现完成，待用户看过后收尾</td><td>验证都在 Ultra 上：AppCore 的 32 个测试与设置的 7 个测试全过；macOS App 用 Tuist workspace（Debug）编过；<code>RuntimeViewer iOS Jailbroken</code> 编过并打成越狱包，<code>RuntimeViewer visionOS</code> 编过，<code>activateSceneSession(for:)</code> 在 visionOS 上可用。没做的：普通 iOS 没单独编（与越狱版同一份源码）；设备上的行为由用户在 vphone 上看；iPad 多窗口没有设备，没验。文档判断：规则写进 <code>RuntimeViewerUsingUIKit/AGENTS.md</code>（启动顺序与两节新内容），<code>RuntimeViewerUsingAppKit/AGENTS.md</code> 与根 <code>AGENTS.md</code> 跟上；不另写使用指南或实现说明；不另立术语。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>用户在设备上看时发现的两件事</td><td>一、iPad 上内容区的导航栏后面与底部手势条旁露出纯黑：0101 只给文字视图上了主题底色，文字视图又只占安全区，安全区外露出的是分栏控制器的 <code>systemBackground</code>。用户同意在这条分支上修：视图底色也跟主题走。iPhone 上同样有，只是不显眼。二、iOS 18.7.2 虚拟机上越狱版起不来：系统拒绝执行（<code>EBADEXEC</code>，内核日志 <code>AMFI: … Developer mode is disabled, task_for_pid-allow is disallowed</code>）。两台 iOS 27 虚拟机开着开发者模式。与代码无关；那台在设置里打开开发者模式不生效，要带补丁重新装，所以这一步不在 iOS 18 上验，前提写进了越狱注入指南。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>内容页导航栏没有标题，用户同意在这条分支上修</td><td>2026-07-23 那次把 iOS 的标题改成跟 <code>DocumentState.selectedRuntimeObject</code> 走，而 iOS 的侧栏经自己的路由打开对象、不走 <code>SelectionRoute</code>，那个值一直是空的。改回每页自己的对象（<code>runtimeObjectName</code>）。不等第四步：导航栈里每页要有自己的标题，返回按钮显示下面那页的。修之前新测试的两处断言都红。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>Implemented</td><td>用户在 iPhone-27.0 与 iPad-27.0 上看过后收尾，编号 0102。收尾前在最终代码上重跑了相关的 AppCore 测试（10 组 38 个）与设置的 7 个，全过。没做的：iOS 18 上没验；普通 iOS 的模拟器构建没单独编。文档判断：不另写使用指南或实现说明；不另立术语。<code>MainViewModel</code> / <code>MainRoute</code> 的合并与 iOS 走 <code>SelectionRoute</code> 在第四步做。</td></tr>
         </tbody>
       </table>
       </div>

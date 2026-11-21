@@ -65,7 +65,7 @@ sidebar's root page (a document picker), Open Path… on the jailbroken app, and
   run time from the home directory — the jailbroken variant): a document picker cannot reach the system's
   paths or another app's binaries. No compile-time flag decides it.
 
-Background: `Documentations/Evolutions/draft-window-model-on-ios.md`.
+Background: `Documentations/Evolutions/0102-window-model-on-ios.md`.
 
 ## Settings
 
