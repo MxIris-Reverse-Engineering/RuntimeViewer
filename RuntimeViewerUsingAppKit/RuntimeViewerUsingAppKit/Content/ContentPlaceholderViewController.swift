@@ -196,8 +196,11 @@ final class ContentPlaceholderViewController: BaseViewController<ContentPlacehol
         // Text typed on the page's background goes to the field, as it would have before the
         // click that took the focus from it.
         startPageView.keyTyped = { [weak self] event in
+            // Text only: the arrows, Page Up and Down, Home, End and the function keys are special
+            // keys whose characters lie outside the control characters.
             guard let self,
                   event.modifierFlags.intersection([.command, .control]).isEmpty,
+                  event.specialKey == nil,
                   let characters = event.characters, characters.unicodeScalars.contains(where: { !CharacterSet.controlCharacters.contains($0) }),
                   view.window?.makeFirstResponder(searchField.textField) == true,
                   let fieldEditor = searchField.textField.currentEditor()
@@ -427,8 +430,12 @@ extension ContentPlaceholderViewController {
         static let listLeadingInset: CGFloat = 4
         static let listTopSpacing: CGFloat = 12
         static let showAllFontSize: CGFloat = 11
-        /// SwiftUI's `List` row around a 32-point icon beside two lines of text, as Xcode draws it.
+        /// SwiftUI's `List` row around a 32-point icon slot beside two lines of text, as Xcode draws
+        /// it (`Metrics.iconSlotSide`).
         static let rowHeight: CGFloat = 38
+        /// The square Xcode's row lays its icon out in (`IconView` with a 32 × 32 layout size); the
+        /// object's glyph is drawn smaller inside it, at `ContentStartPageItemCellViewModel.iconSize`.
+        static let iconSlotSide: CGFloat = 32
         static let rowTrailingInset: CGFloat = 4
         static let iconToTextSpacing: CGFloat = 4
         static let titleFontSize: CGFloat = 13
@@ -871,12 +878,15 @@ extension ContentPlaceholderViewController: EditorPaneContent {
 // MARK: - Item Cell
 
 extension ContentPlaceholderViewController {
-    /// A row of the start page, as Xcode's initial editor draws a recent file: the item's 32-point
-    /// icon, and beside it its name and, under the name, its path — the first component's icon,
-    /// then the components joined with a compact chevron — over a hairline that starts under the
-    /// text.
+    /// A row of the start page, as Xcode's initial editor draws a recent file: the item's icon in a
+    /// 32-point slot, and beside it its name and, under the name, its path — the first component's
+    /// icon, then the components joined with a compact chevron — over a hairline that starts under
+    /// the text.
     fileprivate final class ItemCellView: TableCellView {
-        private let iconView = ImageView()
+        private let iconView = ImageView().then {
+            $0.imageScaling = .scaleNone
+            $0.imageAlignment = .alignCenter
+        }
 
         private let titleLabel = Label().then {
             $0.font = .systemFont(ofSize: Metrics.titleFontSize, weight: .regular)
@@ -941,7 +951,7 @@ extension ContentPlaceholderViewController {
                 make.top.equalTo(textStackView)
                 make.centerY.equalToSuperview().priority(.low)
                 make.top.greaterThanOrEqualToSuperview()
-                make.size.equalTo(ContentStartPageItemCellViewModel.iconSize)
+                make.size.equalTo(Metrics.iconSlotSide)
             }
 
             pathIconView.snp.makeConstraints { make in

@@ -376,6 +376,7 @@ public struct OpenQuicklyCatalog: Sendable {
    - 行为：排序与侧栏的 Open Quickly 相同（命中自身名字、位置靠前、名字短的在前）
    - 行为：读取条目期间搜索框尾部转圈，读完显示结果（转圈要读得慢的目录才出现，没有测试，目视）
    - 行为：回车打开第一项；↓ / ↑ 移动选中后回车打开选中项
+   - 行为：最新查询的结果还没到时按回车（包括第一次读目录期间），等结果到了打开其中选中的一项，不打开旧查询的结果
    - 行为：打开镜像结果显示该镜像的镜像页
    - 行为：打开结果或按 Esc 后输入框清空、结果消失，回到最近列表
    - 行为：起始页所在的栏取得焦点（⌘T 新标签、切到这一栏）时，键盘焦点落进搜索框（`EditorPaneContent.focusableView`，照 Xcode 的 `shouldFocusSearchField`；目视）
@@ -423,3 +424,4 @@ public struct OpenQuicklyCatalog: Sendable {
 | 2026-11-21 | 第一次搜索的代价不封顶，记为已知 | 第一次满 3 个字符时会读这个 Engine 所有已索引镜像的对象列表（同时 8 个），这次搜索结束才释放。后台索引默认关闭，一般会话里已索引的只有用户打开过的镜像；开了 Always Index 或索引了大半个 shared cache 时第一次会慢、占用变大。根治要 Engine 端按名字找对象的命令，列入后续项。 |
 | 2026-11-21 | 放大镜用 SF Symbols | Xcode 用自带的 23 × 23 模板图（`IDESearchWindowMagnifyingGlass`），不随 App 分发；这里用系统的 `magnifyingglass`，21pt 大约等大，放在同样的 32 × 32 框里。 |
 | 2026-11-21 | 第 4 步第二轮审查后调整 | 页面空白处能取得焦点之后，它会进 Tab 顺序（焦点看似丢失）、焦点在它上面时打字会响——改为不进 Tab 顺序，打字时把焦点交回搜索框、字接在原有文字后面。「读取期间转圈」仍没有测试：要一个读得慢的目录才出现，列为目视。 |
+| 2026-11-21 | 自审 | `/code-review medium` 审功能分支相对 `next` 的全部改动，六条逐条按四问核实，记在 [`KnownIssues/2026-11-21-editor-start-page-review-findings.md`](../KnownIssues/2026-11-21-editor-start-page-review-findings.md)：回车打开旧查询的结果（SP.1）与读目录时回车被吞（SP.2）一并修掉，带两条回归测试；页面空白处的方向键等不再转进输入框（SP.3）；图标照 Xcode 占 32 点的位、按 24 点画（SP.4）；目录在一次搜索期间不刷新（SP.5）与输入框文字经 relay 上报（SP.6）不修，理由留档。 |

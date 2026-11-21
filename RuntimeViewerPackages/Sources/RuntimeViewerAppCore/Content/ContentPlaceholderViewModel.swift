@@ -79,6 +79,17 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
     /// Ends the search under way: the field's text goes, and so does the catalog.
     private let searchResetRelay = PublishRelay<Void>()
 
+    /// The newest text the search took, and the text the results on show answer: the two differ
+    /// while the newest text is still matching — or the catalog still being read — and Return
+    /// then waits for the newest results instead of opening one of an older text.
+    private var latestSearchText = ""
+
+    private var resultsSearchText: String?
+
+    /// Return pressed while the newest results were still coming: it opens the selected one of
+    /// them as soon as they arrive.
+    private var pendingSearchCommitDestination: SelectionRoute.Destination?
+
     private let clearSearchFieldRelay = PublishRelay<Void>()
 
     /// The recent objects the start page shows, most recent first: the first
@@ -191,7 +202,7 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
     private enum SearchStep {
         case inactive
         case loading
-        case matched([OpenQuicklyCatalog.Entry])
+        case matched([OpenQuicklyCatalog.Entry], searchText: String)
     }
 
     /// Searches as the field's text changes: from `minimumSearchTextLength` characters on, against
@@ -207,6 +218,9 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
             searchResetRelay.asObservable().map { "" }
         )
         .filter { text in text.isEmpty || text.count >= minimumSearchTextLength }
+        .do(onNext: { [weak self] text in
+            self?.latestSearchText = text
+        })
         .flatMapLatest { [weak self] text -> Observable<SearchStep> in
             guard let self else { return .empty() }
             if text.isEmpty {
@@ -216,7 +230,7 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
             let catalogTask = catalog()
             return Observable<SearchStep>.async {
                 let catalog = await catalogTask.value
-                return .matched(await Self.matches(in: catalog, for: text))
+                return .matched(await Self.matches(in: catalog, for: text), searchText: text)
             }
             .withLoadingPlaceholder(
                 .loading,
@@ -235,16 +249,23 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
     private func apply(_ step: SearchStep) {
         switch step {
         case .inactive:
+            resultsSearchText = nil
+            pendingSearchCommitDestination = nil
             search = .inactive
         case .loading:
             search = .loading
-        case .matched(let entries):
+        case .matched(let entries, let searchText):
             let engine = documentState.runtimeEngine
             let engineName = engine.source.description
             let rows = entries.map { entry in
                 ContentStartPageItemCellViewModel(item: entry.item, engineName: engineName, engineID: engine.engineID)
             }
+            resultsSearchText = searchText
             search = .results(rows, selectedIndex: rows.isEmpty ? nil : 0)
+            if let destination = pendingSearchCommitDestination, searchText == latestSearchText {
+                pendingSearchCommitDestination = nil
+                commitSearch(in: destination)
+            }
         }
     }
 
@@ -286,16 +307,22 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
         search = .results(rows, selectedIndex: movedIndex)
     }
 
-    /// Opens the selected result, if there is one, and ends the search.
+    /// Opens the selected result, if there is one, and ends the search; while the newest text's
+    /// results are still coming, opens the selected one of them once they arrive.
     private func commitSearch(in destination: SelectionRoute.Destination) {
+        if !latestSearchText.isEmpty, resultsSearchText != latestSearchText {
+            pendingSearchCommitDestination = destination
+            return
+        }
         guard case .results(let rows, let selectedIndex?) = search else { return }
         let item = rows[selectedIndex].item
         endSearch()
         open(item, in: destination)
     }
 
-    /// Ends the search: no results, no catalog, and the field emptied.
+    /// Ends the search: no results, no catalog, nothing waiting to open, and the field emptied.
     private func endSearch() {
+        pendingSearchCommitDestination = nil
         searchResetRelay.accept(())
         clearSearchFieldRelay.accept(())
     }

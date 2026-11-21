@@ -234,6 +234,36 @@ struct ContentStartPageSearchTests {
         #expect(startPage.viewModel.search == .inactive)
     }
 
+    @Test("Return before the newest text's results arrive opens the newest first result, not an older one")
+    func returnWaitsForTheNewestResults() async throws {
+        let startPage = try await makeStartPage(engineID: "ContentStartPageSearchTests.returnWaits")
+        startPage.searchText.accept("libobjc")
+        let olderResults = try await startPage.results()
+        guard case .image = olderResults.rows.first?.item else {
+            Issue.record("the older search's first result is no image: \(olderResults.rows.first?.appearance.title ?? "none")")
+            return
+        }
+
+        startPage.searchText.accept("NSObject")
+        startPage.commits.accept(.focusedTab)
+
+        try await waitUntil { startPage.documentState.selectedRuntimeObject != nil || startPage.documentState.editorArea.focusedPane.activeTab.imagePath != nil }
+        #expect(startPage.documentState.editorArea.focusedPane.activeTab.imagePath == nil)
+        #expect(startPage.documentState.selectedRuntimeObject?.displayName == "NSObject")
+    }
+
+    @Test("Return while the first search is still reading opens its first result once it arrives")
+    func returnDuringTheFirstSearchIsKept() async throws {
+        let startPage = try await makeStartPage(engineID: "ContentStartPageSearchTests.returnDuringFirst")
+
+        startPage.searchText.accept("NSObject")
+        startPage.commits.accept(.focusedTab)
+
+        try await waitUntil { startPage.documentState.selectedRuntimeObject != nil }
+        #expect(startPage.documentState.selectedRuntimeObject?.displayName == "NSObject")
+        #expect(startPage.viewModel.search == .inactive)
+    }
+
     @Test("Return with nothing found opens nothing")
     func returnWithNothingFoundOpensNothing() async throws {
         let startPage = try await makeStartPage(engineID: "ContentStartPageSearchTests.nothing")

@@ -86,7 +86,9 @@ public final class ContentStartPageItemCellViewModel: NSObject, @unchecked Senda
         return folderName
     }
 
-    /// The size the row's icon is drawn at.
+    /// The size the row's icon is drawn at, centred in the 32-point slot Xcode's row lays its icon
+    /// out in: an object's glyph drawn at 32 points would stand much larger than the file icons in
+    /// Xcode's rows, which leave a margin inside their slot.
     public static let iconSize: CGFloat = 24
 
     public override func isEqual(_ object: Any?) -> Bool {

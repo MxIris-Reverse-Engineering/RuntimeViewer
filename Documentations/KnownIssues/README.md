@@ -308,3 +308,12 @@ when picking up follow-up work.
   `WL.1` the Specialization sheet's status label (same mechanism), `WL.2` the
   image page's path label (unverified), `WL.3` five wrapping labels that may
   show only their first line (unverified).
+- [2026-11-21-editor-start-page-review-findings.md](2026-11-21-editor-start-page-review-findings.md) —
+  `/code-review medium` of `feature/editor-start-page` (the empty editor pane's
+  start page). Six findings, all in code new on that branch: `SP.1` Return
+  opened a result of an earlier query and `SP.2` Return was dropped while the
+  first search read its catalog (both fixed with regression tests), `SP.3` keys
+  typed on the page's background (fixed), `SP.4` the row icon's slot (fixed);
+  `SP.5` a catalog kept for the whole search misses images indexed meanwhile
+  and `SP.6` the field's text through a relay rather than an rx accessor, both
+  left as they are with the reasons recorded.

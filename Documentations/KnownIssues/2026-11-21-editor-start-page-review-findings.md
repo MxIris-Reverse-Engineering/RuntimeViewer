@@ -1,0 +1,27 @@
+# 2026-11-21 空编辑栏起始页的自审
+
+来由：[`draft-editor-start-page`](../Evolutions/draft-editor-start-page.md) 实现完成后，对 `feature/editor-start-page`
+相对 `next` 的全部改动跑了一次 `/code-review medium`。六条发现逐条按四问核实：能否复现、`next` 上有没有、值不值得修、
+以前修过没有。四条在分支上修掉，两条不修，理由在下面。所有涉及的代码都是这条分支新写的，所以「`next` 上有没有」一律是没有，
+「以前修过没有」一律是没修过（`git log` 查过，相关文件在 `next` 上要么不存在，要么没有这部分代码）。
+
+**约定**
+- ID 为 `SP.<N>`。
+- 修掉一条时在这里注明修复的提交，条目不删。
+
+## 条目
+
+| ID | 发现 | 严重度 | 复现 | 处理 | 重新判断的条件 |
+|---|---|---|---|---|---|
+| SP.1 | 搜索框里按回车，打开的可能是上一次查询的结果：新查询的匹配还没回来时，`.results` 里还是旧结果，`commitSearch(in:)` 照开不误 | Major | 能。先搜「libobjc」等结果出来，再输入「NSObject」立刻回车，打开的是 libobjc 镜像而不是 NSObject。回归测试「Return before the newest text's results arrive…」修前失败 | 已修：VM 记住最新查询与结果对应的查询，两者不同时回车先挂起，最新结果一到就打开其中选中的一项 | — |
+| SP.2 | 第一次搜索还在读目录时按回车，回车被吞掉、什么也不开 | Minor | 能。在新的 Engine 上输入「NSObject」立刻回车，什么也不开。回归测试「Return while the first search is still reading…」修前失败 | 已修：与 SP.1 同一处，回车挂起到结果到达 | — |
+| SP.3 | 焦点在起始页空白处时按方向键、Page Up / Down、Home、End、功能键，焦点会跳进搜索框、按键进了输入框：转交按键时只滤掉了控制字符，这些键的字符在私用区 | Minor | 能（按代码推断，未在界面上实测）：`NSEvent.characters` 对方向键是 U+F700 一带，不在 `CharacterSet.controlCharacters` 里 | 已修：另外要求 `event.specialKey == nil`。只在视图控制器里，App target 没有测试 target，没有自动化测试，列为目视 | — |
+| SP.4 | 行的注释说图标 32 点，实际按 24 点画、也按 24 点排版 | Minor | 是注释与代码不一致 | 已修：照 Xcode（`IconView` 的布局尺寸 32 × 32）把图标位改成 32 点，图仍按 24 点画、居中，注释改成一致。对象的字形画满 32 点会比 Xcode 行里留了边的文件图标大得多 | — |
+| SP.5 | 搜索目录在输入框有字期间一直沿用，这期间新索引或新加载的镜像搜不到 | Minor | 能。输入「Foo」，再从侧栏加载定义 FooBar 的镜像，接着输入「FooB」，仍找不到 FooBar | **不修**。清空输入框（或打开一项、按 Esc）后的下一次搜索会重新读目录；边输入边加载镜像的情形少见。按引擎的索引通知把新镜像增量并进目录可以修，但索引成批进行时会让输入期间反复读取，不划算 | 有人报「刚加载的东西搜不到」；或 Engine 有了按名字找对象的命令、目录不再整份读进来时（提案后续项） |
+| SP.6 | 输入框的文字经手写的 `PublishRelay` 从 `controlTextDidChange` 送进 VM，而不是用控件的 rx 接口；`RuntimeViewerUsingAppKit/AGENTS.md` 规定 `PublishRelay` 只用于控件接口表达不了的事件 | Minor | 是写法问题，不影响行为 | **不修**。方向键、回车、Esc 只能从文本框委托的 `control(_:textView:doCommandBy:)` 拿到，控制器必须当委托；而 RxCocoa / RxAppKit 的 `rx.text` 靠它们自己的委托代理，两者会互相覆盖。要用 rx 接口就得再装一层转发委托，比现在一个委托收齐文字与按键更复杂。规则要防的是「一个固定控件手写 target/action」，这里不属于那种情况 | 有一个不占委托、按通知上报文字的 rx 接口时 |
+
+## 同类排查
+
+- **SP.1 的模式**（回车用的是还没换成新查询的结果）：侧栏的 ⇧⌘O 浮动 Open Quickly 由 UIFoundation 的 `QuickActionBar`
+  管搜索与回车，结果异步回来之前按回车打开的是什么，由那个组件决定，不在本仓库，这次没有改。
+- **SP.3 的模式**（把按键转交给输入框）：仓库里没有别处这样转交按键。
