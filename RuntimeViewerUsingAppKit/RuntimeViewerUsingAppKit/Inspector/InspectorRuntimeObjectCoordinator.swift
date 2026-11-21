@@ -319,13 +319,15 @@ extension InspectorRuntimeObjectCoordinator {
             let needsRelationships: Bool
             switch runtimeObject.kind {
             case .objc(.type(.class)), .objc(.type(.protocol)),
-                 .swift(.type(.class)), .swift(.type(.protocol)):
+                 .swift(.type(.class)), .swift(.type(.protocol)),
+                 .cPlusPlus(.class):
                 needsRelationships = true
             default:
                 needsRelationships = false
             }
             switch runtimeObject.kind {
-            case .objc(.type(.class)):
+            case .objc(.type(.class)), .cPlusPlus(.class):
+                // A C++ class's superclasses are its primary bases.
                 return .init(hierarchy: .superclasses, needsRelationships: needsRelationships, needsSpecialization: false)
             case .objc(.type(.protocol)):
                 return .init(hierarchy: .refinedProtocols, needsRelationships: needsRelationships, needsSpecialization: false)

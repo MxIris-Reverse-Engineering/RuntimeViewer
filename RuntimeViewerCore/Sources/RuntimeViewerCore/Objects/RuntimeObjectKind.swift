@@ -46,9 +46,20 @@ public enum RuntimeObjectKind: Codable, Hashable, Identifiable, Comparable, Case
         public static let allCases: [RuntimeObjectKind.Swift] = Kind.allCases.map { .type($0) } + Kind.allCases.map { .extension($0) } + Kind.allCases.map { .conformance($0) }
     }
 
+    /// A C++ entity an image's symbols or run-time type information show.
+    /// Itanium mangling does not tell a `struct` from a `class`, so every C++
+    /// type is a class.
+    public enum CPlusPlus: Codable, Hashable, Identifiable, CaseIterable, Sendable {
+        case `class`
+        case namespace
+
+        public var id: Self { self }
+    }
+
     case c(C)
     case objc(ObjectiveC)
     case swift(Swift)
+    case cPlusPlus(CPlusPlus)
 
     public var id: Self { self }
 
@@ -120,6 +131,13 @@ public enum RuntimeObjectKind: Codable, Hashable, Identifiable, Comparable, Case
                     20
                 }
             }
+        case .cPlusPlus(let cPlusPlus):
+            switch cPlusPlus {
+            case .class:
+                21
+            case .namespace:
+                22
+            }
         }
     }
 
@@ -132,6 +150,7 @@ public enum RuntimeObjectKind: Codable, Hashable, Identifiable, Comparable, Case
         cases.append(contentsOf: C.allCases.map { RuntimeObjectKind.c($0) })
         cases.append(contentsOf: ObjectiveC.allCases.map { RuntimeObjectKind.objc($0) })
         cases.append(contentsOf: Swift.allCases.map { RuntimeObjectKind.swift($0) })
+        cases.append(contentsOf: CPlusPlus.allCases.map { RuntimeObjectKind.cPlusPlus($0) })
         return cases
     }()
 
@@ -203,6 +222,13 @@ public enum RuntimeObjectKind: Codable, Hashable, Identifiable, Comparable, Case
                     "Swift TypeAlias Conformance"
                 }
             }
+        case .cPlusPlus(let cPlusPlus):
+            switch cPlusPlus {
+            case .class:
+                "C++ Class"
+            case .namespace:
+                "C++ Namespace"
+            }
         }
     }
     
@@ -223,6 +249,13 @@ public enum RuntimeObjectKind: Codable, Hashable, Identifiable, Comparable, Case
     public var isSwift: Bool {
         switch self {
         case .swift: return true
+        default: return false
+        }
+    }
+
+    public var isCPlusPlus: Bool {
+        switch self {
+        case .cPlusPlus: return true
         default: return false
         }
     }

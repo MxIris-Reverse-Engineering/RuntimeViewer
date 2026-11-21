@@ -163,7 +163,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
   <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">Draft</span></p>
   <h1><span class="proposal-number">Draft</span> C++ 对象：列出并打印从 RTTI、vtable 与符号恢复的 C++ 类与命名空间</h1>
   <dl class="meta">
-    <div><dt>状态</dt><dd><span class="status status-accepted">Accepted</span></dd></div>
+    <div><dt>状态</dt><dd><span class="status status-in-progress">In Progress</span></dd></div>
     <div><dt>最后更新</dt><dd>2026-11-21</dd></div>
     <div><dt>项目类型</dt><dd>App</dd></div>
     <div><dt>原文</dt><dd><code>draft-cplusplus-objects.md</code></dd></div>
@@ -198,9 +198,9 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <section id="decide">
   <h2>要你定</h2>
   <div class="callout">
-    <p class="callout-title">批准这份草案后从 <code>next</code> 切功能分支开工</p>
+    <p class="callout-title">实现中发现的上游问题怎么处理</p>
     <ol>
-      <li>范围、第一版界面与界面形状已在澄清提问里定下（见决策日志）；剩下的只是整体批准。</li>
+      <li>MachOKitExtensions 3.1.0 把 <code>N_INDR</code> 符号表条目当成定义的符号：libc++ 下会多出一个成员地址无意义的 <code>std::exception</code>。修法在上游（扫描时跳过 <code>N_INDR</code>），本分支不修，测试用 <code>withKnownIssue</code> 记着。</li>
     </ol>
   </div>
   <div class="callout callout-warning">
@@ -351,7 +351,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
   <ol>
     <li><strong>新种类</strong> <code>RuntimeObjectKind.cPlusPlus(.class | .namespace)</code>，排在 Swift 之后；新语言 <code>RuntimeInterfaceLanguage.cPlusPlus</code>（<code>"cpp"</code>）。修饰名分不出 struct 与 class，一律叫类。</li>
     <li><strong>每个镜像一个按需建的 C++ section</strong>，第三个工厂照 ObjC 工厂的形状缓存与合并构建；不属于「已索引」，后台索引、语料都不碰它。</li>
-    <li><strong>对象树</strong>：类型作用域与 RTTI 类是类（按限定名合并，RTTI 优先）；命名空间与「未定」作用域是命名空间；函数作用域丢弃；只有 RTTI 的类按 <code>scopePath</code> 挂进去、缺的层补齐；空命名空间不列；全局有成员时列一个 <code>::</code>（Global Namespace）；同名隐藏类留 typeinfo 偏移最小的。</li>
+    <li><strong>对象树</strong>：类型作用域与 RTTI 类是类（按限定名合并，RTTI 优先）；命名空间与「未定」作用域是命名空间；函数作用域丢弃；只有 RTTI 的类按 <code>scopePath</code> 挂进去、缺的层补齐；没有会打印的成员、也没有子对象的命名空间不列；全局有成员时列一个 <code>::</code>（Global Namespace）；同名隐藏类留 typeinfo 偏移最小的。</li>
     <li><strong>只发给要它的请求方</strong>：<code>ObjectsInImageCommand</code> 加 <code>includesCPlusPlusObjects: Bool?</code>（<code>nil</code> 不编码），公开 API 默认 <code>false</code>；只有侧栏、路径栏、镜像页传 <code>true</code>。</li>
     <li><strong>进度</strong>：两个新阶段，只在请求带字段时发出。</li>
     <li><strong>伪头文件</strong>：类的头部注释、基类、每张 vtable 的虚函数（槽位号、地址、overrides / inherited）、非虚成员函数、变量、嵌套类型；构造与析构变体合并；元数据符号不当成员；只打印修饰名里有的；地址跟随 <code>addMethodIMPAddressComments</code>。</li>
@@ -467,6 +467,22 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 
 <section id="research">
   <h2>调研</h2>
+  <h3>实测（release，Ultra，测时负载 20–30）</h3>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>镜像与读法</th><th>作用域树</th><th>类索引</th><th>给每个槽位取名</th></tr></thead>
+    <tbody>
+      <tr><td>Espresso，进程内</td><td class="numeric">0.20 秒</td><td class="numeric">0.04 秒（4,379 类）</td><td class="numeric">0.62 秒</td></tr>
+      <tr><td>Espresso，本机 cache 文件</td><td class="numeric">0.23 秒</td><td class="numeric">1.66 秒</td><td class="numeric">2.43 秒</td></tr>
+      <tr><td>JavaScriptCore（关了 RTTI）</td><td class="numeric">0.15 秒</td><td class="numeric">0 类</td><td>—</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>按需建、不进索引的方案不变。两个 C++ target 的代码段合计约 350 KB（链接与剥离之前）。</p>
+  <div class="callout callout-warning">
+    <p class="callout-title">已知问题（上游）</p>
+    <p>MachOKitExtensions 3.1.0 的符号扫描没有排除 <code>N_INDR</code> 条目，libc++ 逐个转出的 <code>std::exception</code> 符号被当成 libc++ 自己的，于是 libc++ 下多一个 <code>std::exception</code>，从 libc++ 点这个基类也停在 libc++。修法在上游。</p>
+  </div>
   <details>
     <summary>现状代码</summary>
     <div class="details-body">
@@ -553,7 +569,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <section id="log">
   <h2>决策日志</h2>
   <details>
-    <summary>4 条，最近一条：不打印修饰名里没有的东西</summary>
+    <summary>20 条，最近一条：实现完成，待用户看过后收尾</summary>
     <div class="details-body">
       <div class="table-wrap">
       <table>
@@ -563,6 +579,23 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
           <tr><td class="numeric">2026-11-21</td><td>定下范围与形状</td><td>用户选定：类型与命名空间都列（接受 <code>std</code> 一类命名空间的噪音，由 Filter Scope 收起）；第一版只接浏览用的界面，Find、导出、MCP、CLI 以后另起提案；内容区写成伪头文件。</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>线上形状：字段而非命令</td><td>经 Mach service 的旧版注入 payload 会把不认识的命令当成客户端离开（PR121.73），所以 C++ 对象经 <code>objectsInImage</code> 的可选字段取。</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>不打印修饰名里没有的东西</td><td>样例里画了返回类型与 <code>static</code>，但修饰名只给函数模板特化记返回类型、不区分静态成员、不记访问级别；界面只打印修饰名里有的。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>Accepted</td><td>用户看过简报后批准，开始实现。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>In Progress</td><td>从 <code>next</code> 切出 <code>feature/cplusplus-objects</code>。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>第 1 步实测</td><td>Espresso 的 C++ section 进程内约 0.25 秒、cache 文件约 1.9 秒；按需建的方案不变。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>第 1–5 步合成一个提交</td><td>前四步共改 <code>RuntimeEngine.swift</code> 的同几段；App 层穷举分支在第 1 步直接写成最终值，只提交 Core 会让 App 层编不过。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>界面请求按需建 section</td><td>恢复的标签或书签可能在列表之前请求界面；关系请求只看已建的 section。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>主基类的取法简化</td><td>层级取第一个非虚、偏移为 0 的直接基类，不读基类的 vtable。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>引用镜像有符号时打印引用镜像这一份</td><td>从 libc++ 点 <code>std::runtime_error</code> 打开 libc++ 这一份；只有引用镜像完全没有这个名字时才去导出 typeinfo 的镜像。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>发现上游 N_INDR 问题</td><td>不在本分支修，记为后续项。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>线上测试按解码层写</td><td>旧服务端的行为就是解码时丢掉字段；真实连接上测两种传输与中转。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>停止引擎清的是进程里共用的 store</td><td>同一进程里别的引擎下次用到会重建；App 的服务进程只服务一个引擎。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>三条 App 层行为没写测试</td><td>侧栏、导出与 Find、镜像页三处只是一个参数或默认值；线上测试已证明不带字段拿不到 C++ 对象。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>不另写实现说明</td><td>约定已写进 <code>AGENTS.md</code>、§4.4 与文档注释，提案记着全部决定。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>术语表加两条</td><td>「C++ 对象」与「主基类」。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>空命名空间按会打印的成员判断</td><td>libobjc 里只装着 block 调用的作用域曾显示成 <code>_read_images</code> 一类空命名空间。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>路径栏测试跟着改</td><td>期望值改为带 C++ 的对象列表。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>Tuist 检查的既有红</td><td><code>Tuist.swift</code> 缺 MachOSwiftSection 的 <code>SwiftSectionTestingMacros</code>，origin/next 同样缺，不是本分支引入。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>实现完成，待用户看过后收尾</td><td>Core 全量、App 层两个测试包与整个 App 都过；红灯单独重跑全过或是既有红灯；没做界面目视。</td></tr>
         </tbody>
       </table>
       </div>

@@ -29,6 +29,9 @@ extension RuntimeObject {
         case .objc(.type(.class)), .c:
             base = sanitized
             suffix = ".h"
+        case .cPlusPlus:
+            base = sanitized
+            suffix = ".hpp"
         case .objc(.type(.protocol)):
             base = sanitized
             suffix = "-Protocol.h"

@@ -17,7 +17,7 @@ public struct RuntimeRelationshipNode: Hashable, Codable, Sendable {
         /// Swift struct conforming to a protocol.
         public init?(of object: RuntimeObject) {
             switch object.kind {
-            case .objc(.type(.class)), .swift(.type(.class)):
+            case .objc(.type(.class)), .swift(.type(.class)), .cPlusPlus(.class):
                 self = .class
             case .objc(.type(.protocol)), .swift(.type(.protocol)):
                 self = .protocol

@@ -312,7 +312,8 @@ public final class EditorJumpBarItemStore {
             // Indexed only: reading the objects of an image that is not would index it, which is
             // the content pane's to start, with its progress where the user is looking.
             let isIndexed = (try? await engine.isImageIndexed(path: imagePath)) ?? false
-            let objects: [RuntimeObject]? = isIndexed ? try? await engine.objects(in: imagePath) : nil
+            // C++ objects too: their section is built on first asking, which indexing never does.
+            let objects: [RuntimeObject]? = isIndexed ? try? await engine.objects(in: imagePath, includesCPlusPlusObjects: true) : nil
             guard let self, self.treeGeneration == treeGeneration else { return }
             let wasIndexedWhileReading = imagesIndexedWhileReading.remove(canonicalImagePath) != nil
             guard let objects else {

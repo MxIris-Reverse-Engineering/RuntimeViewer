@@ -21,6 +21,8 @@ struct InspectorRelationshipsViewModelTests {
             (.swift(.type(.protocol)), "Conforming Types"),
             (.swift(.type(.struct)), ""),
             (.objc(.category(.class)), ""),
+            (.cPlusPlus(.class), "Derived Classes"),
+            (.cPlusPlus(.namespace), ""),
         ]
     )
     func sectionTitleFollowsKind(_ argument: (kind: RuntimeObjectKind, title: String)) async throws {
@@ -40,6 +42,15 @@ struct InspectorRelationshipsViewModelTests {
 
         #expect(try await nextValue(from: classOutput.emptyMessage) == "No subclasses found in indexed images.")
         #expect(try await nextValue(from: protocolOutput.emptyMessage) == "No conforming types found in indexed images.")
+    }
+
+    @Test("a C++ class's empty message says its derived classes are looked for in its image")
+    func cPlusPlusEmptyMessageNamesItsImage() async throws {
+        let environment = ViewModelTestEnvironment()
+        let (viewModel, output) = makeViewModel(for: Fixtures.runtimeObject(kind: .cPlusPlus(.class)), in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+
+        #expect(try await nextValue(from: output.emptyMessage) == "No derived classes found in its image.")
     }
 
     @Test("an object that is neither a class nor a protocol loads an empty list")

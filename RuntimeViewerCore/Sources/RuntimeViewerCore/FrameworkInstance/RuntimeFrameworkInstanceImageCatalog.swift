@@ -111,6 +111,10 @@ final class RuntimeFrameworkInstanceImageCatalog: RuntimeImageCatalog {
         await processCatalog.image(definingObjCType: name)
     }
 
+    func image(definingCPlusPlusTypeInfoForMangledTypeName mangledTypeName: String) async -> (imagePath: String, machO: MachOImage)? {
+        await processCatalog.image(definingCPlusPlusTypeInfoForMangledTypeName: mangledTypeName)
+    }
+
     func mainExecutablePath() -> String {
         processCatalog.mainExecutablePath()
     }

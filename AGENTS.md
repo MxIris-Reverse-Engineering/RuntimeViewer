@@ -261,6 +261,10 @@ sidebar's text-token filter fields need — a comparison type's `valuePrefix` / 
 token whose comparison the field does not offer, and the delegate's `filterTokenField(_:editingStringFor:)` —
 and `NSNavigationPopoverController`, which the runtime source picker's list is; `0.19.0` stops a window that
 showed a navigation popover from never being freed, and filters a long list in one quickly.
+MachOKitExtensions is declared `from: "3.1.0"` in `RuntimeViewerCore`, the first release with
+`CPlusPlusClassIndexStore` — the C++ classes, vtables and slot names read from run-time type information —
+which the C++ section reads; `3.0.0` brought the scope tree and is what MachOSwiftSection and
+MachOObjCSection require.
 SwiftyXPC (the `MxIris-macOS-Library-Forks` fork) is declared `from: "0.5.106"`, the first release with
 connections to an instance of an embedded service of their own (`ConnectionType.remoteServiceInstance`, which
 each file's process is started with) and with listener handlers that reach connections accepted before
@@ -316,7 +320,13 @@ fails without an error, and Icon Composer's SVG pipeline ignores `stroke`.
 The project uses three Swift Package Manager packages:
 
 **RuntimeViewerCore** (`RuntimeViewerCore/`):
-- `RuntimeViewerCore` — Runtime inspection engine using MachOObjCSection (ObjC) and MachOSwiftSection (Swift)
+- `RuntimeViewerCore` — Runtime inspection engine using MachOObjCSection (ObjC), MachOSwiftSection (Swift)
+  and MachOKitExtensions' `CPlusPlusSymbols` (C++). **An image's C++ section is no part of indexing**: it
+  is built the first time a request asks for C++ objects (`objects(in:includesCPlusPlusObjects:)`, which
+  only the sidebar's list, the jump bar and the image page pass `true` to), and Find, export, the word
+  cloud, MCP, the CLI and background indexing never see a C++ object. The flag is an optional field of
+  `objectsInImage`, never a command of its own, so a peer of an earlier build answers it with Objective-C
+  and Swift objects. Background: `Documentations/Evolutions/draft-cplusplus-objects.md`
 - `RuntimeViewerCommunication` — XPC/TCP-based IPC layer for cross-process inspection
 - `RuntimeViewerInjection` — process injection as a RuntimeEngine command extension: the
   `RuntimeInjectionService` protocol, the wire types (`RuntimeProcess`,

@@ -217,6 +217,15 @@ extension ContentInterface {
             case .protocol: return .swift(.type(.protocol))
             default: return nil
             }
+        case .cPlusPlus:
+            // A C++ interface spells every class and namespace it names in full
+            // (`CPlusPlusInterfacePrinter`), so the token's text is the name the
+            // engine looks the object up by.
+            switch kind {
+            case .class: return .cPlusPlus(.class)
+            case .other: return .cPlusPlus(.namespace)
+            default: return nil
+            }
         }
     }
 

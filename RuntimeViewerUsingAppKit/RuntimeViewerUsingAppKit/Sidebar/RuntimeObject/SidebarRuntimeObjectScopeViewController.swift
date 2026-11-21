@@ -61,6 +61,7 @@ final class SidebarRuntimeObjectScopeViewController: BaseViewController<SidebarR
             groupRows[.c]!
             groupRows[.objectiveC]!
             groupRows[.swift]!
+            groupRows[.cPlusPlus]!
         }
 
         let headerRow = HStackView(distribution: .fill, alignment: .fill, spacing: 8) {
@@ -625,6 +626,8 @@ extension RuntimeObjectKind {
         case .swift(.type(let kind)): return swiftKindBase(kind)
         case .swift(.extension(let kind)): return "\(swiftKindBase(kind)) Extension"
         case .swift(.conformance(let kind)): return "\(swiftKindBase(kind)) Conformance"
+        case .cPlusPlus(.class): return "Class"
+        case .cPlusPlus(.namespace): return "Namespace"
         }
     }
 }

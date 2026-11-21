@@ -20,4 +20,8 @@ public struct RuntimeInterfaceLanguage: RawRepresentable, Codable, Hashable, Sen
     /// A Swift declaration — of a Swift object, or of an Objective-C one as
     /// Swift imports it.
     public static let swift = RuntimeInterfaceLanguage(rawValue: "swift")
+
+    /// A C++ declaration, as an image's symbols and run-time type information
+    /// recover it.
+    public static let cPlusPlus = RuntimeInterfaceLanguage(rawValue: "cpp")
 }

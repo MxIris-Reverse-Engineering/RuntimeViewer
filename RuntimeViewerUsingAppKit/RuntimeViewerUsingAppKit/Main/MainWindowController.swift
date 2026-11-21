@@ -178,6 +178,9 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
                     case .swift:
                         ext = "swiftinterface"
                         icon = NSWorkspace.shared.icon(for: .swiftSource)
+                    case .cPlusPlus:
+                        ext = "hpp"
+                        icon = NSWorkspace.shared.icon(for: .cPlusPlusHeader)
                     }
                     return NSPreviewRepresentingActivityItem(item: data.provider, title: data.title + "." + ext, image: nil, icon: icon)
                 }

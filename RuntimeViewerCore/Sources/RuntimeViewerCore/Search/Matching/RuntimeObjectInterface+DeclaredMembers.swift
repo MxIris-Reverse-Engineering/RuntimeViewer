@@ -10,7 +10,9 @@ extension RuntimeObjectInterface {
         let isSwift: Bool
         switch object.kind {
         case .swift: isSwift = true
-        case .objc, .c: isSwift = false
+        // No rule of the locator matches a C++ declaration, so a C++
+        // interface declares no member it can find.
+        case .objc, .c, .cPlusPlus: isSwift = false
         }
         return RuntimeMemberDeclarationLocator.declaredMembersByLine(in: interfaceString, isSwift: isSwift)
     }

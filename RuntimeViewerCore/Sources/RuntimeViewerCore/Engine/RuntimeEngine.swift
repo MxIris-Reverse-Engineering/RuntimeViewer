@@ -265,6 +265,10 @@ public actor RuntimeEngine {
 
     let swiftSectionFactory: any RuntimeSwiftSectionProviding
 
+    /// Built only for the images something asked the C++ objects of; see
+    /// `RuntimeCPlusPlusSectionProviding`.
+    let cPlusPlusSectionFactory: any RuntimeCPlusPlusSectionProviding
+
     /// Cross-image relationship resolver. Owns the `relationships(for:)`
     /// computation so this engine file carries only the dispatch wrapper.
     let relationshipsResolver: any RuntimeRelationshipsResolving
@@ -392,6 +396,7 @@ public actor RuntimeEngine {
         self.imageCatalog = imageIndex.catalog
         self.objcSectionFactory = imageIndex.objcSectionFactory
         self.swiftSectionFactory = imageIndex.swiftSectionFactory
+        self.cPlusPlusSectionFactory = imageIndex.cPlusPlusSectionFactory
         self.relationshipsResolver = imageIndex.relationshipsResolver
         self.typeRelationshipsResolver = imageIndex.typeRelationshipsResolver
         #log(.info, "Initializing RuntimeEngine with source: \(String(describing: source), privacy: .public)")
@@ -597,12 +602,14 @@ public actor RuntimeEngine {
     private func releaseIndexedSections() {
         let swiftSectionFactory = swiftSectionFactory
         let objcSectionFactory = objcSectionFactory
+        let cPlusPlusSectionFactory = cPlusPlusSectionFactory
         // The corpus is text printed from those sections; it goes with them.
         let interfaceCorpusStore = interfaceCorpusStore
         Task {
             await interfaceCorpusStore.evictAll()
             await swiftSectionFactory.removeAllSections()
             await objcSectionFactory.removeAllSections()
+            await cPlusPlusSectionFactory.removeAllSections()
         }
     }
 
@@ -828,7 +835,7 @@ public actor RuntimeEngine {
         }
     }
 
-    func _objects(in image: String) async throws -> [RuntimeObject] {
+    func _objects(in image: String, includesCPlusPlusObjects: Bool = false) async throws -> [RuntimeObject] {
         #log(.debug, "Getting objects in image: \(image, privacy: .public)")
         let image = imageCatalog.canonicalImagePath(image)
         let (isObjCSectionExisted, objcSection) = try await objcSectionFactory.section(for: image)
@@ -839,7 +846,9 @@ public actor RuntimeEngine {
             loadedImagePaths.insert(image)
         }
         #log(.debug, "Found \(objcObjects.count, privacy: .public) ObjC and \(swiftObjects.count, privacy: .public) Swift objects")
-        return objcObjects + swiftObjects
+        guard includesCPlusPlusObjects else { return objcObjects + swiftObjects }
+        let cPlusPlusObjects = try await cPlusPlusSectionFactory.section(for: image).section.allObjects()
+        return objcObjects + swiftObjects + cPlusPlusObjects
     }
 
     /// `resolvesReferencesAcrossImages` off answers from the object's own
@@ -887,9 +896,55 @@ public actor RuntimeEngine {
                     rawInterface = nil
                 }
             }
+        case .cPlusPlus:
+            if let section = try? await cPlusPlusSectionFactory.section(for: imageCatalog.canonicalImagePath(name.imagePath)).section,
+               let interface = try? await section.interface(for: name, options: options) {
+                return interface
+            }
+            guard resolvesReferencesAcrossImages else { return nil }
+            return await cPlusPlusInterfaceInDefiningImage(of: name, options: options)
         }
 
         return rawInterface
+    }
+
+    /// The interface of a C++ class `object` names that its own image does not
+    /// define: a base of one of the image's classes, printed by the section of
+    /// the image that exports its typeinfo. `nil` when no image does — a type
+    /// every image keeps a hidden copy of the typeinfo of.
+    private func cPlusPlusInterfaceInDefiningImage(of object: RuntimeObject, options: RuntimeObjectInterface.GenerationOptions) async -> RuntimeObjectInterface? {
+        guard let referringSection = await cPlusPlusSectionFactory.existingSection(for: imageCatalog.canonicalImagePath(object.imagePath)),
+              let mangledTypeName = await referringSection.mangledTypeName(ofBaseNamed: object.name),
+              let definingSection = try? await cPlusPlusSectionFactory.section(definingClassWithMangledTypeName: mangledTypeName),
+              definingSection.imagePath != referringSection.imagePath
+        else { return nil }
+        return try? await definingSection.interface(for: object, options: options)
+    }
+
+    /// The primary bases of the C++ class `object`, nearest first: each level
+    /// the first direct base that is not virtual and sits at offset zero,
+    /// followed into the image that exports its typeinfo when the class's own
+    /// image does not define it. A level no image this engine reads defines
+    /// carries its name only and ends the chain.
+    func cPlusPlusPrimaryBaseChain(of object: RuntimeObject) async -> [(qualifiedName: String, object: RuntimeObject?)] {
+        guard case .cPlusPlus(.class) = object.kind else { return [] }
+        var chain: [(qualifiedName: String, object: RuntimeObject?)] = []
+        var section: (any RuntimeCPlusPlusSectioning)? = try? await cPlusPlusSectionFactory.section(for: imageCatalog.canonicalImagePath(object.imagePath)).section
+        var className = object.name
+        var visitedNames: Set<String> = [className]
+        // Bounded: a damaged image could name a cycle of bases.
+        while chain.count < 64, let currentSection = section, let base = await currentSection.primaryBase(ofClassNamed: className) {
+            let baseSection: (any RuntimeCPlusPlusSectioning)? = if base.isInSameImage {
+                currentSection
+            } else {
+                try? await cPlusPlusSectionFactory.section(definingClassWithMangledTypeName: base.mangledTypeName)
+            }
+            chain.append((base.qualifiedName, await baseSection?.object(named: base.qualifiedName)))
+            guard visitedNames.insert(base.qualifiedName).inserted else { break }
+            section = baseSection
+            className = base.qualifiedName
+        }
+        return chain
     }
 
     /// The Objective-C header of `object` as `objcSection` prints it, with what the Swift side of
@@ -1361,11 +1416,16 @@ extension RuntimeEngine {
         return try await dispatch(InterfaceCommand(object: object, options: options, acceptsColumnarInterfaceString: true)).interface
     }
 
-    public func objects(in image: String) async throws -> [RuntimeObject] {
-        try await foregroundObjects(in: image, onProgress: nil)
+    /// The objects of the image at `image`, Objective-C then Swift — and its
+    /// C++ classes and namespaces after them when `includesCPlusPlusObjects`
+    /// is true. A peer of a build before C++ objects answers that request with
+    /// Objective-C and Swift objects only.
+    public func objects(in image: String, includesCPlusPlusObjects: Bool = false) async throws -> [RuntimeObject] {
+        try await foregroundObjects(in: image, includesCPlusPlusObjects: includesCPlusPlusObjects, onProgress: nil)
     }
 
-    public func objectsWithProgress(in image: String) -> AsyncThrowingStream<RuntimeObjectsLoadingEvent, Swift.Error> {
+    /// `objects(in:includesCPlusPlusObjects:)` with the indexing progress.
+    public func objectsWithProgress(in image: String, includesCPlusPlusObjects: Bool = false) -> AsyncThrowingStream<RuntimeObjectsLoadingEvent, Swift.Error> {
         AsyncThrowingStream { continuation in
             Task { [weak self] in
                 guard let self else {
@@ -1373,7 +1433,7 @@ extension RuntimeEngine {
                     return
                 }
                 do {
-                    let objects = try await foregroundObjects(in: image) { progress in
+                    let objects = try await foregroundObjects(in: image, includesCPlusPlusObjects: includesCPlusPlusObjects) { progress in
                         continuation.yield(.progress(progress))
                     }
                     continuation.yield(.completed(objects))
@@ -1387,11 +1447,12 @@ extension RuntimeEngine {
 
     private func foregroundObjects(
         in image: String,
+        includesCPlusPlusObjects: Bool,
         onProgress: (@Sendable (RuntimeObjectsLoadingProgress) async -> Void)?
     ) async throws -> [RuntimeObject] {
         try await loadBorrowedImageIfNeeded(at: image, onProgress: onProgress)
         let objects = try await performingForegroundLoad {
-            try await dispatch(ObjectsInImageCommand(image: image), onProgress: onProgress)
+            try await dispatch(ObjectsInImageCommand(image: image, includesCPlusPlusObjects: includesCPlusPlusObjects), onProgress: onProgress)
         }
         imageDidIndexSubject.send(image)
         return objects
@@ -1422,9 +1483,9 @@ extension RuntimeEngine {
     }
 
     /// Local arm of `ObjectsInImageCommand`'s progress-bearing `perform`.
-    func _objects(in image: String, reportProgress: @escaping @Sendable (RuntimeObjectsLoadingProgress) async -> Void) async throws -> [RuntimeObject] {
+    func _objects(in image: String, includesCPlusPlusObjects: Bool = false, reportProgress: @escaping @Sendable (RuntimeObjectsLoadingProgress) async -> Void) async throws -> [RuntimeObject] {
         try await pumpingIndexingProgress(to: reportProgress) { continuation in
-            try await _localObjectsWithProgress(in: image, continuation: continuation)
+            try await _localObjectsWithProgress(in: image, includesCPlusPlusObjects: includesCPlusPlusObjects, continuation: continuation)
         }
     }
 
@@ -1459,6 +1520,7 @@ extension RuntimeEngine {
 
     private func _localObjectsWithProgress(
         in image: String,
+        includesCPlusPlusObjects: Bool,
         continuation: AsyncThrowingStream<RuntimeObjectsLoadingEvent, Swift.Error>.Continuation,
     ) async throws -> [RuntimeObject] {
         #log(.debug, "Getting objects with progress in image: \(image, privacy: .public)")
@@ -1471,7 +1533,11 @@ extension RuntimeEngine {
             loadedImagePaths.insert(image)
         }
         #log(.debug, "Found \(objcObjects.count, privacy: .public) ObjC and \(swiftObjects.count, privacy: .public) Swift objects with progress")
-        return objcObjects + swiftObjects
+        guard includesCPlusPlusObjects else { return objcObjects + swiftObjects }
+        // Its progress phases go only to a request that asked for C++
+        // objects, which a peer of an earlier build never sends.
+        let cPlusPlusObjects = try await cPlusPlusSectionFactory.section(for: image, progressContinuation: continuation).section.allObjects()
+        return objcObjects + swiftObjects + cPlusPlusObjects
     }
 
     public func hierarchy(for object: RuntimeObject) async throws -> [String] {
@@ -1480,8 +1546,11 @@ extension RuntimeEngine {
 
     func _hierarchy(for object: RuntimeObject) async throws -> [String] {
         switch object.kind {
-        case .c:
+        case .c, .cPlusPlus(.namespace):
             return []
+        case .cPlusPlus(.class):
+            // Like the other two, the names start with the class itself.
+            return [object.name] + (await cPlusPlusPrimaryBaseChain(of: object)).map(\.qualifiedName)
         case .objc:
             return try await objcSectionFactory.existingSection(for: object.imagePath)?.classHierarchy(for: object) ?? []
         case .swift:
@@ -1503,14 +1572,22 @@ extension RuntimeEngine {
     /// answers with `RuntimeNetworkRequestError.isUnknownCommand` — and only
     /// the names `hierarchy(for:)` returns to offer.
     public func superclassChain(for object: RuntimeObject) async throws -> [RuntimeRelationshipNode] {
-        if sharedCacheOwner(forImageAt: object.imagePath) == nil, let participants = spanningParticipants() {
+        // A C++ class's chain is answered where its image is read, and never
+        // across owners: no C++ base of one image is looked for in another
+        // engine's images.
+        if !object.kind.isCPlusPlus, sharedCacheOwner(forImageAt: object.imagePath) == nil, let participants = spanningParticipants() {
             return try await superclassChainAcrossOwners(for: object, participants: participants)
         }
         return try await dispatch(SuperclassChainCommand(object: object))
     }
 
     func _superclassChain(for object: RuntimeObject) async throws -> [RuntimeRelationshipNode] {
-        try await typeRelationshipsResolver.superclassChain(of: object)
+        if object.kind.isCPlusPlus {
+            return await cPlusPlusPrimaryBaseChain(of: object).map { level in
+                RuntimeRelationshipNode(name: level.object?.displayName ?? level.qualifiedName, typeKind: .class, object: level.object, children: [])
+            }
+        }
+        return try await typeRelationshipsResolver.superclassChain(of: object)
     }
 
     /// The protocols `object` refines, each with the protocols it refines in
@@ -1543,7 +1620,14 @@ extension RuntimeEngine {
     }
 
     func _relationships(for object: RuntimeObject) async -> RuntimeRelationships {
-        await relationshipsResolver.relationships(for: object)
+        if case .cPlusPlus = object.kind {
+            // The classes of the class's own image deriving from it directly;
+            // a participant that never listed the image's C++ objects has no
+            // section for it and answers nothing.
+            let section = await cPlusPlusSectionFactory.existingSection(for: imageCatalog.canonicalImagePath(object.imagePath))
+            return RuntimeRelationships(subclasses: await section?.derivedClasses(of: object) ?? [], conformingTypes: [])
+        }
+        return await relationshipsResolver.relationships(for: object)
     }
 
     /// The other face of a class or protocol both lists show: the Swift class

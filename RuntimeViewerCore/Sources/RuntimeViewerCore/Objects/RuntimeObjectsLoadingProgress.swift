@@ -19,6 +19,14 @@ public struct RuntimeObjectsLoadingProgress: Sendable, Codable {
         case indexingObjCSubclasses
         case indexingObjCConformances
         case indexingSwiftSubclasses
+        /// The image's C++ symbols sorted into scopes. Reported only to a
+        /// request that asked for C++ objects (`ObjectsInImageCommand`'s
+        /// `includesCPlusPlusObjects`): a peer of a build before C++ objects
+        /// does not decode the case, and never asks.
+        case indexingCPlusPlusSymbols
+        /// The image's classes read from its run-time type information.
+        /// Reported under the same condition as `indexingCPlusPlusSymbols`.
+        case indexingCPlusPlusClasses
     }
 
     public let phase: Phase
@@ -56,6 +64,8 @@ extension RuntimeObjectsLoadingProgress.Phase {
         case .indexingObjCSubclasses: return "Indexing Objective-C subclasses..."
         case .indexingObjCConformances: return "Indexing Objective-C conformances..."
         case .indexingSwiftSubclasses: return "Indexing Swift subclasses..."
+        case .indexingCPlusPlusSymbols: return "Indexing C++ symbols..."
+        case .indexingCPlusPlusClasses: return "Indexing C++ classes..."
         }
     }
 
@@ -85,6 +95,10 @@ extension RuntimeObjectsLoadingProgress.Phase {
         case .indexingObjCConformances:      return (0.40, 0.45)
         case .indexingSwiftSubclasses:       return (0.89, 0.90)
         case .buildingObjects:              return (0.90, 1.00)
+        // The C++ section is built after the other two, while the objects
+        // are put together.
+        case .indexingCPlusPlusSymbols:      return (0.90, 0.95)
+        case .indexingCPlusPlusClasses:      return (0.95, 1.00)
         }
     }
 }

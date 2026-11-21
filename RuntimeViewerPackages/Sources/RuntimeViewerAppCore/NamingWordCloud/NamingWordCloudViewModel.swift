@@ -435,7 +435,7 @@ public final class NamingWordCloudViewModel: ViewModel<NamingWordCloudRoute> {
         switch object.kind {
         case .objc: return options.objcHeaderOptions.printExportedDeclarationsOnly
         case .swift: return options.swiftInterfaceOptions.printExportedDeclarationsOnly
-        case .c: return false
+        case .c, .cPlusPlus: return false
         }
     }
 

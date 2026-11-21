@@ -53,6 +53,13 @@ protocol RuntimeImageCatalog<Reading>: Sendable {
     /// keyed by.
     func image(definingObjCType name: RuntimeObjCName) async -> (imagePath: String, machO: MachO)?
 
+    /// The image that exports the typeinfo of the C++ type `mangledTypeName`
+    /// mangles to (`N3TST6CellIDE`, whose typeinfo symbol is
+    /// `__ZTIN3TST6CellIDE`) — with the path its sections are keyed by. `nil`
+    /// when no image exports it, as for a type every image keeps a hidden
+    /// copy of the typeinfo of.
+    func image(definingCPlusPlusTypeInfoForMangledTypeName mangledTypeName: String) async -> (imagePath: String, machO: MachO)?
+
     /// The main executable `@executable_path` expands against.
     func mainExecutablePath() -> String
 

@@ -89,19 +89,21 @@ public struct RuntimeObjectScope: Hashable, Sendable {
     }
 
     /// Top-level coarse buckets that match the disclosure groups in the
-    /// scope popover (C / Objective-C / Swift). `RuntimeObjectKind` itself
+    /// scope popover (C / Objective-C / Swift / C++). `RuntimeObjectKind` itself
     /// has no such grouping, so the popover and the matcher both go through
     /// this enum to stay in sync.
     public enum KindGroup: Hashable, CaseIterable, Sendable {
         case c
         case objectiveC
         case swift
+        case cPlusPlus
 
         public var title: String {
             switch self {
             case .c: return "C"
             case .objectiveC: return "Objective-C"
             case .swift: return "Swift"
+            case .cPlusPlus: return "C++"
             }
         }
 
@@ -114,6 +116,8 @@ public struct RuntimeObjectScope: Hashable, Sendable {
                 raw = RuntimeObjectKind.ObjectiveC.allCases.map { .objc($0) }
             case .swift:
                 raw = RuntimeObjectKind.Swift.allCases.map { .swift($0) }
+            case .cPlusPlus:
+                raw = RuntimeObjectKind.CPlusPlus.allCases.map { .cPlusPlus($0) }
             }
             return raw.filter { RuntimeObjectScope.allRepresentableKinds.contains($0) }
         }
@@ -123,6 +127,7 @@ public struct RuntimeObjectScope: Hashable, Sendable {
             case .c: return .c
             case .objc: return .objectiveC
             case .swift: return .swift
+            case .cPlusPlus: return .cPlusPlus
             }
         }
     }

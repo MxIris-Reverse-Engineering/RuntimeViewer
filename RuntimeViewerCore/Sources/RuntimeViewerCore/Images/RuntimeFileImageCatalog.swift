@@ -86,6 +86,11 @@ final class RuntimeFileImageCatalog: RuntimeImageCatalog, @unchecked Sendable {
     @Mutex
     private var objcClassImagePaths: [String: String?] = [:]
 
+    /// The images that export the typeinfo of the C++ types asked about so
+    /// far, by mangled type name — `nil` for a type none of them exports.
+    @Mutex
+    private var cPlusPlusTypeInfoImagePaths: [String: String?] = [:]
+
     /// The file's own image that exports each Objective-C class, by class
     /// name, made the first time a class is looked up: looking a name up image
     /// by image would open every image of a folder for every name.
@@ -265,6 +270,26 @@ final class RuntimeFileImageCatalog: RuntimeImageCatalog, @unchecked Sendable {
         let foundPath = fileImagePath(exportingObjCClassNamed: className)
             ?? cacheImages.first { $0.value.exportTrie?.search(by: Self.objcClassSymbolPrefix + className) != nil }?.key
         objcClassImagePaths[className] = .some(foundPath)
+        return foundPath.flatMap { imagePath in machO(forImagePath: imagePath).map { (imagePath, $0) } }
+    }
+
+    /// The file's own images first, in listing order, then the paired
+    /// cache's. A file image not open yet is opened only for as long as its
+    /// export trie is read: a lookup happens when the user follows a base
+    /// class out of its image, rarely enough that no index of every image's
+    /// typeinfo symbols is kept.
+    func image(definingCPlusPlusTypeInfoForMangledTypeName mangledTypeName: String) async -> (imagePath: String, machO: MachOFile)? {
+        if let known = cPlusPlusTypeInfoImagePaths[mangledTypeName] {
+            return known.flatMap { imagePath in machO(forImagePath: imagePath).map { (imagePath, $0) } }
+        }
+        let symbolName = "__ZTI" + mangledTypeName
+        let foundPath = fileImagePaths.first { imagePath in
+            let image = openedFileImages[imagePath]
+                ?? (try? RuntimeFile.machOFile(at: URL(fileURLWithPath: imagePath), preferring: fileSlice))
+            return image?.exportTrie?.search(by: symbolName) != nil
+        }
+            ?? cacheImages.first { $0.value.exportTrie?.search(by: symbolName) != nil }?.key
+        cPlusPlusTypeInfoImagePaths[mangledTypeName] = .some(foundPath)
         return foundPath.flatMap { imagePath in machO(forImagePath: imagePath).map { (imagePath, $0) } }
     }
 

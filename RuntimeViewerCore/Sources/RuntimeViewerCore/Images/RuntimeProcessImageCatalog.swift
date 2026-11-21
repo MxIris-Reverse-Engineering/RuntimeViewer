@@ -46,6 +46,16 @@ struct RuntimeProcessImageCatalog: RuntimeImageCatalog {
         return (machO.imagePath, machO)
     }
 
+    /// dyld knows: the loaded image its symbol lookup finds the typeinfo in.
+    func image(definingCPlusPlusTypeInfoForMangledTypeName mangledTypeName: String) async -> (imagePath: String, machO: MachOImage)? {
+        // `dlsym` takes the name without the underscore the symbol table adds.
+        guard let typeInfo = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "_ZTI" + mangledTypeName) else { return nil }
+        var information = Dl_info()
+        guard dladdr(typeInfo, &information) != 0, let header = information.dli_fbase else { return nil }
+        let machO = MachOImage(ptr: UnsafePointer(header.assumingMemoryBound(to: mach_header.self)))
+        return (machO.imagePath, machO)
+    }
+
     func mainExecutablePath() -> String {
         DyldUtilities.mainExecutablePath()
     }

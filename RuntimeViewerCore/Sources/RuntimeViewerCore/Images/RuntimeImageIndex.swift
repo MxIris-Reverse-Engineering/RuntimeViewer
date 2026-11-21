@@ -1,12 +1,12 @@
 import Foundation
 import MachOKit
 
-/// An engine's parsed images: its catalog, the two section factories over the
-/// catalog's images and the two relationship resolvers over the factories —
-/// all built for one way of reading an image, and handed to the engine through
-/// the protocols it holds them by.
+/// An engine's parsed images: its catalog, the three section factories over
+/// the catalog's images and the two relationship resolvers over the factories
+/// — all built for one way of reading an image, and handed to the engine
+/// through the protocols it holds them by.
 ///
-/// The only place the five are put together, so an engine cannot end up with
+/// The only place the six are put together, so an engine cannot end up with
 /// a factory over one catalog and a resolver over another.
 struct RuntimeImageIndex: Sendable {
     let catalog: any RuntimeImageCatalog
@@ -14,6 +14,8 @@ struct RuntimeImageIndex: Sendable {
     let objcSectionFactory: any RuntimeObjCSectionProviding
 
     let swiftSectionFactory: any RuntimeSwiftSectionProviding
+
+    let cPlusPlusSectionFactory: any RuntimeCPlusPlusSectionProviding
 
     let relationshipsResolver: any RuntimeRelationshipsResolving
 
@@ -28,6 +30,7 @@ struct RuntimeImageIndex: Sendable {
         self.catalog = catalog
         self.objcSectionFactory = objcSectionFactory
         self.swiftSectionFactory = swiftSectionFactory
+        self.cPlusPlusSectionFactory = RuntimeCPlusPlusSectionFactory<Catalog.Reading>(catalog: catalog)
         self.relationshipsResolver = relationshipsResolver
         self.typeRelationshipsResolver = RuntimeTypeRelationshipsResolver(
             objcSectionFactory: objcSectionFactory,
