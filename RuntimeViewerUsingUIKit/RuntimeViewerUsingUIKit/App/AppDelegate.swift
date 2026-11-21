@@ -4,6 +4,7 @@ import FoundationToolbox
 import RuntimeViewerCore
 import RuntimeViewerCrossReferences
 import RuntimeViewerEngineManagement
+import RuntimeViewerApplication
 
 @Loggable
 @main
@@ -19,6 +20,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     @Dependency(\.appearanceController)
     private var appearanceController
+
+    @Dependency(\.documentSessionRegistry)
+    private var documentSessionRegistry
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         #log(.info,"Application did finish launching")
@@ -60,5 +64,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return UISceneConfiguration(name: "Default Configuration", sessionRole: connectingSceneSession.role)
     }
 
-    func application(_ application: UIApplication, didDiscardSceneSessions sceneSessions: Set<UISceneSession>) {}
+    /// The windows the user closed: their documents leave the engines' work.
+    func application(_ application: UIApplication, didDiscardSceneSessions sceneSessions: Set<UISceneSession>) {
+        documentSessionRegistry.discardSessions(forWindows: sceneSessions.map(\.persistentIdentifier))
+    }
 }
