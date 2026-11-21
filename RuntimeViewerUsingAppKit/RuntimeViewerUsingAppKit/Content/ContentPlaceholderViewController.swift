@@ -192,6 +192,21 @@ final class ContentPlaceholderViewController: BaseViewController<ContentPlacehol
             guard let self else { return }
             updateSearchResultsVisibility()
         }
+
+        // Text typed on the page's background goes to the field, as it would have before the
+        // click that took the focus from it.
+        startPageView.keyTyped = { [weak self] event in
+            guard let self,
+                  event.modifierFlags.intersection([.command, .control]).isEmpty,
+                  let characters = event.characters, characters.unicodeScalars.contains(where: { !CharacterSet.controlCharacters.contains($0) }),
+                  view.window?.makeFirstResponder(searchField.textField) == true,
+                  let fieldEditor = searchField.textField.currentEditor()
+            else { return false }
+            // The field selects all of its text when it takes the focus; typing goes after it.
+            fieldEditor.selectedRange = NSRange(location: (fieldEditor.string as NSString).length, length: 0)
+            fieldEditor.keyDown(with: event)
+            return true
+        }
     }
 
     // MARK: - Bindings
@@ -765,12 +780,23 @@ extension ContentPlaceholderViewController {
 extension ContentPlaceholderViewController {
     /// The start page's own view: a click on it, outside the field and the list, takes the focus
     /// from the field, as a click inside Xcode's initial editor does — onto the page itself, so the
-    /// focus stays in this pane and the pane becomes the focused one.
+    /// focus stays in this pane and the pane becomes the focused one. It is no stop of the Tab key,
+    /// and typing on it types into the field.
     private final class StartPageView: NSView {
+        /// Takes a key typed while the page has the focus, and says whether it did.
+        var keyTyped: ((NSEvent) -> Bool)?
+
         override var acceptsFirstResponder: Bool { true }
+
+        override var canBecomeKeyView: Bool { false }
 
         override func mouseDown(with event: NSEvent) {
             window?.makeFirstResponder(self)
+        }
+
+        override func keyDown(with event: NSEvent) {
+            if keyTyped?(event) == true { return }
+            super.keyDown(with: event)
         }
     }
 }
