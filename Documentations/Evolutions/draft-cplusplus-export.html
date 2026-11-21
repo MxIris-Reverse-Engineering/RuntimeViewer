@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Draft - 导出 C++ 对象：单个与批量导出写出 C++ 头文件</title>
+<style>
+/* Evolution proposal page, shared style (style A, "Apple documentation").
+   Copy this whole <style> block verbatim. Page-specific rules, if any, go only
+   in the marked block at the end. Must render in WebKit (Safari, Xcode preview,
+   Quick Look): no JavaScript, no external resources. */
+:root {
+  --background: #ffffff; --foreground: #1d1d1f; --secondary: #6e6e73; --separator: #d2d2d7;
+  --panel: #f5f5f7; --code-background: #f2f2f4; --accent: #0071e3;
+  --added: #1f8a4c; --added-fill: #e3f5ea;
+  --changed: #b26a00; --changed-fill: #fdf0db;
+  --removed: #c62828; --removed-fill: #fbe4e4;
+  --moved: #0066cc; --moved-fill: #e5f0fc;
+  --kept: #6e6e73; --kept-fill: #ececef;
+  --token-keyword: #ad3da4; --token-type: #3900a0; --token-string: #c41a16; --token-number: #1c00cf;
+  --token-comment: #707f8c; --token-macro: #643820;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #1c1c1e; --foreground: #f2f2f7; --secondary: #a1a1a6; --separator: #3a3a3c;
+    --panel: #2c2c2e; --code-background: #2a2a2d; --accent: #4ea1ff;
+    --added: #4cd281; --added-fill: #183826;
+    --changed: #ffb340; --changed-fill: #3d2c10;
+    --removed: #ff6b6b; --removed-fill: #3d1a1a;
+    --moved: #5aa9ff; --moved-fill: #142b45;
+    --kept: #b0b0b5; --kept-fill: #333336;
+    --token-keyword: #fc5fa3; --token-type: #d0a8ff; --token-string: #fc6a5d; --token-number: #d0bf69;
+    --token-comment: #7f8c98; --token-macro: #fd8f3f;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--background); color: var(--foreground);
+  font: 15px/1.65 -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased; }
+.page { max-width: 1080px; margin: 0 auto; padding: 28px 24px 72px; }
+.svg-definitions { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+/* Header */
+.eyebrow { margin: 0 0 6px; font-size: 13px; color: var(--secondary); }
+.crumb + .crumb::before { content: " / "; }
+h1 { font-size: 28px; line-height: 1.3; letter-spacing: -0.01em; margin: 0 0 12px; }
+h1 code { font-size: 0.8em; }
+.proposal-number { color: var(--secondary); margin-right: 4px; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 20px; margin: 0; font-size: 13px; color: var(--secondary); }
+.meta div { display: flex; gap: 6px; align-items: baseline; }
+.meta dd { margin: 0; color: var(--foreground); }
+.meta dd code { font-size: 12px; }
+.status { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--kept); background: var(--kept-fill); }
+.status-accepted { color: var(--moved); background: var(--moved-fill); }
+.status-in-progress { color: var(--changed); background: var(--changed-fill); }
+.status-implemented { color: var(--added); background: var(--added-fill); }
+.status-rejected, .status-withdrawn { color: var(--removed); background: var(--removed-fill); }
+
+/* Table of contents */
+.toc { margin: 22px 0 8px; padding: 8px 10px; background: var(--panel); border-radius: 12px; }
+.toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 2px 4px; }
+.toc li { margin: 0; }
+.toc a { display: inline-block; padding: 3px 11px; border-radius: 999px; color: var(--accent); text-decoration: none; font-size: 14px; }
+.toc a:hover { background: var(--background); }
+
+/* Text */
+section { scroll-margin-top: 16px; }
+h2 { font-size: 21px; margin: 40px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--separator); }
+h3 { font-size: 16px; margin: 22px 0 8px; }
+h4 { font-size: 15px; margin: 18px 0 6px; }
+p { margin: 10px 0; }
+a { color: var(--accent); }
+ul, ol { padding-left: 22px; }
+li { margin: 4px 0; }
+blockquote { margin: 12px 0; padding: 2px 14px; border-left: 3px solid var(--separator); color: var(--secondary); }
+hr { border: none; border-top: 1px solid var(--separator); margin: 24px 0; }
+
+/* Code */
+code { font: 0.86em/1.4 ui-monospace, "SF Mono", Menlo, monospace; background: var(--code-background); padding: 1px 5px; border-radius: 5px; }
+pre { background: var(--code-background); border-radius: 10px; padding: 14px 16px; overflow-x: auto; -webkit-overflow-scrolling: touch; font: 12.5px/1.6 ui-monospace, "SF Mono", Menlo, monospace; }
+pre code { font: inherit; background: none; padding: 0; border-radius: 0; }
+.token-keyword { color: var(--token-keyword); font-weight: 600; }
+.token-type { color: var(--token-type); }
+.token-string { color: var(--token-string); }
+.token-number { color: var(--token-number); }
+.token-comment { color: var(--token-comment); }
+.token-macro { color: var(--token-macro); }
+
+/* Callouts */
+.callout { background: var(--panel); border-left: 4px solid var(--accent); border-radius: 10px; padding: 12px 16px; margin: 14px 0; }
+.callout-note { border-left-color: var(--secondary); }
+.callout-warning { border-left-color: var(--changed); }
+.callout-title { margin: 0 0 6px; font-weight: 600; }
+.callout > :last-child { margin-bottom: 0; }
+.callout ol, .callout ul { margin: 6px 0 0; }
+
+/* Diagrams */
+.legend { list-style: none; padding: 0; margin: 8px 0 12px; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--secondary); }
+.legend li { margin: 0; }
+.swatch { display: inline-block; width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid; vertical-align: -2px; margin-right: 6px; }
+.swatch-added { background: var(--added-fill); border-color: var(--added); }
+.swatch-changed { background: var(--changed-fill); border-color: var(--changed); }
+.swatch-removed { background: var(--removed-fill); border-color: var(--removed); border-style: dashed; }
+.swatch-moved { background: var(--moved-fill); border-color: var(--moved); }
+.swatch-kept { background: var(--kept-fill); border-color: var(--kept); }
+.figure { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--separator); border-radius: 12px; padding: 12px; margin: 12px 0; }
+.figure svg { display: block; width: 100%; min-width: 760px; height: auto; }
+.figure-narrow svg { min-width: 0; max-width: 640px; margin: 0 auto; }
+.figure-caption { font-size: 13px; color: var(--secondary); margin-top: 8px; }
+svg text { font: 12px ui-monospace, "SF Mono", Menlo, monospace; fill: var(--foreground); }
+svg .group-label { font-size: 13px; font-weight: 700; }
+svg .caption { font-size: 10.5px; fill: var(--secondary); }
+svg .strike { text-decoration: line-through; }
+svg .group { fill: none; stroke: var(--separator); stroke-width: 1.5; stroke-dasharray: 5 4; }
+svg .box-added { fill: var(--added-fill); stroke: var(--added); stroke-width: 1.5; }
+svg .box-changed { fill: var(--changed-fill); stroke: var(--changed); stroke-width: 1.5; }
+svg .box-removed { fill: var(--removed-fill); stroke: var(--removed); stroke-width: 1.5; stroke-dasharray: 4 3; }
+svg .box-moved { fill: var(--moved-fill); stroke: var(--moved); stroke-width: 1.5; }
+svg .box-kept { fill: var(--kept-fill); stroke: var(--kept); stroke-width: 1.2; }
+svg .arrow { fill: none; stroke: var(--secondary); stroke-width: 1.4; marker-end: url(#arrowhead); }
+svg .arrow-weak { stroke-dasharray: 4 3; }
+svg .arrow-removed { stroke: var(--removed); stroke-dasharray: 4 3; }
+svg .arrowhead { fill: var(--secondary); }
+
+/* Tables */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 10px 0; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { border: 1px solid var(--separator); padding: 7px 9px; text-align: left; vertical-align: top; }
+th { background: var(--panel); font-weight: 600; }
+.numeric { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tag { display: inline-block; white-space: nowrap; padding: 0 7px; border-radius: 5px; font-size: 12px; font-weight: 600; color: var(--kept); background: var(--kept-fill); }
+.tag-added { color: var(--added); background: var(--added-fill); }
+.tag-changed { color: var(--changed); background: var(--changed-fill); }
+.tag-removed { color: var(--removed); background: var(--removed-fill); }
+.tag-moved { color: var(--moved); background: var(--moved-fill); }
+
+/* Collapsible sections */
+details { border: 1px solid var(--separator); border-radius: 12px; margin: 12px 0; overflow: hidden; }
+summary { cursor: pointer; list-style: none; padding: 11px 16px; font-weight: 600; background: var(--panel); }
+summary::-webkit-details-marker { display: none; }
+summary::before { content: "›"; display: inline-block; width: 1em; color: var(--secondary); -webkit-transition: -webkit-transform 0.15s; transition: transform 0.15s; }
+details[open] > summary::before { -webkit-transform: rotate(90deg); transform: rotate(90deg); }
+details[open] > summary { border-bottom: 1px solid var(--separator); }
+.details-body { padding: 4px 16px 12px; }
+
+@media (max-width: 640px) {
+  .page { padding: 20px 16px 56px; }
+  h1 { font-size: 23px; }
+}
+
+/* ===== Page-specific styles (only for elements the shared style lacks, e.g. UI mockups) ===== */
+</style>
+</head>
+<body>
+<svg class="svg-definitions" aria-hidden="true" focusable="false">
+  <defs><marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>
+</svg>
+<div class="page">
+
+<header class="doc-header">
+  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">Draft</span></p>
+  <h1><span class="proposal-number">Draft</span> 导出 C++ 对象：单个与批量导出写出 C++ 头文件</h1>
+  <dl class="meta">
+    <div><dt>状态</dt><dd><span class="status status-accepted">Accepted</span></dd></div>
+    <div><dt>最后更新</dt><dd>2026-11-21</dd></div>
+    <div><dt>项目类型</dt><dd>App</dd></div>
+    <div><dt>原文</dt><dd><code>draft-cplusplus-export.md</code></dd></div>
+  </dl>
+</header>
+
+<nav class="toc" aria-label="目录">
+  <ol>
+    <li><a href="#summary">摘要</a></li>
+    <li><a href="#decide">要你定</a></li>
+    <li><a href="#architecture">架构图</a></li>
+    <li><a href="#map">改动地图</a></li>
+    <li><a href="#proposal">提议方案</a></li>
+    <li><a href="#design">详细设计</a></li>
+    <li><a href="#research">调研</a></li>
+    <li><a href="#alternatives">替代方案</a></li>
+    <li><a href="#impact">影响</a></li>
+    <li><a href="#steps">落地步骤</a></li>
+    <li><a href="#log">决策日志</a></li>
+  </ol>
+</nav>
+
+<main class="content">
+
+<section id="summary">
+  <h2>摘要</h2>
+  <p>导出（单个镜像的 Export Interfaces… 与批量导出）在 Objective-C、Swift 之外写出镜像的 C++ 类与命名空间。每个 C++ 对象写成一份伪头文件，内容就是内容区打印的那一份。目录格式放进 <code>CPlusPlusHeaders/</code>，单文件格式合成 <code>&lt;镜像名&gt;.hpp</code>，两种格式在配置页里像 ObjC、Swift 一样单选。</p>
+  <p>C++ 对象是一棵树：顶层多是命名空间，类挂在下面，而打印器打印命名空间时只给其中的类写一行前向声明。所以导出要把整棵树展开，每个类与命名空间各写一份。文件名用限定名，免得不同命名空间里的同名类互相覆盖。</p>
+  <p>Core 的导出配置加一个默认关闭的 <code>includesCPlusPlusObjects</code>，只有 App 的两条导出路径打开它，所以 CLI 的 <code>export</code> 子命令输出不变。</p>
+</section>
+
+<section id="decide">
+  <h2>要你定</h2>
+  <div class="callout callout-note">
+    <p class="callout-title">没有待定的事</p>
+    <p>开工前的三件事都已确认：照此开工；目录格式里的 C++ 文件平铺在 <code>CPlusPlusHeaders/</code> 下；CLI 的 <code>export</code> 这次不加 C++，以后与 MCP、Find 一起另起提案。</p>
+  </div>
+</section>
+
+<section id="architecture">
+  <h2>架构图</h2>
+  <ul class="legend">
+    <li><i class="swatch swatch-added"></i>新增</li>
+    <li><i class="swatch swatch-changed"></i>修改</li>
+    <li><i class="swatch swatch-kept"></i>不变</li>
+  </ul>
+  <div class="figure">
+  <svg viewBox="0 0 1000 430" role="img" aria-label="What changed">
+    <rect class="group" x="10" y="10" width="430" height="330" rx="10"/>
+    <text class="group-label" x="22" y="32">RuntimeViewerAppCore / App</text>
+    <rect class="box-changed" x="25" y="44" width="400" height="46" rx="6"/><text x="35" y="63">Exporting configuration</text><text class="caption" x="35" y="81">objects(in:, includesCPlusPlusObjects: true); C++ radios</text>
+    <rect class="box-changed" x="25" y="100" width="400" height="46" rx="6"/><text x="35" y="119">Exporting progress</text><text class="caption" x="35" y="137">+ cPlusPlusFormat, includesCPlusPlusObjects: true</text>
+    <rect class="box-changed" x="25" y="156" width="400" height="46" rx="6"/><text x="35" y="175">Exporting completion</text><text class="caption" x="35" y="193">"ObjC: n | Swift: n | C++: n"</text>
+    <rect class="box-changed" x="25" y="212" width="400" height="46" rx="6"/><text x="35" y="231">Batch exporting (configuration, progress, completion)</text><text class="caption" x="35" y="249">same three, per image; card "ObjC · Swift · C++"</text>
+    <rect class="box-changed" x="25" y="268" width="400" height="46" rx="6"/><text x="35" y="287">ExportingDefaultsKey / ExportingState</text><text class="caption" x="35" y="305">+ Exporting.cPlusPlusFormat (default: directory)</text>
+
+    <rect class="group" x="470" y="10" width="520" height="330" rx="10"/>
+    <text class="group-label" x="482" y="32">RuntimeViewerCore / Export</text>
+    <rect class="box-changed" x="485" y="44" width="470" height="46" rx="6"/><text x="495" y="63">RuntimeEngine.exportInterfaces(with:reporter:)</text><text class="caption" x="495" y="81">objects(in:includesCPlusPlusObjects:) → flatMap(\.exportedObjects)</text>
+    <rect class="box-added" x="485" y="100" width="470" height="46" rx="6"/><text x="495" y="119">RuntimeObject.exportedObjects</text><text class="caption" x="495" y="137">C++: itself + every descendant, depth first</text>
+    <rect class="box-changed" x="485" y="156" width="470" height="46" rx="6"/><text x="495" y="175">RuntimeInterfaceExportItem.Group</text><text class="caption" x="495" y="193">.objectiveC, .swift, + .cPlusPlus</text>
+    <rect class="box-changed" x="485" y="212" width="470" height="46" rx="6"/><text x="495" y="231">RuntimeInterfaceExportWriter.write(_:as:format:…)</text><text class="caption" x="495" y="249">CPlusPlusHeaders/ | &lt;image&gt;.hpp</text>
+    <rect class="box-changed" x="485" y="268" width="470" height="46" rx="6"/><text x="495" y="287">Configuration / Result / Metadata</text><text class="caption" x="495" y="305">+ cPlusPlusFormat, includesCPlusPlusObjects, cPlusPlusCount</text>
+
+    <rect class="box-kept" x="25" y="360" width="400" height="46" rx="6"/><text x="35" y="379">MCP, Find</text><text class="caption" x="35" y="397">never see C++ objects (unchanged)</text>
+    <rect class="box-kept" x="485" y="360" width="470" height="46" rx="6"/><text x="495" y="379">runtime-viewer-cli export</text><text class="caption" x="495" y="397">unchanged: includesCPlusPlusObjects defaults to false</text>
+
+    <path class="arrow" d="M 425 123 L 483 70"/>
+    <path class="arrow" d="M 425 235 L 483 78"/>
+    <path class="arrow arrow-weak" d="M 955 383 L 975 383 L 975 67 L 957 67"/>
+  </svg>
+  </div>
+  <p class="figure-caption">App 的两条导出路径带上新参数去要 C++ 对象；Core 把 C++ 树展开、按三组写出。CLI 取默认值，输出不变。</p>
+
+  <div class="figure">
+  <svg viewBox="0 0 1000 250" role="img" aria-label="Expanding the C++ tree of libc++abi">
+    <rect class="box-kept" x="20" y="20" width="300" height="34" rx="6"/><text x="30" y="42">Objective-C / Swift objects</text>
+    <rect class="box-kept" x="560" y="20" width="420" height="34" rx="6"/><text x="570" y="42">ObjCHeaders/, SwiftInterfaces/ (as before)</text>
+    <rect class="box-added" x="20" y="70" width="300" height="34" rx="6"/><text x="30" y="92">std (namespace)</text>
+    <rect class="box-added" x="560" y="70" width="420" height="34" rx="6"/><text x="570" y="92">CPlusPlusHeaders/std.hpp</text>
+    <rect class="box-added" x="60" y="114" width="260" height="34" rx="6"/><text x="70" y="136">std::exception (class)</text>
+    <rect class="box-added" x="560" y="114" width="420" height="34" rx="6"/><text x="570" y="136">CPlusPlusHeaders/std__exception.hpp</text>
+    <rect class="box-added" x="60" y="158" width="260" height="34" rx="6"/><text x="70" y="180">std::bad_alloc (class)</text>
+    <rect class="box-added" x="560" y="158" width="420" height="34" rx="6"/><text x="570" y="180">CPlusPlusHeaders/std__bad_alloc.hpp</text>
+    <rect class="box-added" x="20" y="202" width="300" height="34" rx="6"/><text x="30" y="224">:: (global namespace)</text>
+    <rect class="box-added" x="560" y="202" width="420" height="34" rx="6"/><text x="570" y="224">CPlusPlusHeaders/GlobalNamespace.hpp</text>
+    <path class="arrow" d="M 320 37 L 558 37"/>
+    <path class="arrow" d="M 320 87 L 558 87"/>
+    <path class="arrow" d="M 320 131 L 558 131"/>
+    <path class="arrow" d="M 320 175 L 558 175"/>
+    <path class="arrow" d="M 320 219 L 558 219"/>
+    <text class="caption" x="335" y="110">depth first, parent before children</text>
+  </svg>
+  </div>
+  <p class="figure-caption">目录格式下 libc++abi 的 C++ 树展开成哪些文件。命名空间的文件里是它的自由函数，加上 Declared here 一节的前向声明。</p>
+</section>
+
+<section id="map">
+  <h2>改动地图</h2>
+  <p>Core 指 <code>RuntimeViewerCore/Sources/RuntimeViewerCore/</code>，AppCore 指 <code>RuntimeViewerPackages/Sources/RuntimeViewerAppCore/</code>，App 指 <code>RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/</code>。</p>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>文件 / 类型</th><th>动作</th><th>改什么</th><th>为什么</th><th>步骤</th></tr></thead>
+    <tbody>
+      <tr><td>Core <code>Export/RuntimeInterfaceExportConfiguration.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>加 <code>cPlusPlusFormat</code>（默认 <code>.directory</code>）与 <code>includesCPlusPlusObjects</code>（默认 <code>false</code>）</td><td>方案第 1 条</td><td class="numeric">1</td></tr>
+      <tr><td>Core <code>Export/RuntimeObject+Export.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>加 <code>exportedObjects</code>；C++ 文件名用清洗过的限定名，全局命名空间用 <code>GlobalNamespace</code></td><td>方案第 2、4 条</td><td class="numeric">1</td></tr>
+      <tr><td>Core <code>Export/RuntimeInterfaceExportItem.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>isSwift</code> 换成 <code>Group</code>，每组带目录名与扩展名；删掉没人用的 <code>fileExtension</code></td><td>方案第 3 条</td><td class="numeric">1</td></tr>
+      <tr><td>Core <code>Export/RuntimeInterfaceExportWriter.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>两个写法合成按组写一组</td><td>方案第 3 条</td><td class="numeric">1</td></tr>
+      <tr><td>Core <code>Export/RuntimeEngine+Export.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>取对象带字段、展开、按组计数与写出；两段重复的写出代码合成一个循环</td><td>方案第 2、3 条</td><td class="numeric">1</td></tr>
+      <tr><td>Core <code>Export/RuntimeInterfaceExportResult.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>加 <code>cPlusPlusCount</code>，构造参数默认 0</td><td>方案第 5 条</td><td class="numeric">1</td></tr>
+      <tr><td>Core <code>Export/RuntimeInterfaceExportMetadata.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>可选的 C++ 格式与计数；README 只在要了 C++ 时多两行</td><td>方案第 5 条</td><td class="numeric">1</td></tr>
+      <tr><td><code>RuntimeViewerCoreTests/CPlusPlusExportTests.swift</code></td><td><span class="tag tag-added">新增</span></td><td>libc++abi 上的两种格式、默认不要、文件名、展开顺序、README、计数、与内容区一致</td><td>第 1 步行为</td><td class="numeric">1</td></tr>
+      <tr><td>AppCore <code>Exporting/ExportingState.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>ExportingDefaultsKey.cPlusPlusFormat</code>、<code>ExportingState.cPlusPlusFormat</code></td><td>方案第 6 条</td><td class="numeric">2</td></tr>
+      <tr><td>AppCore <code>Exporting/ExportingConfigurationViewModel.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>取对象带 <code>true</code>；输入输出加 C++ 的格式、计数与显隐；记住所选格式</td><td>方案第 6 条</td><td class="numeric">2</td></tr>
+      <tr><td>App <code>Exporting/ExportingConfigurationViewController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>「C++:」一组单选与说明，摘要加「N C++」</td><td>方案第 6 条</td><td class="numeric">2</td></tr>
+      <tr><td>AppCore <code>Exporting/ExportingProgressViewModel.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>配置带 C++ 格式与 <code>includesCPlusPlusObjects: true</code></td><td>方案第 6 条</td><td class="numeric">2</td></tr>
+      <tr><td>AppCore <code>Exporting/ExportingCompletionViewModel.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>C++ 数大于 0 时加「C++: N」</td><td>方案第 6 条</td><td class="numeric">2</td></tr>
+      <tr><td>AppCore <code>BatchExporting/BatchExportingState.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>C++ 格式；每个镜像与汇总的 C++ 计数</td><td>方案第 6 条</td><td class="numeric">2</td></tr>
+      <tr><td>AppCore 与 App 的批量导出配置页</td><td><span class="tag tag-changed">修改</span></td><td>C++ 一组单选，与单个导出共用格式键</td><td>方案第 6 条</td><td class="numeric">2</td></tr>
+      <tr><td>AppCore <code>BatchExporting/BatchExportingProgressViewModel.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>exportOne</code> 的配置带 C++ 格式与 <code>true</code></td><td>方案第 6 条</td><td class="numeric">2</td></tr>
+      <tr><td>AppCore 与 App 的批量导出完成页</td><td><span class="tag tag-changed">修改</span></td><td><code>objcSwiftValue</code> 改名 <code>languageCountsValue</code>；卡片「ObjC · Swift · C++」</td><td>方案第 6 条</td><td class="numeric">2</td></tr>
+      <tr><td><code>RuntimeViewerAppCoreTests/ExportingCompletionViewModelTests.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>单个与批量完成页的 C++ 计数</td><td>第 2 步行为</td><td class="numeric">2</td></tr>
+      <tr><td><code>AGENTS.md</code>、<code>Glossary.md</code>、两份索引</td><td><span class="tag tag-changed">修改</span></td><td>导出从「看不到 C++ 的」里拿掉；暂缓项改为 Find、MCP 与 CLI；登记</td><td>文档与代码同批</td><td class="numeric">2</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>不改的：CLI（<code>CommandExecutor</code> 不传新参数，取默认值）、MCP、Find、C++ 打印器、ObjC 与 Swift 的导出写法。</p>
+</section>
+
+<section id="proposal">
+  <h2>提议方案</h2>
+  <ol>
+    <li><strong>Core 的导出配置加两项</strong>：<code>includesCPlusPlusObjects: Bool</code>（默认 <code>false</code>）与 <code>cPlusPlusFormat: Format</code>（默认 <code>.directory</code>）。默认不要 C++，所以 CLI 和现有调用点的行为不变。</li>
+    <li><strong>要 C++ 时把树展开</strong>：<code>exportInterfaces</code> 取对象时把字段带上，再把每个对象换成它的 <code>exportedObjects</code>：ObjC、Swift、C 对象只有自己；C++ 对象是自己加上全部后代，深度优先、父在前，顺序与侧栏一致。配置页数 C++ 对象时用同一个。</li>
+    <li><strong>写出分三组</strong>：Objective-C（含 C）、Swift、C++。C++ 的单文件是 <code>&lt;镜像名&gt;.hpp</code>，目录是 <code>CPlusPlusHeaders/</code>。写出器改成按组的表来写，重复的写出代码合成一段。</li>
+    <li><strong>C++ 的文件名用限定名</strong>：沿用现有的清洗规则，非法字符（含冒号）一律换成下划线，所以 <code>std::exception</code> → <code>std__exception.hpp</code>。全局命名空间写成 <code>GlobalNamespace.hpp</code>。</li>
+    <li><strong>结果与 README</strong>：结果加 <code>cPlusPlusCount</code>；README 只在要了 C++ 时多 <code>C++ format</code> 与 <code>C++ interfaces</code> 两行；C++ 没有生成选项，不加选项一节。</li>
+    <li><strong>App 的两条导出路径都要 C++</strong>：单个导出的配置页在镜像里有 C++ 时显示「C++:」一组单选，摘要多「N C++」，完成页加「C++: N」；批量导出一直显示 C++ 一组，完成页卡片改成三个数。C++ 格式存在 <code>Exporting.cPlusPlusFormat</code>，两者共用，默认 Directory。</li>
+    <li><strong>不加「不导出 C++」的开关</strong>：ObjC 和 Swift 也没有，镜像里有就导出。</li>
+  </ol>
+  <details>
+    <summary>非目标</summary>
+    <div class="details-body">
+      <ul>
+        <li>CLI 的 <code>export</code>、MCP、Find 照旧看不到 C++ 对象；提案索引的暂缓项改为只列这三项。</li>
+        <li>不改 C++ 打印器：导出的就是内容区的文本，命名空间里的类照旧是前向声明。</li>
+        <li>ObjC、Swift 的导出不变：仍只导顶层对象，文件名和目录都不变。</li>
+        <li>不按命名空间分子目录（替代方案第 3 条，用户定了平铺）。</li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<section id="design">
+  <h2>详细设计</h2>
+  <details open>
+    <summary>Core 的 API</summary>
+    <div class="details-body">
+<pre><code>public struct RuntimeInterfaceExportConfiguration: Sendable {
+    public let cPlusPlusFormat: Format
+    /// Whether the export asks for the image's C++ objects
+    /// (`objects(in:includesCPlusPlusObjects:)`) and writes them. Off by
+    /// default, so a caller that predates C++ objects exports what it did.
+    public let includesCPlusPlusObjects: Bool
+
+    public init(
+        imagePath: String,
+        imageName: String,
+        directory: URL,
+        objcFormat: Format,
+        swiftFormat: Format,
+        cPlusPlusFormat: Format = .directory,
+        generationOptions: RuntimeObjectInterface.GenerationOptions,
+        includeMetadata: Bool = true,
+        includesCPlusPlusObjects: Bool = false
+    )
+}
+
+extension RuntimeObject {
+    /// The objects an export writes for this one: itself, and for a C++
+    /// class or namespace every class and namespace declared in it, depth
+    /// first.
+    public var exportedObjects: [RuntimeObject] { get }
+}
+
+public struct RuntimeInterfaceExportResult: Sendable, Equatable {
+    public let cPlusPlusCount: Int
+    public init(succeeded:failed:totalDuration:objcCount:swiftCount:cPlusPlusCount: Int = 0)
+}
+
+struct RuntimeInterfaceExportItem: Sendable {
+    enum Group: CaseIterable, Sendable {
+        case objectiveC   // .objc and .c:  ObjCHeaders/,      &lt;image&gt;.h
+        case swift        //                SwiftInterfaces/,  &lt;image&gt;.swiftinterface
+        case cPlusPlus    //                CPlusPlusHeaders/, &lt;image&gt;.hpp
+    }
+    var group: Group { get }
+}</code></pre>
+    </div>
+  </details>
+  <details>
+    <summary><code>exportInterfaces</code> 的流程</summary>
+    <div class="details-body">
+<pre><code>let objects = try await objects(in: configuration.imagePath,
+                                includesCPlusPlusObjects: configuration.includesCPlusPlusObjects)
+    .flatMap(\.exportedObjects)
+// per object, as before: interface(for:options:), empty → skipped, failure → counted
+// count per group (objcCount, swiftCount, cPlusPlusCount)
+for group in RuntimeInterfaceExportItem.Group.allCases {
+    let items = results.filter { $0.group == group }
+    guard !items.isEmpty else { continue }
+    try RuntimeInterfaceExportWriter.write(items, as: group, format: configuration.format(for: group),
+                                           to: configuration.directory, imageName: configuration.imageName)
+}</code></pre>
+      <p>三组的写出顺序与今天相同（ObjC 在 Swift 前面），C++ 最后。单文件格式是各对象界面按展开顺序拼接，中间空一行。</p>
+    </div>
+  </details>
+  <details>
+    <summary>C++ 的文件名</summary>
+    <div class="details-body">
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>限定名</th><th>文件名</th></tr></thead>
+        <tbody>
+          <tr><td><code>std::exception</code></td><td><code>std__exception.hpp</code></td></tr>
+          <tr><td><code>(anonymous namespace)::Foo</code></td><td><code>(anonymous namespace)__Foo.hpp</code></td></tr>
+          <tr><td><code>std::__1::vector&lt;int, std::__1::allocator&lt;int&gt;&gt;</code></td><td><code>std____1__vector_int, std____1__allocator_int__.hpp</code></td></tr>
+          <tr><td><code>::</code>（全局命名空间）</td><td><code>GlobalNamespace.hpp</code></td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p>清洗规则沿用现有的（<code>/:&lt;&gt;"\|?*</code> 换成 <code>_</code>，超过 255 字节时截断并加哈希），只是 C++ 的输入从 <code>displayName</code> 换成了 <code>name</code>。全局命名空间里一个真叫 <code>a__b</code> 的类会和 <code>a::b</code> 撞；这种名字是留给实现的保留名，按现状处理，不另做去重。</p>
+    </div>
+  </details>
+  <details>
+    <summary>App 的文字</summary>
+    <div class="details-body">
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>地方</th><th>文字</th></tr></thead>
+        <tbody>
+          <tr><td>单个导出的组名与选项</td><td><code>C++:</code>，<code>Single File (.hpp)</code>、<code>Directory Structure</code></td></tr>
+          <tr><td>单个导出的说明</td><td><code>Combine all C++ interfaces into one .hpp file</code>；<code>Individual .hpp files in CPlusPlusHeaders/ subdirectory</code></td></tr>
+          <tr><td>批量导出的说明</td><td><code>Combine all C++ interfaces into one .hpp file per image</code>；<code>Individual .hpp files in each image's CPlusPlusHeaders/ subdirectory</code></td></tr>
+          <tr><td>单个导出的摘要</td><td><code>Image: libc++abi.dylib · 12 ObjC · 3 Swift · 41 C++</code>（数为 0 的一段不写）</td></tr>
+          <tr><td>单个导出的完成页</td><td><code>ObjC: 12 | Swift: 3 | C++: 41</code>（C++ 为 0 时不写那段）</td></tr>
+          <tr><td>批量导出的卡片</td><td>标签 <code>ObjC · Swift · C++</code>，值 <code>12 · 3 · 41</code></td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p>配置页数的 C++ 是展开后 C++ 种类的个数，也就是会写出的文件数。进度页的对象名照旧用 <code>displayName</code>，C++ 显示短名。</p>
+    </div>
+  </details>
+</section>
+
+<section id="research">
+  <h2>调研</h2>
+  <ul>
+    <li>单个导出的配置页用不带参数的 <code>objects(in:)</code>（<code>ExportingConfigurationViewModel.swift:57-67</code>），进度页组配置调 <code>exportInterfaces</code>（<code>ExportingProgressViewModel.swift:51-90</code>）；批量导出在 <code>BatchExportingProgressViewModel.exportOne</code>（<code>:164-260</code>）里逐个镜像调同一个入口。</li>
+    <li>CLI 的 <code>export</code>（<code>CommandExecutor.swift:438-451</code>）也走 <code>exportInterfaces</code>；MCP 没有导出。</li>
+    <li>Core 的导出只取顶层对象，按 <code>isSwift</code> 分两组（<code>RuntimeEngine+Export.swift:15-145</code>）；写出器里又各分一次组，两组的写出代码几乎逐行重复。</li>
+    <li>0103 已给导出补了 C++ 的臂（<code>.hpp</code>），但 C++ 的 <code>isSwift</code> 是 false，要是进来会落进 ObjC 那一组。</li>
+    <li>C++ 对象的 <code>name</code> 是限定名、<code>displayName</code> 是最后一段；打印器对其中声明的类型只写一行前向声明（<code>CPlusPlusInterfacePrinter.declaredSection</code>，<code>:360-381</code>）。</li>
+    <li>耗时（0103「实测」）：Espresso 进程内建 C++ section 约 0.25 秒、cache 文件约 1.9 秒；给 4,379 个类的 56,204 个槽位取名 0.62 秒 / 2.43 秒。</li>
+    <li>旧版对端收到带字段的请求时只回 ObjC 与 Swift（<code>ObjectsInImageCPlusPlusWireTests</code>），导出照常、没有 C++ 文件。</li>
+  </ul>
+</section>
+
+<section id="alternatives">
+  <h2>替代方案</h2>
+  <details>
+    <summary>六条，都没有采用</summary>
+    <div class="details-body">
+      <ol>
+        <li><strong>只导顶层 C++ 对象</strong>：顶层几乎全是命名空间，类等于没导出。否决。</li>
+        <li><strong>每个顶层命名空间一个文件、把类展开写进去</strong>：要给打印器加一种打印方式，导出与内容区就不一致了。否决。</li>
+        <li><strong>目录格式按命名空间分子目录</strong>：浏览起来更顺手，但命名空间自己的文件放哪、类里嵌套的类怎么放、模板参数里的 <code>::</code> 怎么办，都要另定规矩。用户定了平铺。</li>
+        <li><strong>导出一律带 C++</strong>：会悄悄改掉 CLI 的输出，CLI 的插件 skill 和版本也得跟着改。否决。</li>
+        <li><strong>配置页加「Include C++」勾选框</strong>：ObjC 和 Swift 都没有，C++ 的代价也小。不加。</li>
+        <li><strong>用 <code>cPlusPlusFormat: Format?</code> 同时表达要不要与格式</strong>：<code>nil</code> 的意思要读文档才知道。否决。</li>
+      </ol>
+    </div>
+  </details>
+</section>
+
+<section id="impact">
+  <h2>影响</h2>
+  <ul>
+    <li><strong>用户可见</strong>：导出带 C++ 的镜像时，多出 <code>CPlusPlusHeaders/</code> 或 <code>&lt;镜像名&gt;.hpp</code>；配置页和完成页多了 C++ 的格式与计数。</li>
+    <li><strong>可发现性</strong>：单个导出时，镜像里有 C++ 才出现 C++ 一组；批量导出一直显示；release note 写一句。</li>
+    <li><strong>兼容</strong>：新的 UserDefaults 键 <code>Exporting.cPlusPlusFormat</code>，没有时取 Directory；线上协议不变；新参数都有默认值，CLI 和现有测试不用改。</li>
+    <li><strong>平台</strong>：导出只在 macOS 上有，iOS 不涉及。</li>
+  </ul>
+</section>
+
+<section id="steps">
+  <h2>落地步骤</h2>
+  <ol>
+    <li><strong>Core 导出写出 C++</strong>：<code>exportLeavesCPlusPlusOutUnlessAsked</code>、<code>directoryExportWritesCPlusPlusHeaders</code>、<code>singleFileExportCombinesCPlusPlusIntoOneHeader</code>、<code>exportedCPlusPlusTextMatchesTheContentPane</code>、<code>nestedObjectsFollowTheirScopeDepthFirst</code>、<code>objectiveCAndSwiftObjectsExportOnlyThemselves</code>、<code>cPlusPlusFileNamesUseQualifiedNames</code>、<code>globalNamespaceExportsAsGlobalNamespaceFile</code>、<code>resultCountsCPlusPlusInterfaces</code>、<code>readmeListsCPlusPlusOnlyWhenIncluded</code>。</li>
+    <li><strong>App 的两条导出路径与界面，加文档</strong>：<code>completionSummaryListsCPlusPlusCount</code>、<code>completionSummaryOmitsCPlusPlusWhenThereIsNone</code>、<code>batchSummaryShowsThreeLanguageCounts</code>、<code>aggregatedResultAddsUpCPlusPlusCounts</code>；整个 App 编过，<code>./TuistScript.sh check</code> 没有新的红。配置页的计数与显隐由用户目视。</li>
+    <li><strong>文档判断</strong>（随第 2 步提交）：使用指南与实现说明倾向都不写；没有新术语，「C++ 对象」那条改一句。</li>
+  </ol>
+</section>
+
+<section id="log">
+  <h2>决策日志</h2>
+  <details>
+    <summary>2 条，最近一条：Accepted</summary>
+    <div class="details-body">
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>日期</th><th>变更</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td class="numeric">2026-11-21</td><td>Created as Draft</td><td>0103 落地后，用户要求导出也带上 C++，这是 0103 暂缓项里的一项。走轻量档：先查清现状写出方案，开工前请用户确认三件事。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>Accepted</td><td>用户看过简报后批准，并确认目录格式平铺、CLI 的 <code>export</code> 这次不加 C++。</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+  </details>
+</section>
+
+</main>
+</div>
+</body>
+</html>
