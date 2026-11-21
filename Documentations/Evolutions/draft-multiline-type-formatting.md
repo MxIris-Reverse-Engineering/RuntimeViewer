@@ -217,7 +217,7 @@ private func formatted(_ print: SemanticString) -> SemanticString {
    - 行为：`theNearestBrokenOccurrenceWins`
    - 行为：`aWindowOfABrokenLongLineIsLocated`
    - 行为：`aWholeLineMatchStillWinsFirst`、`aRunInsideALongerLineIsNotTakenForTheCorpusLine`（旧行为不变）
-5. **抬依赖 pin**（MachOSwiftSection 推送 `next` 之后） —— 改动地图第 10 行
+5. **抬依赖 pin**（已完成：MachOSwiftSection `25c4515c`） —— 改动地图第 10 行
    - 行为：不带本地依赖的构建通过
 6. **文档** —— 改动地图第 11 行
    - 行为：索引与提案状态一致
