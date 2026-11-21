@@ -246,25 +246,35 @@ public final class ContentStartPageItemCellViewModel: NSObject, @unchecked Senda
 `ContentPlaceholderViewModel(documentState:router:editorPaneID:)`，`editorPaneID` 为 `nil` 时用焦点栏（与 `ContentTextViewModel` 一致，旧调用点与测试不用改）。
 
 ```swift
-public struct Input {
+public struct ItemOpening {                      // a row opened, and where
+    public let item: ContentStartPageItemCellViewModel
+    public let destination: SelectionRoute.Destination
+}
+
+@MemberwiseInit(.public)
+public struct Input {                            // every signal defaults to .empty()
+    public let pageWillAppear: Signal<Void>      // the pane's one page shows again: Show All off, search cleared
     public let showAllClicked: Signal<Void>
-    public let recentItemChosen: Signal<(ContentStartPageItemCellViewModel, SelectionRoute.Destination)>
-    public let searchText: Signal<String>
-    public let searchSelectionMoved: Signal<Int>          // −1 up, +1 down
-    public let searchCommitted: Signal<SelectionRoute.Destination>   // Return
-    public let searchResultChosen: Signal<(ContentStartPageItemCellViewModel, SelectionRoute.Destination)>
+    public let recentItemOpened: Signal<ItemOpening>            // double-click or Return
+    public let searchText: Signal<String>                       // every change of the field
+    public let searchSelectionMoved: Signal<Int>                // −1 up, +1 down
+    public let searchCommitted: Signal<SelectionRoute.Destination>   // Return, ⌥↩
+    public let searchResultOpened: Signal<ItemOpening>          // a click on a result
+    public let searchCancelled: Signal<Void>                    // Escape
 }
 
 public struct Output {
     public let placeholder: Driver<Placeholder>
-    public let recentItems: Driver<[ContentStartPageItemCellViewModel]>   // already cut to the default count unless shown all
+    public let recentItems: Driver<[ContentStartPageItemCellViewModel]>   // cut to defaultRecentRowCount unless Show All
     public let showAllButton: Driver<ShowAllButton>                       // hidden / showAll / showLess
-    public let search: Driver<SearchState>                                // idle / loading / results([…], selectedIndex)
+    public let search: Driver<Search>                                     // inactive / loading / results([…], selectedIndex:)
     public let clearSearchField: Signal<Void>
 }
 ```
 
-打开：`selectionRouter.trigger(.focusEditorPane(editorPaneID))`，再 `.open(object, in: destination)` 或 `.openImage(path, in: destination)`。打开搜索结果后清空搜索状态并让视图清空输入框。
+打开：`selectionRouter.trigger(.focusEditorPane(editorPaneID))`，再 `.open(formOnScreen(of: object), in: destination)` 或 `.openImage(path, in: destination)`。`formOnScreen(of:)` 用 `EditorArea.tabID(showing:)`（先焦点栏、再按布局顺序，与「新标签前先切到已显示它的标签」同一个查找）找到正显示这个对象的标签，取那里的形态。打开搜索结果后清空搜索状态并让视图清空输入框。
+
+一栏只有一个起始页（`ContentCoordinator` 懒建、所有空标签共用），Xcode 则每个空编辑器一个新页面。所以页面每次「重新开始」都复位：Show All 关掉、列表不选中、搜索清空。重新开始有两种：页面重新放进这一栏（`viewWillAppear` → `pageWillAppear`），以及这一栏换了当前标签（VM 跟着 `$editorArea` 里这一栏的 `activeTabID`）——后者覆盖两个空标签之间切换，那时栏里的内容场景不变，`viewWillAppear` 不会触发。列表的选中跟着对象走：视图记着每行代表的对象，列表变化前后按对象恢复选中。
 
 ### 搜索
 
@@ -341,7 +351,7 @@ public struct OpenQuicklyCatalog: Sendable {
    - 行为：别的 Engine 上的记录不让这一页的列表重建
    - 行为：窗口换到别的 Engine 后列出那个 Engine 的最近对象
    - 行为：文档会话打开后开始记录、关闭后停止
-3. **Show All 与打开最近对象** —— VM 的 `showAllClicked`、`recentItemChosen`
+3. **Show All 与打开最近对象**（已完成） —— VM 的 `pageWillAppear`、`showAllClicked`、`recentItemOpened`、`formOnScreen(of:)`，视图的标题行与按钮、`RecentItemsTableView`（双击与回车、点击取焦点、键盘取焦点时选第一行）、按 Xcode 度量排版
    - 行为：多于 8 个时只显示前 8 行，标题行有「Show All」
    - 行为：不多于 8 个时没有按钮
    - 行为：按「Show All」显示全部、按钮变「Show Less」，再按收回
@@ -349,6 +359,12 @@ public struct OpenQuicklyCatalog: Sendable {
    - 行为：⌥ 打开在下一栏，⇧⌥ 在新标签
    - 行为：已有标签显示着同一对象时，用那个标签里的形态打开（不把它换成存下的无子树形态）
    - 行为：单击只选中、不打开（目视）
+   - 行为：Show All 在列表变化时保持，页面再次出现、或这一栏换到另一个空标签时关掉
+   - 行为：已有标签以别的语言（Generated Interface）显示同一对象时，也用那个标签里的形态打开
+   - 行为：列表被别的窗口重排时，选中跟着对象走（目视）
+   - 行为：macOS 27 上单击一行后列表取得焦点、回车打开它（目视；`mouseDown` 覆写，同 `StatefulOutlineView`）
+   - 行为：用键盘把焦点移进列表且没有选中时选中第一行；点击取焦点不先闪第一行（目视）
+   - 行为：Show Less 收掉了选中行时，取得焦点的列表选中第一行（目视）
 4. **Open Quickly 搜索框** —— `OpenQuicklyCatalog`、`OpenQuicklyRanking`、侧栏改用共用排序、VM 的搜索输入输出、视图的键盘处理
    - 行为：输入少于 3 个字符时不搜索；已有结果时留着上一次的结果
    - 行为：清空输入时结果消失
@@ -360,6 +376,8 @@ public struct OpenQuicklyCatalog: Sendable {
    - 行为：打开镜像结果显示该镜像的镜像页
    - 行为：打开结果或按 Esc 后输入框清空、结果消失，回到最近列表
    - 行为：起始页所在的栏取得焦点（⌘T 新标签、切到这一栏）时，键盘焦点落进搜索框（`EditorPaneContent.focusableView`，照 Xcode 的 `shouldFocusSearchField`；目视）
+   - 行为：点页面空白处让搜索框失去焦点（目视）
+   - 行为：搜索框照 Xcode 的度量：高 47、连续圆角 24、没聚焦时的底色、聚焦且窗口为 key 时去底色加 3pt 强调色光环（不透明度 0.6，一半在框外）、20pt medium、放大镜框在 x = 16、文字从 62 起（目视）
    - 行为：侧栏 Open Quickly 的排序不变（既有测试照旧通过）
 5. **文档** —— `RuntimeViewerUsingAppKit/AGENTS.md`、索引、本提案的决策日志
 
@@ -393,3 +411,6 @@ public struct OpenQuicklyCatalog: Sendable {
 | 2026-11-21 | 按逆向结果对齐 Xcode | Xcode 27.2 的度量写进「前期调研」。随之改的：最近列表上限 10、默认 8 行、按钮在「Show All」与「Show Less」之间切换；单击只选中，双击或回车打开（原写点击打开）；满 3 个字符才搜索，少于 3 个时留着上一次的结果；结果板浮在框下 5pt，只在搜索框聚焦且窗口为 key 时显示。 |
 | 2026-11-21 | 第 2 步审查后调整 | 两位审查者指出：存储每次选中都整文件重写，带着完整子树会卡主线程——改为只存去掉 `children` 的对象；别的 Engine 的写入会让每个起始页重建——改为只比较本 Engine 那一段；同一对象换了形态会被顶到最前——记录器先按身份去重；否定断言靠固定等待——改为利用存储「读等写」的顺序立即读；补了正例、双窗口与切换 Engine 的测试；提案的详细设计照实际写法同步。Debug 版与发布版共用存储目录、Engine 键不清理两条记为已知、列入后续项。 |
 | 2026-11-21 | 第 2 步第二轮审查后调整 | `listedForm(of:)` 改用 Core 新增的 `RuntimeObject.withChildren(_:)`；一条测试不再依赖调度细节；记录器的注释写明「焦点换到显示同一对象的另一栏」与「同一对象换形态」都不算再看一次，中间看过别的对象后才会再记。审查者另提醒：第 3 步打开存下的无子树对象时，若已有标签显示同一对象，要用那个标签里的形态，免得把它换成无子树的形态——记进第 3 步的行为清单。 |
+| 2026-11-21 | 第 3 步审查后调整 | 审查者指出：macOS 27 上单击行只选中、不让列表取得焦点，回车落到搜索框——列表照 `StatefulOutlineView` 加只调 `super` 的 `mouseDown` 覆写；取得焦点时选第一行改为只在键盘取焦点时做，免得点击时先闪第一行；Show Less 收掉选中行后补选第一行；一栏的起始页被所有空标签复用，Show All 与选中会跨标签残留——页面每次出现时复位；`formOnScreen(of:)` 改用 `EditorArea.tabID(showing:)` 的查找顺序；输入名与提案同步（`recentItemOpened`、`ItemOpening`）。 |
+| 2026-11-21 | 与 Xcode 有意不同的两处 | 路径行只占一行（Xcode 最多两行）：行高按 Xcode 截图固定为 38，两行会溢出；页面不整页滚动，搜索框与标题固定、只有列表滚动：最多 10 行，窗口不矮时看不出区别。 |
+| 2026-11-21 | 第 3 步第二轮审查后调整 | 两个空标签之间切换时栏里的内容场景不变、`viewWillAppear` 不触发，复位改为同时跟随这一栏的当前标签；列表重排后选中原先留在行号上、回车可能打开别的对象，改为按对象恢复选中（三路订阅的先后顺序写在注释里）；`formOnScreen(of:)` 改为只按身份找标签，以别的语言显示的标签也算。 |
