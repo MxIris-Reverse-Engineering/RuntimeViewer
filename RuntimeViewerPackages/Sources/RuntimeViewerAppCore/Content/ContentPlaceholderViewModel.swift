@@ -42,6 +42,33 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
             .observeOnMainScheduler()
             .bind(to: $placeholder)
             .disposed(by: rx.disposeBag)
+        followRecentObjects()
+    }
+
+    /// Lists the recent objects of the window's engine — read again when the window moves to
+    /// another engine — as they are now, and again whenever any window on the engine records one
+    /// (`RecentRuntimeObjectsRecorder`). A record on another engine changes nothing here: the store
+    /// holds every engine's list, and only this engine's is compared.
+    private func followRecentObjects() {
+        let recentObjectsByEngine = appDefaults.$recentRuntimeObjectsByEngine
+        documentState.$runtimeEngineSession.asObservable()
+            .map(\.engine)
+            .distinctUntilChanged { $0 === $1 }
+            .flatMapLatest { engine in
+                recentObjectsByEngine
+                    .map { objectsByEngine in RecentRuntimeObjects(engine: engine).objects(in: objectsByEngine) }
+                    .distinctUntilChanged(RecentRuntimeObjects.listsAreAlike)
+                    .map { recentObjects in (engine, recentObjects) }
+            }
+            .observeOnMainScheduler()
+            .subscribeOnNext { [weak self] engine, recentObjects in
+                guard let self else { return }
+                let engineName = engine.source.description
+                recentItems = recentObjects.map { object in
+                    ContentStartPageItemCellViewModel(item: .object(object), engineName: engineName, engineID: engine.engineID)
+                }
+            }
+            .disposed(by: rx.disposeBag)
     }
 
     public struct Input {

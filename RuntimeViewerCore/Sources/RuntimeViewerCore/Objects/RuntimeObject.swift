@@ -156,6 +156,12 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
         .init(name: name, displayName: displayName, kind: kind, imagePath: imagePath, children: children, properties: properties, privateDeclarations: privateDeclarations)
     }
 
+    /// Returns a copy of this object with `children` in place of its own: the same object, since
+    /// children are outside identity. The app's recent objects keep objects with none.
+    public func withChildren(_ children: [RuntimeObject]) -> RuntimeObject {
+        .init(name: name, displayName: displayName, kind: kind, imagePath: imagePath, children: children, properties: properties, privateDeclarations: privateDeclarations)
+    }
+
     /// Returns a copy of this object with `child` appended to its `children`.
     /// Used by the sidebar to splice a newly specialized type into the parent
     /// generic without forcing a full data-source rebuild.
