@@ -61,6 +61,7 @@ final class GenerationOptionsViewController: BaseViewController<GenerationOption
             .checkbox(title: "Infers ObjC Overrides From Selector Names", keyPath: \.swiftInterfaceOptions.infersObjCOverridesFromSelectorNames),
             .checkbox(title: "Print Exported Declarations Only", keyPath: \.swiftInterfaceOptions.printExportedDeclarationsOnly),
             .checkbox(title: "Expand Macros", keyPath: \.swiftInterfaceOptions.expandsMacros),
+            .checkbox(title: "Break Long Types", keyPath: \.swiftInterfaceOptions.breaksLongTypes),
             .enumOption(title: "Member Sort Order", labels: ["By Category", "By Offset"], keyPath: \.swiftInterfaceOptions.memberSortOrder),
         ]),
     ]

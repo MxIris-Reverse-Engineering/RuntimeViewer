@@ -208,7 +208,7 @@ private func formatted(_ print: SemanticString) -> SemanticString {
    - 行为：`togglingBreakLongTypesRegeneratesTheCachedInterface`
    - 行为：`macroExpansionsStillAttachToTheirTypeWhenFormatted`
    - 行为：`togglingBreakLongTypesKeepsThePrinter`（打印器不重建）
-3. **面板与导出元数据** —— 改动地图第 6、7 行
+3. **面板与导出元数据**（已完成；面板一行未经 App 构建验证，见决策日志） —— 改动地图第 6、7 行
    - 行为：面板 Swift 一栏出现「Break Long Types」，勾上后内容区刷新为拆开的文字（无测试目标，人工核对）
    - 行为：`exportMetadataDescribesBreakLongTypes`
 4. **查找跨行定位** —— 改动地图第 8、9 行

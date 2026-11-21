@@ -113,6 +113,21 @@ struct RuntimeInterfaceExportMetadataTests {
         #expect(readme.contains("- RuntimeViewer license: MIT License"))
     }
 
+    /// An export with Break Long Types on writes the long types over several lines; the README
+    /// says so, with the width (evolution proposal `multiline-type-formatting`).
+    @Test("the dump options describe Break Long Types with its width")
+    func exportMetadataDescribesBreakLongTypes() throws {
+        var options = RuntimeObjectInterface.GenerationOptions()
+        let offOption = try #require(RuntimeInterfaceExportMetadata.DumpOptionsInfo.describe(options).swiftInterfaceOptions.first { $0.name == "Break long types" })
+        #expect(offOption.value == "Disabled")
+
+        options.swiftInterfaceOptions.breaksLongTypes = true
+        options.swiftInterfaceOptions.maximumLineWidth = 120
+        let onOption = try #require(RuntimeInterfaceExportMetadata.DumpOptionsInfo.describe(options).swiftInterfaceOptions.first { $0.name == "Break long types" })
+        #expect(onOption.value == "Enabled")
+        #expect(onOption.description.contains("120 columns"))
+    }
+
     @Test("make uses engine-provided module metadata")
     func makeUsesEngineProvidedModuleMetadata() {
         let configuration = RuntimeInterfaceExportConfiguration(
