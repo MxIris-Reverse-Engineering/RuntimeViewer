@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>Draft - iOS 上的设置页</title>
+<title>0101 - iOS 上的设置页</title>
 <style>
 /* Evolution proposal page, shared style (style A, "Apple documentation").
    Copy this whole <style> block verbatim. Page-specific rules, if any, go only
@@ -160,16 +160,16 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <div class="page">
 
 <header class="doc-header">
-  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">Draft</span></p>
-  <h1><span class="proposal-number">Draft</span> iOS 上的设置页</h1>
+  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">0101</span></p>
+  <h1><span class="proposal-number">0101</span> iOS 上的设置页</h1>
   <dl class="meta">
-    <div><dt>状态</dt><dd><span class="status status-in-progress">In Progress</span></dd></div>
+    <div><dt>状态</dt><dd><span class="status status-implemented">Implemented</span></dd></div>
     <div><dt>最后更新</dt><dd>2026-11-21</dd></div>
     <div><dt>创建日期</dt><dd>2026-11-20</dd></div>
     <div><dt>作者</dt><dd>JH</dd></div>
     <div><dt>项目类型</dt><dd>App（macOS，AppKit）</dd></div>
     <div><dt>实现分支</dt><dd><code>feature/settings-screen-on-ios</code></dd></div>
-    <div><dt>原文</dt><dd><code>draft-settings-screen-on-ios.md</code></dd></div>
+    <div><dt>原文</dt><dd><code>0101-settings-screen-on-ios.md</code></dd></div>
   </dl>
 </header>
 
@@ -193,13 +193,13 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 
 <section id="summary">
   <h2>摘要</h2>
-  <p>iOS、越狱版 iOS 与 visionOS 的 RuntimeViewer 有了设置页：侧栏右上角一个齿轮按钮，点开弹出设置，列着<strong>外观</strong>（跟随系统 / 浅色 / 深色）、<strong>主题</strong>（字号、配色方案与自定义颜色）、<strong>转换选项</strong>（生成接口时的类型与偏移写法）三页。页面复用 Mac 版的 SwiftUI 代码，只把 Mac 专属的几处换成两边都能用的写法（转换选项页的模板编辑器另写一份 UIKit 版）；宿主是上游 UIFoundation 新增的 iOS 设置界面。顺带两处让设置在 iOS 上真正生效：内容区改为跟随设置里的主题（现在固定用默认主题），外观设置作用到 App 的所有窗口。Mac 版不变。</p>
+  <p>iOS、越狱版 iOS 与 visionOS 的 RuntimeViewer 有了设置页：侧栏右上角一个齿轮按钮，点开弹出设置，列着<strong>外观</strong>（浅色 / 深色，或跟随系统）、<strong>主题</strong>（字号、配色方案与自定义颜色）、<strong>转换选项</strong>（生成接口时的类型与偏移写法）三页。页面复用 Mac 版的 SwiftUI 代码，只把 Mac 专属的几处换成两边都能用的写法（转换选项页的模板编辑器另写一份 UIKit 版），外观一节在 iOS 上照系统「显示与亮度」的样子画；宿主是上游 UIFoundation 新增的 iOS 设置界面。顺带两处让设置在 iOS 上真正生效：内容区改为跟随设置里的主题（现在固定用默认主题），外观设置作用到 App 的所有窗口。Mac 版不变。</p>
   <div class="callout callout-note">
     <p class="callout-title">关联</p>
     <ul>
       <li>所属愿景：<a href="../Visions/IOSFeatureParity.md">iOS 版功能对齐</a>（第五步「iOS 前端逐项补齐」里的设置页，提前做）</li>
       <li>关联提案：<a href="0100-settings-storage-on-ios.md">0100-settings-storage-on-ios</a>（iOS 上的设置已经存盘）；上游 UIFoundation 的 <a href="https://github.com/Mx-Iris/UIFoundation/blob/main/Documentations/Evolutions/0043-settings-ui-on-ios.md">0043-settings-ui-on-ios</a>（写页面的组件放开到 iOS，加 iOS 宿主，已随 0.49.0 发布）</li>
-      <li>配套文档：待定 —— 预计无单独文档，规则写进 <code>RuntimeViewerUsingUIKit/AGENTS.md</code></li>
+      <li>配套文档：无单独文档；规则在 <code>RuntimeViewerUsingUIKit/AGENTS.md</code> 的「Settings screen and appearance」</li>
       <li>网页版：同目录同名的 <code>.html</code></li>
     </ul>
   </div>
@@ -341,14 +341,15 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
     <thead><tr><th>文件 / 类型</th><th>动作</th><th>改什么</th><th>为什么</th><th>步骤</th></tr></thead>
     <tbody>
       <tr><td><code>RuntimeViewerPackages/<wbr>Package.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>UIFoundation <code>from: "0.49.0"</code>；<code>RuntimeViewerSettingsUI</code> → <code>UIFoundationSettingsUI</code>、<code>RuntimeViewerAppUI</code> → <code>RuntimeViewerSettingsUI</code> 去掉平台条件</td><td>iOS 要链接设置页</td><td class="numeric">1</td></tr>
-      <tr><td>四份 <code>Package.resolved</code>（Debug、Distribution workspace，Packages、CommandLine 包）</td><td><span class="tag tag-changed">修改</span></td><td>只改 UIFoundation 一条 pin 到 0.49.0</td><td>跟着下限</td><td class="numeric">1</td></tr>
+      <tr><td>四份 <code>Package.resolved</code>（Debug、Distribution workspace，Packages、CommandLine 包），后来加上 Core 包的共五份</td><td><span class="tag tag-changed">修改</span></td><td>UIFoundation 一条 pin 到 0.49.0；之后按用户要求，五份里的 MachOSwiftSection 一条到 <code>3a2a20e6</code></td><td>跟着下限；越狱包要带上交叉引用崩溃的修复</td><td class="numeric">1</td></tr>
       <tr><td><code>RuntimeViewerSettingsUI/<wbr>AppSettings.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>去掉 <code>#if os(macOS)</code></td><td>页面在 iOS 上也用</td><td class="numeric">2</td></tr>
-      <tr><td><code>RuntimeViewerSettingsUI/<wbr>Components/<wbr>AppearanceSettingsSection.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>AppearanceSettingsSection</code>（外观一节）、<code>AppearancePicker</code>、选项视图，从 <code>GeneralSettingsView</code> 挪来</td><td>两边共用</td><td class="numeric">2</td></tr>
+      <tr><td><code>RuntimeViewerSettingsUI/<wbr>Components/<wbr>AppearanceSettingsSection.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>AppearanceSettingsSection</code>（外观一节）；macOS 的 <code>AppearancePicker</code>、选项视图从 <code>GeneralSettingsView</code> 挪来；iOS 的 <code>DeviceAppearancePicker</code>、选项视图与「Match System」开关</td><td>两边共用一节，各照各的系统画</td><td class="numeric">2</td></tr>
+      <tr><td><code>RuntimeViewerSettingsUI/<wbr>Resources/<wbr>Assets.xcassets</code> 的 <code>AppearanceLight-iOS</code>、<code>AppearanceDark-iOS</code></td><td><span class="tag tag-added">新增</span></td><td>iOS 27 设置里的两张设备图（@3x）</td><td>iOS 外观一节用</td><td class="numeric">2</td></tr>
       <tr><td><code>RuntimeViewerSettingsUI/<wbr>Components/<wbr>GeneralSettingsView.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>外观一节改用 <code>AppearanceSettingsSection</code>；文件仍只在 macOS</td><td>Mac 不变</td><td class="numeric">2</td></tr>
       <tr><td><code>RuntimeViewerSettingsUI/<wbr>Components/<wbr>AppearanceSettingsView.swift</code></td><td><span class="tag tag-added">新增</span></td><td>iOS 的外观页：<code>SettingsForm { AppearanceSettingsSection() }</code></td><td>iOS 只要这一节</td><td class="numeric">2</td></tr>
-      <tr><td><code>RuntimeViewerSettingsUI/<wbr>Components/<wbr>ThemeSettingsView.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>去掉平台条件；<code>ColorValue.from(_:)</code> 分平台</td><td>iOS 上编</td><td class="numeric">2</td></tr>
-      <tr><td><code>RuntimeViewerSettingsUI/<wbr>Components/<wbr>TransformerSettingsView.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>去掉平台条件；AppKit 的模板编辑器与复制分支留在 <code>#if os(macOS)</code></td><td>iOS 上编</td><td class="numeric">2</td></tr>
-      <tr><td><code>RuntimeViewerSettingsUI/<wbr>Components/<wbr>TokenTemplateTextField+UIKit.swift</code></td><td><span class="tag tag-added">新增</span></td><td>UIKit 版模板编辑器：<code>UITextView</code> 子类、胶囊附件、<code>UIViewRepresentable</code> 包装</td><td>iOS 上的同等功能</td><td class="numeric">2</td></tr>
+      <tr><td><code>RuntimeViewerSettingsUI/<wbr>Components/<wbr>ThemeSettingsView.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>去掉平台条件；<code>ColorValue.from(_:)</code> 分平台；iOS 的字号行显示数值</td><td>iOS 上编、能看出改了</td><td class="numeric">2</td></tr>
+      <tr><td><code>RuntimeViewerSettingsUI/<wbr>Components/<wbr>TransformerSettingsView.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>去掉平台条件；AppKit 的模板编辑器与复制分支留在 <code>#if os(macOS)</code>；<code>EditorGrid</code> / <code>EditorRow</code> / <code>EditorDivider</code> 与 <code>TemplateField</code> 让各编辑器分平台排版；token 胶囊一律折行；C 类型预设在 iOS 上是菜单</td><td>iOS 上编、放得进一屏宽</td><td class="numeric">2</td></tr>
+      <tr><td><code>RuntimeViewerSettingsUI/<wbr>Components/<wbr>TokenTemplateTextField+UIKit.swift</code></td><td><span class="tag tag-added">新增</span></td><td>UIKit 版模板编辑器：<code>UITextView</code> 子类、胶囊附件、<code>UIViewRepresentable</code> 包装，<code>sizeThatFits</code> 按给的宽度算高</td><td>iOS 上的同等功能</td><td class="numeric">2</td></tr>
       <tr><td><code>RuntimeViewerSettingsUI/<wbr>SettingsViewController.swift</code></td><td><span class="tag tag-added">新增</span></td><td>iOS 的设置宿主子类，三页；<code>public</code></td><td>入口打开的就是它；iOS App 在包外</td><td class="numeric">2</td></tr>
       <tr><td><code>RuntimeViewerSettingsUI/<wbr>SettingsWindowController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>整个文件包进 <code>#if os(macOS)</code></td><td>以前 iOS 不编这个模块，它从没需要过条件</td><td class="numeric">2</td></tr>
       <tr><td><code>RuntimeViewerSettingsUI/<wbr>Components/<wbr>TokenTemplatePlaceholder.swift</code></td><td><span class="tag tag-added">新增</span></td><td>找 <code>${名字}</code>、名字与占位符互转、算光标位置</td><td>UIKit 编辑器用；规则与 AppKit 编辑器一致，在 macOS 上可测</td><td class="numeric">2</td></tr>
@@ -375,9 +376,9 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
     <li><strong>三页能在 iOS 上编</strong>（<code>RuntimeViewerSettingsUI</code>）：
       <ul>
         <li><code>AppSettings.swift</code> 去掉平台条件。</li>
-        <li>外观：<code>AppearancePicker</code> 与它的选项视图挪进新文件 <code>AppearanceSettingsSection.swift</code>（各平台），Mac 的 <code>GeneralSettingsView</code> 用它、其余三节不变且仍只在 macOS；iOS 用新的 <code>AppearanceSettingsView</code>（<code>SettingsForm</code> 里只放这一节）。</li>
-        <li>主题：<code>ThemeSettingsView</code> 放开；<code>ColorValue.from(_:)</code> 在 macOS 上原样走 <code>NSColor</code>，在 UIKit 上走 <code>UIColor(color)</code> 转到 sRGB。</li>
-        <li>转换选项：<code>TransformerSettingsView</code> 放开；模板编辑器分平台——AppKit 的原样留着，UIKit 上新写 <code>UITextView</code> 版（同样把 <code>${名字}</code> 显示成胶囊、读回时还原、随内容长高）；复制按钮按平台用 <code>NSPasteboard</code> 或 <code>UIPasteboard</code>。</li>
+        <li>外观：<code>AppearancePicker</code> 与它的选项视图挪进新文件 <code>AppearanceSettingsSection.swift</code>（各平台），Mac 的 <code>GeneralSettingsView</code> 用它、其余三节不变且仍只在 macOS；iOS 用新的 <code>AppearanceSettingsView</code>（<code>SettingsForm</code> 里只放这一节）。iOS 上这一节照系统「设置 › 显示与亮度」：浅色、深色两台设备（<code>DeviceAppearancePicker</code>，图片从 iOS 导出）加一个「Match System」开关代替 Mac 的「System」选项；勾选跟着屏幕上的外观走。</li>
+        <li>主题：<code>ThemeSettingsView</code> 放开；<code>ColorValue.from(_:)</code> 在 macOS 上原样走 <code>NSColor</code>，在 UIKit 上走 <code>UIColor(color)</code> 转到 sRGB。字号在 iOS 上由步进器的标签显示数值（iOS 的 <code>Stepper</code> 只有加减两个按钮）。</li>
+        <li>转换选项：<code>TransformerSettingsView</code> 放开；模板编辑器分平台——AppKit 的原样留着，UIKit 上新写 <code>UITextView</code> 版（同样把 <code>${名字}</code> 显示成胶囊、读回时还原，按给它的宽度换行、按文字定高）；复制按钮按平台用 <code>NSPasteboard</code> 或 <code>UIPasteboard</code>。各编辑器的行经 <code>EditorGrid</code> / <code>EditorRow</code> 排：macOS 上是原来的两栏网格，iOS 上标签在控件上方；C 类型的四个预设在 iOS 的节标题里收进一个「Presets」菜单。</li>
         <li>新增 <code>SettingsViewController.swift</code>（iOS、visionOS）：继承上游 <code>SettingsViewController</code>，三页：外观、主题、转换选项。</li>
       </ul>
     </li>
@@ -406,8 +407,8 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <span class="token-keyword">#if</span> os(iOS) || os(visionOS)
 <span class="token-keyword">import</span> UIFoundationSettingsUI
 
-<span class="token-keyword">package final class</span> <span class="token-type">SettingsViewController</span>: <span class="token-type">UIFoundationSettingsUI</span>.<span class="token-type">SettingsViewController</span> {
-    <span class="token-keyword">package init</span>() {
+<span class="token-keyword">public final class</span> <span class="token-type">SettingsViewController</span>: <span class="token-type">UIFoundationSettingsUI</span>.<span class="token-type">SettingsViewController</span> {
+    <span class="token-keyword">public init</span>() {
         <span class="token-keyword">super</span>.<span class="token-keyword">init</span>(title: <span class="token-string">"Settings"</span>) {
             <span class="token-type">SettingsPage</span>(<span class="token-string">"Appearance"</span>, id: <span class="token-string">"appearance"</span>, plainSymbol: <span class="token-string">"circle.lefthalf.filled"</span>) {
                 <span class="token-type">AppearanceSettingsView</span>()
@@ -444,7 +445,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
     <div class="details-body">
       <ul>
         <li><strong>主题页的取色</strong>：iOS 上 <code>UIColor(color)</code> 先 <code>cgColor.converted(to: CGColorSpace(name: CGColorSpace.sRGB)!, …)</code>，转不了就返回 <code>nil</code>（与 macOS 一样，不覆盖原值）。macOS 分支一个字不改。</li>
-        <li><strong>UIKit 模板编辑器</strong>：<code>NSTextAttachment</code> 的 <code>image</code> 用 <code>UIGraphicsImageRenderer</code> 画胶囊（与 AppKit 版同样的字体、内边距、强调色 15% 底色），附件子类记住名字；<code>textViewDidChange</code> 时把新出现的 <code>${名字}</code> 换成附件、保持光标；读回时把附件换回 <code>${名字}</code>；高度取 <code>contentSize.height</code> 回报给 SwiftUI。</li>
+        <li><strong>UIKit 模板编辑器</strong>：<code>NSTextAttachment</code> 的 <code>image</code> 用 <code>UIGraphicsImageRenderer</code> 画胶囊（与 AppKit 版同样的字体、内边距、强调色 15% 底色），附件子类记住名字；<code>textViewDidChange</code> 时把新出现的 <code>${名字}</code> 换成附件、保持光标；读回时把附件换回 <code>${名字}</code>；尺寸在 <code>UIViewRepresentable.sizeThatFits</code> 里按 SwiftUI 给的宽度算（宽取给的宽度，高取换行后的文字高度、至少 24 pt），不固定高度，也不交给不滚动的 <code>UITextView</code> 的固有尺寸（那是整段文字排成一行的宽度）。</li>
         <li><strong>主题流在 iOS 上</strong>：<code>ResolvedThemeStream</code> 里只读 <code>SettingsAccess</code>（主线程）与 <code>ResolvedTheme(settings:)</code>，没有 AppKit 调用；订阅都在主线程，与 macOS 相同。</li>
       </ul>
     </div>
@@ -557,10 +558,10 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
         <li>行为：<code>iOSAppBuildsForAllThreeTargets</code></li>
       </ul>
     </li>
-    <li><strong>入口</strong>（已完成，设备上待用户看） —— <code>SidebarCoordinator</code>、<code>MainCoordinator</code>
+    <li><strong>入口</strong>（已完成，用户在设备上看过两轮） —— <code>SidebarCoordinator</code>、<code>MainCoordinator</code>
       <ul>
-        <li>行为：<code>gearButtonOpensSettings</code>（由用户在设备上看）</li>
-        <li>行为：<code>editingThemeChangesTheContentPane</code>、<code>appearanceOverridesTheSystemStyle</code>、<code>settingsSurviveRelaunch</code>（由用户在设备上看）</li>
+        <li>行为：<code>gearButtonOpensSettings</code>（用户在设备上看过）</li>
+        <li>行为：<code>editingThemeChangesTheContentPane</code>、<code>appearanceOverridesTheSystemStyle</code>、<code>settingsSurviveRelaunch</code>（用户在设备上看过；设备上的设置文件记着设置页里改过的值）</li>
       </ul>
     </li>
     <li><strong>文档</strong>（已完成） —— 见改动地图最后一行</li>
@@ -577,7 +578,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <section id="log">
   <h2>决策日志</h2>
   <details>
-    <summary>9 条，最近一条：实现完成，待用户看过后收尾</summary>
+    <summary>15 条，最近一条：Implemented，取号 0101</summary>
     <div class="details-body">
       <div class="table-wrap">
       <table>
@@ -591,7 +592,13 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
           <tr><td class="numeric">2026-11-20</td><td>自定：模板编辑器写 UIKit 版，不降级为普通文本框</td><td>胶囊是这页的主要价值</td></tr>
           <tr><td class="numeric">2026-11-20</td><td>用户批准，开始实现</td><td>与上游 UIFoundation 的提案一起批准；上游已落地为 0043 并发布 0.49.0，本篇接着做</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>实现中的调整</td><td>一、<code>SettingsWindowController.swift</code> 原来没有平台条件——以前 iOS 根本不编 <code>RuntimeViewerSettingsUI</code>；现在 AppUI 在各平台都依赖它，这个文件包进 <code>#if os(macOS)</code>。二、RV 的 iOS <code>SettingsViewController</code> 是 <code>public</code>：iOS App 在包外，<code>package</code> 看不到（macOS 的设置窗口经 AppUI 的 <code>appRouter</code> 打开，所以那边是 <code>package</code>）。三、占位符规则抽成 <code>TokenTemplatePlaceholder</code> 给 UIKit 编辑器用，AppKit 编辑器原样留着自己那份（Mac 行为一字不动），两边按同样的规则取名字；测试放在 <code>RuntimeViewerAppUITests</code>（为此给它加了对 <code>RuntimeViewerSettingsUI</code> 的依赖），变异检查（让 <code>caretLocation</code> 原样返回）使 2 处断言变红。四、<code>CrossPlatformSourceGuardTests</code> 的扫描范围加上 <code>RuntimeViewerSettingsUI</code>，自检名单换掉不再是 macOS 专属的 <code>UIFoundationSettingsUI</code>。五、外观一节在 iOS 上把「Appearance」放到节标题、三张缩略图占满一行：iPhone 一行放不下标签加三张图。六、<code>rendererDefaultsToTheSettingsThemeOnEveryPlatform</code> 与 <code>colorValueFromColorRoundTripsSRGB</code> 没写成测试：前者现在是不分平台的同一行代码；后者的 UIKit 分支只在 iOS 上编，macOS 的测试跑不到——两者由三个 iOS 系 App 的构建与用户在设备上看来验证。</td></tr>
-          <tr><td class="numeric">2026-11-21</td><td>实现完成，待用户看过后收尾</td><td>验证都在 Ultra 上：<code>RuntimeViewerSettingsTests</code> 71 个、<code>TokenTemplatePlaceholderTests</code> 5 个、<code>CrossPlatformSourceGuardTests</code> 与 <code>AppCoreBoundaryTests</code> 全过；<code>RuntimeViewer iOS</code>（iOS 模拟器）、<code>RuntimeViewer iOS Jailbroken</code>（iOS 真机）、<code>RuntimeViewer visionOS</code>（visionOS 模拟器）用 Debug workspace 编过；macOS App 用 Tuist workspace（Debug）编过。打了越狱版安装包给用户在 vphone 上看。没做的：设备上的四条行为（齿轮打开设置、改主题内容区跟着变、外观盖过系统、重启后设置还在）由用户看；会开窗口的 AppUI 测试没在这台 Mac 上跑。文档判断：规则写进 <code>RuntimeViewerUsingUIKit/AGENTS.md</code> 的「Settings screen and appearance」，根 <code>AGENTS.md</code> 改了 <em>Settings Integration</em>、<em>Dependency floors</em> 与规则表一行；不另写使用指南或实现说明，没有新术语。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>实现完成，待用户看过后收尾（第一轮）</td><td>验证都在 Ultra 上：<code>RuntimeViewerSettingsTests</code> 71 个、<code>TokenTemplatePlaceholderTests</code> 5 个、<code>CrossPlatformSourceGuardTests</code> 与 <code>AppCoreBoundaryTests</code> 全过；<code>RuntimeViewer iOS</code>（iOS 模拟器）、<code>RuntimeViewer iOS Jailbroken</code>（iOS 真机）、<code>RuntimeViewer visionOS</code>（visionOS 模拟器）用 Debug workspace 编过；macOS App 用 Tuist workspace（Debug）编过。打了越狱版安装包给用户在 vphone 上看。没做的：设备上的四条行为（齿轮打开设置、改主题内容区跟着变、外观盖过系统、重启后设置还在）由用户看；会开窗口的 AppUI 测试没在这台 Mac 上跑。文档判断：规则写进 <code>RuntimeViewerUsingUIKit/AGENTS.md</code> 的「Settings screen and appearance」，根 <code>AGENTS.md</code> 改了 <em>Settings Integration</em>、<em>Dependency floors</em> 与规则表一行；不另写使用指南或实现说明，没有新术语。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>按用户要求抬 MachOSwiftSection</td><td>越狱包改用 MachOSwiftSection 最新的 next（<code>3a2a20e6</code>）打包：它修了交叉引用扫描把主程序头当函数起点、在被注入的进程里断言崩溃的问题。五份锁文件只改这一条 pin；同族库的 next 上也有新提交（Swift 6 迁移），没跟着抬，构建照常通过。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>用户在设备上看过，提出三处问题</td><td>一、外观一节用的是 macOS 系统设置的缩略图，要换成 iOS 的。二、转换选项页打开一个模块后，输出格式那一节被撑得比屏幕还宽、上下留出大片空白：UIKit 模板编辑器不滚动时，固有宽度是整段模板排成一行的宽度，SwiftUI 按它排版；高度又是按另一个宽度算出来的。三、主题页的字号在 iOS 上只有加减两个按钮、看不到数值，点了像没反应：macOS 的 <code>Stepper</code> 自带数值框，iOS 的没有。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>用户选定：iOS 外观照系统「显示与亮度」</td><td>iOS 原图只有浅色、深色两张，没有「跟随系统」那张。用户选了照系统的样子：两台设备加一个「Match System」开关，开着时设置是 <code>.system</code>，关掉时固定为屏幕上的外观，点一台设备就固定为它。原图从 iOS 27 的 <code>DisplayAndBrightnessSettings.framework</code> 的 <code>Assets.car</code> 导出（<code>AppearanceLight</code> / <code>AppearanceDark</code>，@3x，60×130 pt），随包发布，与 Mac 版缩略图的做法一致；用户没选运行时去读系统私有路径。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>外观选择器照逆向出的配方画</td><td>出处是 iOS 27.0 的 <code>DBSDeviceAppearanceTableViewCell</code>、<code>DBSDeviceAppearanceOptionView</code>、<code>DBSCheckmarkView</code>：两台设备与两侧、中间三段等宽空白，从格子边缘量起，上下各两倍系统间距；每台设备竖排「原尺寸预览图、标题（body）、勾选」，系统间距；图上叠时间，白色 15 pt、距顶 15 pt，文字是本地格式的 9:41（模板 <code>Jmm</code>）；勾选是 systemBlue 的 <code>checkmark.circle.fill</code> 或 tertiaryLabel 的 <code>circle</code>（body、large）；勾选跟着屏幕上的外观走，不读设置；按下时透明度降到 0.5，点一台未选中的设备给一次轻触感，点已选中的没有反应。偏离一处：时间字体系统用私有的 <code>.SFSoftTime-Semibold</code>，这里用公开的圆体 semibold 近似。触感只在 iOS 上加：visionOS 没有触感，<code>sensoryFeedback</code> 在 visionOS 26 起才有。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>修复：转换选项页与字号</td><td>UIKit 模板编辑器改为在 <code>sizeThatFits</code> 里取 SwiftUI 给的宽度、按换行后的文字算高，不再自己报高度；各编辑器的行改经 <code>EditorGrid</code> / <code>EditorRow</code> 排版：macOS 仍是两栏网格（用探针核对过，<code>GridRow</code> 包进自定义视图后排版尺寸与原来相同），iOS 上标签在控件上方。原来不折行的 token 胶囊一律改用 <code>FlowLayout</code>；C 类型的四个预设按钮在 iOS 节标题里放不下，收进「Presets」菜单。字号在 iOS 上由 <code>Stepper</code> 的标签显示「13 pt」。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>Implemented，取号 0101</td><td>用户看过第二轮后要求收尾。第二轮的验证都在 Ultra 上：<code>RuntimeViewer iOS Jailbroken</code> 与 <code>RuntimeViewer visionOS</code> 用 Debug workspace 编过，<code>RuntimeViewerSettingsUI</code> 在 macOS 上编过，<code>TokenTemplatePlaceholderTests</code> 5 个、<code>CrossPlatformSourceGuardTests</code> 与 <code>AppCoreBoundaryTests</code> 共 10 个全过；收尾时又跑了 <code>RuntimeViewerSettingsTests</code>（71 个全过），并在抬了 MachOSwiftSection 之后用 Tuist workspace（Debug）重编 macOS App，编过。设备上的设置文件经 vphoned 只读取过一次：记着在设置页里改过的字号（14）与打开的 Type Layout，iOS 上的修改确实写进了磁盘（0100 留下的设备验证一并补上）。没做的：iPad 上的外观也画成手机，记进提案索引的「暂缓的后续项」；时间字体用公开字体近似是有意的偏离（系统用的字体是私有的）。文档判断：不另写使用指南或实现说明，规则在 <code>RuntimeViewerUsingUIKit/AGENTS.md</code>；没有新术语。</td></tr>
         </tbody>
       </table>
       </div>

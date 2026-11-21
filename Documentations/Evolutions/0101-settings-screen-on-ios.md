@@ -1,13 +1,13 @@
-# Draft - iOS 上的设置页
+# 0101 - iOS 上的设置页
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-11-20
 - **最后更新**: 2026-11-21
 - **所属愿景**: [iOS 版功能对齐](../Visions/IOSFeatureParity.md)（第五步「iOS 前端逐项补齐」里的设置页，提前做）
 - **关联提案**: [0100-settings-storage-on-ios](0100-settings-storage-on-ios.md)（iOS 上的设置已经存盘）；上游 UIFoundation 的 [0043-settings-ui-on-ios](https://github.com/Mx-Iris/UIFoundation/blob/main/Documentations/Evolutions/0043-settings-ui-on-ios.md)（写页面的组件放开到 iOS，加 iOS 宿主，已随 0.49.0 发布）
 - **实现分支 / PR**: `feature/settings-screen-on-ios`
-- **配套文档**: 待定 —— 预计无单独文档，规则写进 `RuntimeViewerUsingUIKit/AGENTS.md`
+- **配套文档**: 无单独文档；规则在 `RuntimeViewerUsingUIKit/AGENTS.md` 的「Settings screen and appearance」
 - **网页版**: 同目录同名的 `.html`
 
 ## 摘要
@@ -97,7 +97,7 @@ App 的所有窗口。Mac 版不变。
 | 文件 / 类型 | 动作 | 改什么 | 为什么 | 步骤 |
 |---|---|---|---|---|
 | `RuntimeViewerPackages/Package.swift` | 修改 | UIFoundation `from: "0.49.0"`；`RuntimeViewerSettingsUI` → `UIFoundationSettingsUI`、`RuntimeViewerAppUI` → `RuntimeViewerSettingsUI` 去掉平台条件 | iOS 要链接设置页 | 1 |
-| 四份 `Package.resolved`（Debug、Distribution workspace，Packages、CommandLine 包） | 修改 | 只改 UIFoundation 一条 pin 到 0.49.0 | 跟着下限 | 1 |
+| 四份 `Package.resolved`（Debug、Distribution workspace，Packages、CommandLine 包），后来加上 Core 包的共五份 | 修改 | UIFoundation 一条 pin 到 0.49.0；之后按用户要求，五份里的 MachOSwiftSection 一条到 `3a2a20e6` | 跟着下限；越狱包要带上交叉引用崩溃的修复 | 1 |
 | `RuntimeViewerSettingsUI/AppSettings.swift` | 修改 | 去掉 `#if os(macOS)` | 页面在 iOS 上也用 | 2 |
 | `RuntimeViewerSettingsUI/Components/AppearanceSettingsSection.swift` | 新增 | `AppearanceSettingsSection`（外观一节）；macOS 的 `AppearancePicker`、选项视图从 `GeneralSettingsView` 挪来；iOS 的 `DeviceAppearancePicker`、选项视图与「Match System」开关 | 两边共用一节，各照各的系统画 | 2 |
 | `RuntimeViewerSettingsUI/Resources/Assets.xcassets` 的 `AppearanceLight-iOS`、`AppearanceDark-iOS` | 新增 | iOS 27 设置里的两张设备图（@3x） | iOS 外观一节用 | 2 |
@@ -153,8 +153,8 @@ iOS app
 #if os(iOS) || os(visionOS)
 import UIFoundationSettingsUI
 
-package final class SettingsViewController: UIFoundationSettingsUI.SettingsViewController {
-    package init() {
+public final class SettingsViewController: UIFoundationSettingsUI.SettingsViewController {
+    public init() {
         super.init(title: "Settings") {
             SettingsPage("Appearance", id: "appearance", plainSymbol: "circle.lefthalf.filled") {
                 AppearanceSettingsView()
@@ -188,7 +188,8 @@ final class AppearanceController {
   `nil`（与 macOS 一样，不覆盖原值）。macOS 分支一个字不改。
 - **UIKit 模板编辑器**：`NSTextAttachment` 的 `image` 用 `UIGraphicsImageRenderer` 画胶囊（与 AppKit 版同样的字体、内边距、
   强调色 15% 底色），附件子类记住名字；`textViewDidChange` 时把新出现的 `${名字}` 换成附件、保持光标；读回时把附件换回
-  `${名字}`；高度取 `contentSize.height` 回报给 SwiftUI。
+  `${名字}`；尺寸在 `UIViewRepresentable.sizeThatFits` 里按 SwiftUI 给的宽度算（宽取给的宽度，高取换行后的文字高度、
+  至少 24 pt），不固定高度，也不交给不滚动的 `UITextView` 的固有尺寸（那是整段文字排成一行的宽度）。
 - **主题流在 iOS 上**：`ResolvedThemeStream` 里只读 `SettingsAccess`（主线程）与 `ResolvedTheme(settings:)`，没有 AppKit 调用；
   订阅都在主线程，与 macOS 相同。
 
@@ -240,9 +241,9 @@ final class AppearanceController {
    - 行为：`rendererDefaultsToTheSettingsThemeOnEveryPlatform`
 4. **外观**（已完成）—— `AppearanceController`（iOS）、`AppDelegate`、`SceneDelegate`
    - 行为：`iOSAppBuildsForAllThreeTargets`
-5. **入口**（已完成，设备上待用户看）—— `SidebarCoordinator`、`MainCoordinator`
-   - 行为：`gearButtonOpensSettings`（由用户在设备上看）
-   - 行为：`editingThemeChangesTheContentPane`、`appearanceOverridesTheSystemStyle`、`settingsSurviveRelaunch`（由用户在设备上看）
+5. **入口**（已完成，用户在设备上看过两轮）—— `SidebarCoordinator`、`MainCoordinator`
+   - 行为：`gearButtonOpensSettings`（用户在设备上看过）
+   - 行为：`editingThemeChangesTheContentPane`、`appearanceOverridesTheSystemStyle`、`settingsSurviveRelaunch`（用户在设备上看过；设备上的设置文件记着设置页里改过的值）
 6. **文档**（已完成）—— 见改动地图最后一行
 
 **收尾时必须判断两件事**（判断结果写进决策日志，不允许沉默跳过）：
@@ -268,3 +269,4 @@ final class AppearanceController {
 | 2026-11-21 | 用户选定：iOS 外观照系统「显示与亮度」 | iOS 原图只有浅色、深色两张，没有「跟随系统」那张。用户选了照系统的样子：两台设备加一个「Match System」开关，开着时设置是 `.system`，关掉时固定为屏幕上的外观，点一台设备就固定为它。原图从 iOS 27 的 `DisplayAndBrightnessSettings.framework` 的 `Assets.car` 导出（`AppearanceLight` / `AppearanceDark`，@3x，60×130 pt），随包发布，与 Mac 版缩略图的做法一致；用户没选运行时去读系统私有路径。 |
 | 2026-11-21 | 外观选择器照逆向出的配方画 | 出处是 iOS 27.0 的 `DBSDeviceAppearanceTableViewCell`、`DBSDeviceAppearanceOptionView`、`DBSCheckmarkView`：两台设备与两侧、中间三段等宽空白，从格子边缘量起，上下各两倍系统间距；每台设备竖排「原尺寸预览图、标题（body）、勾选」，系统间距；图上叠时间，白色 15 pt、距顶 15 pt，文字是本地格式的 9:41（模板 `Jmm`）；勾选是 systemBlue 的 `checkmark.circle.fill` 或 tertiaryLabel 的 `circle`（body、large）；勾选跟着屏幕上的外观走，不读设置；按下时透明度降到 0.5，点一台未选中的设备给一次轻触感，点已选中的没有反应。偏离一处：时间字体系统用私有的 `.SFSoftTime-Semibold`，这里用公开的圆体 semibold 近似。触感只在 iOS 上加：visionOS 没有触感，`sensoryFeedback` 在 visionOS 26 起才有。 |
 | 2026-11-21 | 修复：转换选项页与字号 | UIKit 模板编辑器改为在 `sizeThatFits` 里取 SwiftUI 给的宽度、按换行后的文字算高，不再自己报高度；各编辑器的行改经 `EditorGrid` / `EditorRow` 排版：macOS 仍是两栏网格（用探针核对过，`GridRow` 包进自定义视图后排版尺寸与原来相同），iOS 上标签在控件上方。原来不折行的 token 胶囊一律改用 `FlowLayout`；C 类型的四个预设按钮在 iOS 节标题里放不下，收进「Presets」菜单。字号在 iOS 上由 `Stepper` 的标签显示「13 pt」。 |
+| 2026-11-21 | Implemented，取号 0101 | 用户看过第二轮后要求收尾。第二轮的验证都在 Ultra 上：`RuntimeViewer iOS Jailbroken` 与 `RuntimeViewer visionOS` 用 Debug workspace 编过，`RuntimeViewerSettingsUI` 在 macOS 上编过，`TokenTemplatePlaceholderTests` 5 个、`CrossPlatformSourceGuardTests` 与 `AppCoreBoundaryTests` 共 10 个全过；收尾时又跑了 `RuntimeViewerSettingsTests`（71 个全过），并在抬了 MachOSwiftSection 之后用 Tuist workspace（Debug）重编 macOS App，编过。设备上的设置文件经 vphoned 只读取过一次：记着在设置页里改过的字号（14）与打开的 Type Layout，iOS 上的修改确实写进了磁盘（0100 留下的设备验证一并补上）。没做的：iPad 上的外观也画成手机，记进提案索引的「暂缓的后续项」；时间字体用公开字体近似是有意的偏离（系统用的字体是私有的）。文档判断：不另写使用指南或实现说明，规则在 `RuntimeViewerUsingUIKit/AGENTS.md`；没有新术语。 |

@@ -1,8 +1,8 @@
 # 愿景：iOS 版功能对齐
 
 - **状态**: Active
-- **最后更新**: 2026-11-20
-- **相关提案**: [0099-engine-management-on-ios](../Evolutions/0099-engine-management-on-ios.md)（第一步，已落地）、[0100-settings-storage-on-ios](../Evolutions/0100-settings-storage-on-ios.md)（第二步，已落地）
+- **最后更新**: 2026-11-21
+- **相关提案**: [0099-engine-management-on-ios](../Evolutions/0099-engine-management-on-ios.md)（第一步，已落地）、[0100-settings-storage-on-ios](../Evolutions/0100-settings-storage-on-ios.md)（第二步，已落地）、[0101-settings-screen-on-ios](../Evolutions/0101-settings-screen-on-ios.md)（第五步里的设置页，提前做，已落地）
 
 愿景**不做具体决定**，它划定一个方向的边界与取舍原则，让后续每个提案不必重新论证一遍。
 
@@ -203,7 +203,8 @@ MachInjector）、文件引擎给不给凭据，收进几道平台接缝；其�
    换成平台无关的值，等①落地再放开那 6 个；AppUI 补上链接属性、主题跟随、引擎图标、`appRouter` 与 `finderClient` 的
    iOS 实现。
 5. **iOS 前端逐项补齐**——Inspector、点击跳转、标签页与历史、Find、Report、书签、Filter Scope、导出（走分享面板）、
-   特化、生成选项、切换来源与附加进程、文件模式、设置页，iPad 上再加多栏编辑区。可能拆成几篇。
+   特化、生成选项、切换来源与附加进程、文件模式、设置页（外观、主题、转换选项三页已由 0101 提前做完，其余页随各自的
+   功能补上），iPad 上再加多栏编辑区。可能拆成几篇。
 
 ## 不在此愿景内
 
@@ -234,7 +235,7 @@ MachInjector）、文件引擎给不给凭据，收进几道平台接缝；其�
 | [0096-view-models-to-app-core](../Evolutions/0096-view-models-to-app-core.md) | Implemented | 前置：macOS App 的 ViewModel 全部进 AppCore（仍只在 macOS 上编） |
 | [0099-engine-management-on-ios](../Evolutions/0099-engine-management-on-ios.md) | Implemented | 第一步：引擎管理在 iOS 与 visionOS 上可用，iOS app 改由管理器启动引擎 |
 | [0100-settings-storage-on-ios](../Evolutions/0100-settings-storage-on-ios.md) | Implemented | 第二步：iOS 上的设置真正存盘（上游 UIFoundation 放开设置存储的平台限定）；设置页与派生数据不在这一步 |
-| [draft-settings-screen-on-ios](../Evolutions/draft-settings-screen-on-ios.md) | Accepted | 第五步里的设置页，提前做：外观、主题、转换选项三页，复用 Mac 版页面 |
+| [0101-settings-screen-on-ios](../Evolutions/0101-settings-screen-on-ios.md) | Implemented | 第五步里的设置页，提前做：外观、主题、转换选项三页，复用 Mac 版页面；外观一节照 iOS「显示与亮度」画 |
 
 ---
 

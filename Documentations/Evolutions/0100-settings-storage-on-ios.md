@@ -3,7 +3,7 @@
 - **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-11-20
-- **最后更新**: 2026-11-20
+- **最后更新**: 2026-11-21
 - **所属愿景**: [iOS 版功能对齐](../Visions/IOSFeatureParity.md)（第二步）
 - **关联提案**: [0099-engine-management-on-ios](0099-engine-management-on-ios.md)（第一步）、[0011-uifoundation-settings-adoption](0011-uifoundation-settings-adoption.md)（设置改用 UIFoundation 的存储）；上游 UIFoundation 的 [0042-settings-store-on-all-platforms](https://github.com/Mx-Iris/UIFoundation/blob/main/Documentations/Evolutions/0042-settings-store-on-all-platforms.md)（放开设置存储的平台限定、加同步读取，已随 0.48.0 发布）
 - **实现分支 / PR**: `feature/settings-storage-on-ios`，从 `next` 切出，2026-11-20 合入 `next`
@@ -311,3 +311,4 @@ Catalyst 上读写设置。
 | 2026-11-20 | 第二步实现中的调整 | 一、`SettingsLifecycleController`（iOS）要自己 `import Dependencies`：macOS 那个经 `RuntimeViewerArchitectures` 间接拿到，iOS 这个没有。二、跨平台守卫测试 `CrossPlatformSourceGuardTests` 把「清单里只在 AppKit 平台加进来的模块」都当成 macOS 专属，`RuntimeViewerSettingsUI` 对 `UIFoundationSettings` 那条依赖还带着条件，于是放开后它报 `Settings.swift` 与 `InMemorySettingsStorage.swift` 在 iOS 上导入了 macOS 专属模块；条件的理由已经不在，一并去掉，测试自检名单里的 `UIFoundationSettings` 换成仍是 macOS 专属的 `UIFoundationSettingsUI`。 |
 | 2026-11-20 | 实现完成，待用户看过后收尾 | 验证都在 Ultra 上：`RuntimeViewerSettingsTests` 71 个全过；`RuntimeViewerAppCoreTests` 948 个整包跑有 5 个测试红（Call Hierarchy、`BackgroundWorkProcessActivityTests`、`ReportSharedByEngineTests`、`OwnerReportingTaskTests`、跨平台守卫），守卫测试修好后单独重跑全过，其余四个单独重跑也全过，是整包高负载下的偶发失败；`RuntimeViewer iOS`（iOS 模拟器）、`RuntimeViewer iOS Jailbroken`（iOS 真机）、`RuntimeViewer visionOS`（visionOS 模拟器）用 Debug workspace 编过，它们也编了 iOS 与 visionOS 版的 `RuntimeViewerSettings`；macOS App 用 Tuist workspace（Debug）编过。会开窗口的 `RuntimeViewerAppUITests` 没在用户正在用的这台 Mac 上跑。没做的：`settingsFileAppearsAfterFirstLaunchOnDevice`（设备上第一次启动后出现 `settings.json`），没有模拟器与设备操作的授权，留给用户。文档判断：iOS 的规则写进新的 `RuntimeViewerUsingUIKit/AGENTS.md`，根 `AGENTS.md` 改了 *Settings Integration* 与 *Dependency floors*；不另写使用指南或实现说明，没有新术语。 |
 | 2026-11-20 | Implemented，取号 0100 | 这一步没有界面可看，用户决定不等验收、先落地，接着提前做 iOS 设置页。设备上的验证（第一次启动后出现 `settings.json`）没做，留到设置页做好、能在设备上改设置时一起看。文档判断不变：不另写使用指南或实现说明，没有新术语。 |
+| 2026-11-21 | 设备上的验证补上 | [0101](0101-settings-screen-on-ios.md) 落地时经 vphoned 只读取了 iPhone-27.0 虚拟机上的文件（`settingsFileAppearsAfterFirstLaunchOnDevice`）：越狱版没有 App 容器，设置文件在 `/var/mobile/Library/Application Support/RuntimeViewer-Debug/settings.json`，带着迁移写下的 `residentLimitDefaultsRevision: 1`，也记着在设置页里改过的字号与 Type Layout 开关。「装在哪种容器里」的疑问由此有了答案，`RuntimeViewerUsingUIKit/AGENTS.md` 写的是这个位置。 |

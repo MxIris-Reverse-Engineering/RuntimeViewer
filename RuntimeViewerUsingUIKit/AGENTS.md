@@ -67,4 +67,4 @@ Background: `Documentations/Evolutions/0100-settings-storage-on-ios.md`.
 - **The content pane follows the settings' theme** (`resolvedThemeStream`, as on macOS), background
   included.
 
-Background: `Documentations/Evolutions/draft-settings-screen-on-ios.md`.
+Background: `Documentations/Evolutions/0101-settings-screen-on-ios.md`.
