@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>Draft - 空编辑栏的起始页：Open Quickly 与最近打开的对象</title>
+<title>0106 - 空编辑栏的起始页：Open Quickly 与最近打开的对象</title>
 <style>
 /* Evolution proposal page, shared style (style A, "Apple documentation").
    Copy this whole <style> block verbatim. Page-specific rules, if any, go only
@@ -160,13 +160,13 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <div class="page">
 
 <header class="doc-header">
-  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">Draft</span></p>
-  <h1><span class="proposal-number">Draft</span> 空编辑栏的起始页：Open Quickly 与最近打开的对象</h1>
+  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">0106</span></p>
+  <h1><span class="proposal-number">0106</span> 空编辑栏的起始页：Open Quickly 与最近打开的对象</h1>
   <dl class="meta">
-    <div><dt>状态</dt><dd><span class="status status-in-progress">In Progress</span></dd></div>
-    <div><dt>最后更新</dt><dd>2026-11-21</dd></div>
+    <div><dt>状态</dt><dd><span class="status status-implemented">Implemented</span></dd></div>
+    <div><dt>最后更新</dt><dd>2026-11-22</dd></div>
     <div><dt>项目类型</dt><dd>App（macOS，AppKit）</dd></div>
-    <div><dt>原文</dt><dd><code>draft-editor-start-page.md</code></dd></div>
+    <div><dt>原文</dt><dd><code>0106-editor-start-page.md</code></dd></div>
   </dl>
 </header>
 
@@ -458,7 +458,7 @@ search ends: field emptied, page starts over, bar closed, item opened, engine sw
 <section id="log">
   <h2>决策日志</h2>
   <details>
-    <summary>最近一条：实现完成（第 8 步），待用户看过后收尾</summary>
+    <summary>最近一条：落地为 0106</summary>
     <div class="details-body">
       <div class="table-wrap">
       <table>
@@ -483,6 +483,7 @@ search ends: field emptied, page starts over, bar closed, item opened, engine sw
           <tr><td class="numeric">2026-11-21</td><td>第 8 步的取舍</td><td>侧栏进入、镜像页、看对象都算用过镜像；存储改为 10 个镜像各带 10 个对象，镜像挤出时连同对象；路径按规范写法；打开最近镜像显示镜像页；旧存储不迁移。</td></tr>
           <tr><td class="numeric">2026-11-22</td><td>第 8 步审查后调整</td><td>模拟器进程问到根路径之前记下的镜像会重复（SP.17）；空路径不记（SP.20）；补测试缺口（SP.21）；焦点留在隐藏列表上、换 Engine 时的中间结果不修（SP.18、SP.19）。</td></tr>
           <tr><td class="numeric">2026-11-22</td><td>修复再审后调整</td><td>第一版把整列路径都按当前写法改写，会给共用一个键的另一个模拟器进程叠根路径（SP.22）；改为只合并同一镜像的另一种写法，别的项不动。起始页要到下一次记录才赶上根路径，列入后续项；App 自己的二进制不在根路径下是 Core 规范形式的问题（SP.23）。</td></tr>
+          <tr><td class="numeric">2026-11-22</td><td>落地为 0106</td><td>四份草案随 `next` 的同一次推送按进入 `next` 的先后取号：0104 长类型拆行、0105 欢迎窗口、0106 起始页、0107 导出 C++ 对象；随 v3.0.0-beta.10 发布。</td></tr>
         </tbody>
       </table>
       </div>

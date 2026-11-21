@@ -334,7 +334,7 @@ The project uses three Swift Package Manager packages:
   optional field of `objectsInImage`, never a command of its own, so a peer of an earlier build answers it
   with Objective-C and Swift objects. An export asks only when `RuntimeInterfaceExportConfiguration`'s
   `includesCPlusPlusObjects` is on (off by default: the CLI's `export` writes no C++). Background:
-  `Documentations/Evolutions/0103-cplusplus-objects.md`, `Documentations/Evolutions/draft-cplusplus-export.md`
+  `Documentations/Evolutions/0103-cplusplus-objects.md`, `Documentations/Evolutions/0107-cplusplus-export.md`
 - `RuntimeViewerCommunication` — XPC/TCP-based IPC layer for cross-process inspection
 - `RuntimeViewerInjection` — process injection as a RuntimeEngine command extension: the
   `RuntimeInjectionService` protocol, the wire types (`RuntimeProcess`,

@@ -1,11 +1,11 @@
-# Draft - 长类型拆行：生成选项里加「Break Long Types」
+# 0104 - 长类型拆行：生成选项里加「Break Long Types」
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-11-21
-- **最后更新**: 2026-11-21
+- **最后更新**: 2026-11-22
 - **所属愿景**: 无
-- **关联提案**: MachOSwiftSection 的 [multiline-type-formatting](https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection/blob/next/Documentations/Evolutions/draft-multiline-type-formatting.md)（格式化本身由那边提供）
+- **关联提案**: MachOSwiftSection 的 [multiline-type-formatting](https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection/blob/next/Documentations/Evolutions/0104-multiline-type-formatting.md)（格式化本身由那边提供）
 - **实现分支 / PR**: `feature/multiline-type-formatting`
 - **配套文档**: 待定 —— 落地时登记实现说明 / 使用指南的链接
 - **网页版**: 同目录同名的 `.html`
@@ -241,3 +241,4 @@ private func formatted(_ print: SemanticString) -> SemanticString {
 | 2026-11-21 | 查找测试先在旧代码上变红 | 新测试不带查询词，免得旧的「按查询词就近匹配」碰巧找到同一处；换回改动前的 `ContentHighlightRequest` 跑过一次，四条新测试（拆开的整行、跨插入换行的命中、多处取最近、拆开的长行窗口）都失败，两条旧行为保护通过；换回新代码后全部通过。 |
 | 2026-11-21 | 实现完成，待用户看过后收尾 | 第 1–4 步完成，在 JHs-Mac-Studio-Ultra 上用本地依赖（`USING_LOCAL_DEPENDENCIES=1`，MachOSwiftSection 本地 `next` 已含 `MultilineTypeFormatting`）以低优先级构建：`RuntimeViewerCore` 定向 42 个测试（含 `RuntimeInterfaceCorpusVisibilityTests`，它不按选项自动枚举，新选项不影响它）、`RuntimeViewerPackages` 的 `ContentHighlightRequestTests` 与 `ContentTextHighlightTests` 20 个测试全过。面板那一行（`GenerationOptionsViewController`）在 App target 里，没有单独的测试目标，机器负载高、没做 App 构建，也没在界面上人工看过。第 5 步（MachOSwiftSection 推送 `next` 后抬 pin）与第 6 步（落地时补齐本分支的索引行）留到收尾。文档判断：不另写说明或指南，没有新术语；CLI 与 agent 插件不变。 |
 | 2026-11-21 | 已在本地合进 `next`，等推送时取号 | 用户决定收尾：MachOSwiftSection 已落地为 0102 并推送，本仓库抬 pin 到 `25c4515c`（远端依赖解析通过），功能分支以 merge commit 合进本地 `next`。本地 `next` 上还有别的功能（C++ 对象、iOS 窗口模型）合进来未推送，`next` 不由本次推送，编号与 `Implemented` 留到 `next` 推送的那次。远端功能分支保留，是推送前这些提交在远端的唯一一份。 |
+| 2026-11-22 | 落地为 0104 | 四份草案随 `next` 的同一次推送按进入 `next` 的先后取号：0104 长类型拆行、0105 欢迎窗口、0106 起始页、0107 导出 C++ 对象；状态改 Implemented，随 v3.0.0-beta.10 发布。 |

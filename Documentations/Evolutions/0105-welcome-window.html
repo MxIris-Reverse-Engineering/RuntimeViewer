@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>Draft - 欢迎窗口（接入 UIFoundation 的 WelcomePanel）</title>
+<title>0105 - 欢迎窗口（接入 UIFoundation 的 WelcomePanel）</title>
 <style>
 /* Evolution proposal page, shared style (style A, "Apple documentation").
    Copy this whole <style> block verbatim. Page-specific rules, if any, go only
@@ -160,13 +160,13 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <div class="page">
 
 <header class="doc-header">
-  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">Draft</span></p>
-  <h1><span class="proposal-number">Draft</span> 欢迎窗口（接入 UIFoundation 的 WelcomePanel）</h1>
+  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">0105</span></p>
+  <h1><span class="proposal-number">0105</span> 欢迎窗口（接入 UIFoundation 的 WelcomePanel）</h1>
   <dl class="meta">
-    <div><dt>状态</dt><dd><span class="status status-in-progress">In Progress</span></dd></div>
-    <div><dt>最后更新</dt><dd>2026-11-21</dd></div>
+    <div><dt>状态</dt><dd><span class="status status-implemented">Implemented</span></dd></div>
+    <div><dt>最后更新</dt><dd>2026-11-22</dd></div>
     <div><dt>项目类型</dt><dd>App（macOS，AppKit）</dd></div>
-    <div><dt>原文</dt><dd><code>draft-welcome-window.md</code></dd></div>
+    <div><dt>原文</dt><dd><code>0105-welcome-window.md</code></dd></div>
   </dl>
 </header>
 
@@ -486,6 +486,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
           <tr><td class="numeric">2026-11-21</td><td>图标光晕改成白色</td><td>深色背景上看不出黑色阴影。改成透明度 0.2 的白色，按亮度折算与 Xcode 的蓝色光晕相当。</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>新窗口照 Xcode 原地出现</td><td>用户觉得新窗口从右下角飞到屏幕中间很怪。逆向查明 <code>newDocument(_:)</code> 在鼠标抬起时让新窗口从指针处飞出，Xcode 不走这条路。欢迎窗口、File › New 与启动、Dock 退回的 My Mac 窗口都先以 display:false 建文档再自己显示窗口；标签栏「+」不改。</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>用户看过，收尾；编号与 Implemented 留到 <code>next</code> 推送的那次</td><td>网页版按最终提案重新生成。本地 <code>next</code> 上还有两个功能等用户看效果，这次不推；照长类型拆行那次的做法，号排在它后面。两个仓库的功能 worktree 与本地分支已删，RuntimeViewer 的远端功能分支保留。不另写指南或实现说明，没有新术语。</td></tr>
+          <tr><td class="numeric">2026-11-22</td><td>落地为 0105</td><td>四份草案随 `next` 的同一次推送按进入 `next` 的先后取号：0104 长类型拆行、0105 欢迎窗口、0106 起始页、0107 导出 C++ 对象；随 v3.0.0-beta.10 发布。</td></tr>
         </tbody>
       </table>
       </div>

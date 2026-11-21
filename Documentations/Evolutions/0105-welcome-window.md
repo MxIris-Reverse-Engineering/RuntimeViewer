@@ -1,9 +1,9 @@
-# Draft - 欢迎窗口（接入 UIFoundation 的 WelcomePanel）
+# 0105 - 欢迎窗口（接入 UIFoundation 的 WelcomePanel）
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-11-21
-- **最后更新**: 2026-11-21
+- **最后更新**: 2026-11-22
 - **所属愿景**: 无
 - **关联提案**: [0069 文件模式](0069-file-mode.md)（最近列表里的文件都是它打开的）、[0077 文件模式打开文件夹](0077-file-folders.md)；UIFoundation 的 [0011 WelcomePanel](https://github.com/Mx-Iris/UIFoundation/blob/main/Documentations/Evolutions/0011-welcome-panel.md) 与 [0012 Xcode 26 样式实测复刻](https://github.com/Mx-Iris/UIFoundation/blob/main/Documentations/Evolutions/0012-xcode26-faithful-style.md)
 - **实现分支 / PR**: RuntimeViewer `feature/welcome-window`（从 `next` 切）；UIFoundation `feature/welcome-panel-placeholder-text`（从 `main` 切，合回 `main` 后发 0.50.0）
@@ -578,3 +578,4 @@ iOS、visionOS 不受影响（设置模型里多一个字段，iOS 的设置页�
 | 2026-11-21 | 图标光晕改成白色 | 用户看过黑色版：深色背景上看不出阴影。改成透明度 0.2 的白色，按亮度折算与 Xcode 的蓝色光晕相当。 |
 | 2026-11-21 | 新窗口照 Xcode 原地出现 | 用户看过后觉得新窗口从右下角飞到屏幕中间很怪，并指出 Xcode 不这样。逆向 AppKit 与 Xcode 27.2 查明：`newDocument(_:)` 在鼠标抬起时让新文档窗口从指针处飞出，Xcode 不走这条路。用户选择欢迎窗口与 File › New 都照 Xcode：先以 display:false 建文档再自己显示窗口。启动与 Dock 点击退回的 My Mac 窗口也走同一个方法；标签栏「+」不改。详见详细设计「新窗口不从指针飞出」。 |
 | 2026-11-21 | 用户看过，收尾；编号与 Implemented 留到 `next` 推送的那次 | 用户看过改后的光晕与新窗口，确认收尾。网页版按最终提案重新生成。本地 `next` 上还有空编辑栏起始页与导出 C++ 对象两个功能合进来、等用户看效果，`next` 这次不推，照长类型拆行那次的做法，编号与 `Implemented` 留到 `next` 推送的那次（长类型拆行先进 `next`，号排在它后面）。两个仓库的功能 worktree 与本地分支已删；RuntimeViewer 的远端功能分支保留，是推送前这些提交在远端的唯一一份。文档判断不变：不另写使用指南或实现说明，`RuntimeViewerUsingAppKit/AGENTS.md` 的两条已覆盖；没有新术语。 |
+| 2026-11-22 | 落地为 0105 | 四份草案随 `next` 的同一次推送按进入 `next` 的先后取号：0104 长类型拆行、0105 欢迎窗口、0106 起始页、0107 导出 C++ 对象；状态改 Implemented，随 v3.0.0-beta.10 发布。 |

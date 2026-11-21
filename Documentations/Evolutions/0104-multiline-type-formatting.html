@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>Draft - 长类型拆行：生成选项里加「Break Long Types」</title>
+<title>0104 - 长类型拆行：生成选项里加「Break Long Types」</title>
 <style>
 /* Evolution proposal page, shared style (style A, "Apple documentation").
    Copy this whole <style> block verbatim. Page-specific rules, if any, go only
@@ -159,13 +159,13 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <div class="page">
 
 <header class="doc-header">
-  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">Draft</span></p>
-  <h1><span class="proposal-number">Draft</span> 长类型拆行：生成选项里加「Break Long Types」</h1>
+  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">0104</span></p>
+  <h1><span class="proposal-number">0104</span> 长类型拆行：生成选项里加「Break Long Types」</h1>
   <dl class="meta">
-    <div><dt>状态</dt><dd><span class="status status-in-progress">In Progress</span></dd></div>
-    <div><dt>最后更新</dt><dd>2026-11-21</dd></div>
+    <div><dt>状态</dt><dd><span class="status status-implemented">Implemented</span></dd></div>
+    <div><dt>最后更新</dt><dd>2026-11-22</dd></div>
     <div><dt>项目类型</dt><dd>App</dd></div>
-    <div><dt>原文</dt><dd><code>draft-multiline-type-formatting.md</code></dd></div>
+    <div><dt>原文</dt><dd><code>0104-multiline-type-formatting.md</code></dd></div>
   </dl>
 </header>
 
@@ -399,6 +399,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
           <tr><td class="numeric">2026-11-21</td><td>查找的跨行定位也覆盖「窗口」</td><td>超过 320 个 UTF-16 单元的语料行以带 <code>…</code> 的窗口交给查找，走另一条分支；两条分支统一改用去掉空白的正文。</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>查找测试先在旧代码上变红</td><td>新测试不带查询词；换回改动前的代码时四条新测试失败、两条旧行为保护通过，换回新代码后全部通过。</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>实现完成，待用户看过后收尾</td><td>Core 定向 42 个、Packages 定向 20 个测试全过（本地依赖、低优先级）；面板一行未经 App 构建与人工核对；抬 pin 与索引留到收尾。</td></tr>
+          <tr><td class="numeric">2026-11-22</td><td>落地为 0104</td><td>四份草案随 `next` 的同一次推送按进入 `next` 的先后取号：0104 长类型拆行、0105 欢迎窗口、0106 起始页、0107 导出 C++ 对象；随 v3.0.0-beta.10 发布。</td></tr>
         </tbody>
       </table>
       </div>

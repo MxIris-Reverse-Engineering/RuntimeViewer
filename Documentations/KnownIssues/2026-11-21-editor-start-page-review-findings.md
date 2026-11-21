@@ -1,6 +1,6 @@
 # 2026-11-21 空编辑栏起始页的自审
 
-来由：[`draft-editor-start-page`](../Evolutions/draft-editor-start-page.md) 实现完成后，对 `feature/editor-start-page`
+来由：[`0106-editor-start-page`](../Evolutions/0106-editor-start-page.md) 实现完成后，对 `feature/editor-start-page`
 相对 `next` 的全部改动跑了一次 `/code-review medium`。六条发现逐条按四问核实：能否复现、`next` 上有没有、值不值得修、
 以前修过没有。四条在分支上修掉，两条不修，理由在下面；对修复的第二轮又找出两条（SP.7 修掉、SP.8 不修）。后来加的第 6 步（⇧⌘O 浮动条与起始页同一个搜索）
 在它自己的审查关里又找出五条（SP.9–SP.13），三条修掉、两条不修；对那批修复与第 7 步（删掉侧栏自己的 Open Quickly）的审查又找出三条（SP.14–SP.16），
