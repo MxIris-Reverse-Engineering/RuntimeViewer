@@ -108,7 +108,7 @@ tag `0.49.0` 是同一个提交 `96343f3`，没有未发版的提交）
 5. **App**：新增生命周期控制器 `WelcomeController`（`App/` 目录）——
    - 持有 `WelcomePanelController`（`.xcode26`，懒创建），自己当它的 data source（用最近文档）与 delegate
      （双击打开文件）；两个动作：New Window on My Mac（`newDocument`）、Open File…（`openDocument`）；
-     标题用 `CFBundleDisplayName`，空列表文字 `No Recent Files`。
+     标题用 `CFBundleDisplayName`，空列表文字 `No Recent Files`；图标后的光晕换成黑色（样式默认的是 Xcode 图标的蓝色）。
    - `shouldOpenUntitledDocument()` 回答 `applicationShouldOpenUntitledFile(_:)`：设置已读完就按开关当场决定；
      没读完就记下「启动时有一个未命名文档的请求」并先回 `false`，等 `start()` 里读完设置后再决定弹欢迎窗口
      还是开 My Mac 窗口（这时已经有文档窗口就什么都不做）。
@@ -340,6 +340,7 @@ final class WelcomeController: NSObject {
         var configuration = WelcomePanelController.Configuration(style: .xcode26)
         configuration.welcomeLabelText = applicationName
         configuration.projectListPlaceholderText = "No Recent Files"
+        configuration.appIconImageShadow = /* black, alpha 0.55, blur 50, offset (0, 2) */
         configuration.primaryAction = .init(
             image: SFSymbols(systemName: .plusSquare).nsImage,
             title: "New Window on My Mac",
@@ -390,6 +391,9 @@ extension DependencyValues {
 - 打开文件出错时 `openDocument(withContentsOf:)` 的 completion 里不再报一次：`FileController` 已经报过。
 - 两个动作的图标是 Xcode 欢迎窗口用的 SF Symbol：`plus.square`（Xcode 的 Create New Project…）与 `folder`
   （决策日志 2026-11-21「动作图标」一行）。
+- 图标后的光晕：`.xcode26` 样式默认给 Xcode 的蓝色光晕（`appIconDefaultShadow`，只在深色外观下画），
+  衬在 RuntimeViewer 的深色图标后面是一团不搭的蓝雾；改传 `appIconImageShadow`，大小与偏移照旧、颜色换成黑色
+  （决策日志 2026-11-21「图标光晕」一行）。UIFoundation 不用改：这个属性本来就能配。
 
 ### `AppDelegate`
 
@@ -528,3 +532,4 @@ iOS、visionOS 不受影响（设置模型里多一个字段，iOS 的设置页�
 | 2026-11-21 | `Tuist.swift` 缺 `SwiftSectionTestingMacros` 不在本分支修 | `./TuistScript.sh check` 报这一项，trait 的比对通过。缺项来自 next 上已有的 MachOSwiftSection pin（C++ 对象那次合并抬到的提交带了这个新 target），与本提案无关，留给 next 上处理。 |
 | 2026-11-21 | 设置测试改为一条往返测试加一句旧文件断言 | 原列的两个用例名合并成 `welcomeWindowSwitchRoundTrips` 与 `legacyPayloadDecoding` 里的一句，覆盖的行为不变。 |
 | 2026-11-21 | 实现完成，待用户看过后收尾 | 包级测试与 Tuist 的 App 构建通过；目视验收交给用户。文档判断：不另写使用指南或实现说明，决策与约束已写进 `RuntimeViewerUsingAppKit/AGENTS.md`（`WelcomeController` 一条）与本提案；没有新术语。 |
+| 2026-11-21 | 图标光晕改成黑色 | 用户看过后觉得蓝色光晕很怪：那是 Xcode 图标的颜色，衬在 RuntimeViewer 的深色图标后面不搭。经 `appIconImageShadow` 换成同样大小与偏移的黑色阴影，不改 UIFoundation。 |

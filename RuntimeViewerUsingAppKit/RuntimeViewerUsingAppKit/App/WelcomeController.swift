@@ -137,6 +137,14 @@ final class WelcomeController: NSObject {
         // The list holds the files opened in file mode — documents are never saved — so it lists
         // files, not projects.
         configuration.projectListPlaceholderText = "No Recent Files"
+        // The style's own glow is Xcode's, tinted the blue of Xcode's icon; behind this app's dark
+        // icon it reads as a stray blue haze. Same size and offset, in black. The panel draws it in a
+        // dark appearance only.
+        let appIconShadow = NSShadow()
+        appIconShadow.shadowColor = NSColor.black.withAlphaComponent(0.55)
+        appIconShadow.shadowBlurRadius = 50
+        appIconShadow.shadowOffset = NSSize(width: 0, height: 2)
+        configuration.appIconImageShadow = appIconShadow
         configuration.primaryAction = .init(
             image: SFSymbols(systemName: .plusSquare).nsImage,
             title: "New Window on My Mac",
