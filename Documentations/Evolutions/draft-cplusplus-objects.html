@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Draft - C++ 对象：列出并打印从 RTTI、vtable 与符号恢复的 C++ 类与命名空间</title>
+<style>
+/* Evolution proposal page, shared style (style A, "Apple documentation").
+   Copy this whole <style> block verbatim. Page-specific rules, if any, go only
+   in the marked block at the end. Must render in WebKit (Safari, Xcode preview,
+   Quick Look): no JavaScript, no external resources. */
+:root {
+  --background: #ffffff; --foreground: #1d1d1f; --secondary: #6e6e73; --separator: #d2d2d7;
+  --panel: #f5f5f7; --code-background: #f2f2f4; --accent: #0071e3;
+  --added: #1f8a4c; --added-fill: #e3f5ea;
+  --changed: #b26a00; --changed-fill: #fdf0db;
+  --removed: #c62828; --removed-fill: #fbe4e4;
+  --moved: #0066cc; --moved-fill: #e5f0fc;
+  --kept: #6e6e73; --kept-fill: #ececef;
+  --token-keyword: #ad3da4; --token-type: #3900a0; --token-string: #c41a16; --token-number: #1c00cf;
+  --token-comment: #707f8c; --token-macro: #643820;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #1c1c1e; --foreground: #f2f2f7; --secondary: #a1a1a6; --separator: #3a3a3c;
+    --panel: #2c2c2e; --code-background: #2a2a2d; --accent: #4ea1ff;
+    --added: #4cd281; --added-fill: #183826;
+    --changed: #ffb340; --changed-fill: #3d2c10;
+    --removed: #ff6b6b; --removed-fill: #3d1a1a;
+    --moved: #5aa9ff; --moved-fill: #142b45;
+    --kept: #b0b0b5; --kept-fill: #333336;
+    --token-keyword: #fc5fa3; --token-type: #d0a8ff; --token-string: #fc6a5d; --token-number: #d0bf69;
+    --token-comment: #7f8c98; --token-macro: #fd8f3f;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--background); color: var(--foreground);
+  font: 15px/1.65 -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased; }
+.page { max-width: 1080px; margin: 0 auto; padding: 28px 24px 72px; }
+.svg-definitions { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+/* Header */
+.eyebrow { margin: 0 0 6px; font-size: 13px; color: var(--secondary); }
+.crumb + .crumb::before { content: " / "; }
+h1 { font-size: 28px; line-height: 1.3; letter-spacing: -0.01em; margin: 0 0 12px; }
+h1 code { font-size: 0.8em; }
+.proposal-number { color: var(--secondary); margin-right: 4px; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 20px; margin: 0; font-size: 13px; color: var(--secondary); }
+.meta div { display: flex; gap: 6px; align-items: baseline; }
+.meta dd { margin: 0; color: var(--foreground); }
+.meta dd code { font-size: 12px; }
+.status { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--kept); background: var(--kept-fill); }
+.status-accepted { color: var(--moved); background: var(--moved-fill); }
+.status-in-progress { color: var(--changed); background: var(--changed-fill); }
+.status-implemented { color: var(--added); background: var(--added-fill); }
+.status-rejected, .status-withdrawn { color: var(--removed); background: var(--removed-fill); }
+
+/* Table of contents */
+.toc { margin: 22px 0 8px; padding: 8px 10px; background: var(--panel); border-radius: 12px; }
+.toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 2px 4px; }
+.toc li { margin: 0; }
+.toc a { display: inline-block; padding: 3px 11px; border-radius: 999px; color: var(--accent); text-decoration: none; font-size: 14px; }
+.toc a:hover { background: var(--background); }
+
+/* Text */
+section { scroll-margin-top: 16px; }
+h2 { font-size: 21px; margin: 40px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--separator); }
+h3 { font-size: 16px; margin: 22px 0 8px; }
+h4 { font-size: 15px; margin: 18px 0 6px; }
+p { margin: 10px 0; }
+a { color: var(--accent); }
+ul, ol { padding-left: 22px; }
+li { margin: 4px 0; }
+blockquote { margin: 12px 0; padding: 2px 14px; border-left: 3px solid var(--separator); color: var(--secondary); }
+hr { border: none; border-top: 1px solid var(--separator); margin: 24px 0; }
+
+/* Code */
+code { font: 0.86em/1.4 ui-monospace, "SF Mono", Menlo, monospace; background: var(--code-background); padding: 1px 5px; border-radius: 5px; }
+pre { background: var(--code-background); border-radius: 10px; padding: 14px 16px; overflow-x: auto; -webkit-overflow-scrolling: touch; font: 12.5px/1.6 ui-monospace, "SF Mono", Menlo, monospace; }
+pre code { font: inherit; background: none; padding: 0; border-radius: 0; }
+.token-keyword { color: var(--token-keyword); font-weight: 600; }
+.token-type { color: var(--token-type); }
+.token-string { color: var(--token-string); }
+.token-number { color: var(--token-number); }
+.token-comment { color: var(--token-comment); }
+.token-macro { color: var(--token-macro); }
+
+/* Callouts */
+.callout { background: var(--panel); border-left: 4px solid var(--accent); border-radius: 10px; padding: 12px 16px; margin: 14px 0; }
+.callout-note { border-left-color: var(--secondary); }
+.callout-warning { border-left-color: var(--changed); }
+.callout-title { margin: 0 0 6px; font-weight: 600; }
+.callout > :last-child { margin-bottom: 0; }
+.callout ol, .callout ul { margin: 6px 0 0; }
+
+/* Diagrams */
+.legend { list-style: none; padding: 0; margin: 8px 0 12px; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--secondary); }
+.legend li { margin: 0; }
+.swatch { display: inline-block; width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid; vertical-align: -2px; margin-right: 6px; }
+.swatch-added { background: var(--added-fill); border-color: var(--added); }
+.swatch-changed { background: var(--changed-fill); border-color: var(--changed); }
+.swatch-removed { background: var(--removed-fill); border-color: var(--removed); border-style: dashed; }
+.swatch-moved { background: var(--moved-fill); border-color: var(--moved); }
+.swatch-kept { background: var(--kept-fill); border-color: var(--kept); }
+.figure { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--separator); border-radius: 12px; padding: 12px; margin: 12px 0; }
+.figure svg { display: block; width: 100%; min-width: 760px; height: auto; }
+.figure-narrow svg { min-width: 0; max-width: 640px; margin: 0 auto; }
+.figure-caption { font-size: 13px; color: var(--secondary); margin-top: 8px; }
+svg text { font: 12px ui-monospace, "SF Mono", Menlo, monospace; fill: var(--foreground); }
+svg .group-label { font-size: 13px; font-weight: 700; }
+svg .caption { font-size: 10.5px; fill: var(--secondary); }
+svg .strike { text-decoration: line-through; }
+svg .group { fill: none; stroke: var(--separator); stroke-width: 1.5; stroke-dasharray: 5 4; }
+svg .box-added { fill: var(--added-fill); stroke: var(--added); stroke-width: 1.5; }
+svg .box-changed { fill: var(--changed-fill); stroke: var(--changed); stroke-width: 1.5; }
+svg .box-removed { fill: var(--removed-fill); stroke: var(--removed); stroke-width: 1.5; stroke-dasharray: 4 3; }
+svg .box-moved { fill: var(--moved-fill); stroke: var(--moved); stroke-width: 1.5; }
+svg .box-kept { fill: var(--kept-fill); stroke: var(--kept); stroke-width: 1.2; }
+svg .arrow { fill: none; stroke: var(--secondary); stroke-width: 1.4; marker-end: url(#arrowhead); }
+svg .arrow-weak { stroke-dasharray: 4 3; }
+svg .arrow-removed { stroke: var(--removed); stroke-dasharray: 4 3; }
+svg .arrowhead { fill: var(--secondary); }
+
+/* Tables */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 10px 0; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { border: 1px solid var(--separator); padding: 7px 9px; text-align: left; vertical-align: top; }
+th { background: var(--panel); font-weight: 600; }
+.numeric { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tag { display: inline-block; white-space: nowrap; padding: 0 7px; border-radius: 5px; font-size: 12px; font-weight: 600; color: var(--kept); background: var(--kept-fill); }
+.tag-added { color: var(--added); background: var(--added-fill); }
+.tag-changed { color: var(--changed); background: var(--changed-fill); }
+.tag-removed { color: var(--removed); background: var(--removed-fill); }
+.tag-moved { color: var(--moved); background: var(--moved-fill); }
+
+/* Collapsible sections */
+details { border: 1px solid var(--separator); border-radius: 12px; margin: 12px 0; overflow: hidden; }
+summary { cursor: pointer; list-style: none; padding: 11px 16px; font-weight: 600; background: var(--panel); }
+summary::-webkit-details-marker { display: none; }
+summary::before { content: "›"; display: inline-block; width: 1em; color: var(--secondary); -webkit-transition: -webkit-transform 0.15s; transition: transform 0.15s; }
+details[open] > summary::before { -webkit-transform: rotate(90deg); transform: rotate(90deg); }
+details[open] > summary { border-bottom: 1px solid var(--separator); }
+.details-body { padding: 4px 16px 12px; }
+
+@media (max-width: 640px) {
+  .page { padding: 20px 16px 56px; }
+  h1 { font-size: 23px; }
+}
+
+/* ===== Page-specific styles (only for elements the shared style lacks, e.g. UI mockups) ===== */
+</style>
+</head>
+<body>
+<svg class="svg-definitions" aria-hidden="true" focusable="false">
+  <defs><marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>
+</svg>
+<div class="page">
+
+<header class="doc-header">
+  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">Draft</span></p>
+  <h1><span class="proposal-number">Draft</span> C++ 对象：列出并打印从 RTTI、vtable 与符号恢复的 C++ 类与命名空间</h1>
+  <dl class="meta">
+    <div><dt>状态</dt><dd><span class="status status-accepted">Accepted</span></dd></div>
+    <div><dt>最后更新</dt><dd>2026-11-21</dd></div>
+    <div><dt>项目类型</dt><dd>App</dd></div>
+    <div><dt>原文</dt><dd><code>draft-cplusplus-objects.md</code></dd></div>
+  </dl>
+</header>
+
+<nav class="toc" aria-label="目录">
+  <ol>
+    <li><a href="#summary">摘要</a></li>
+    <li><a href="#decide">要你定</a></li>
+    <li><a href="#architecture">架构图</a></li>
+    <li><a href="#map">改动地图</a></li>
+    <li><a href="#proposal">提议方案</a></li>
+    <li><a href="#design">详细设计</a></li>
+    <li><a href="#research">调研</a></li>
+    <li><a href="#alternatives">替代方案</a></li>
+    <li><a href="#impact">影响</a></li>
+    <li><a href="#steps">落地步骤</a></li>
+    <li><a href="#log">决策日志</a></li>
+  </ol>
+</nav>
+
+<main class="content">
+
+<section id="summary">
+  <h2>摘要</h2>
+  <p>RuntimeViewer 新增第三种对象语言：C++。镜像的对象列表在 Objective-C、Swift 之外列出 C++ 的<strong>类</strong>与<strong>命名空间</strong>，嵌套的作为子项。类有两个来源，按限定名合并：MachOKitExtensions 3.1.0 的 <code>CPlusPlusClassIndexStore</code> 读 RTTI（Itanium C++ ABI 的运行时类型信息）与 vtable（虚函数表），符号被剥离的类也找得到；3.0.0 起的 <code>CPlusPlusSymbolIndexStore</code> 按作用域归类镜像的 C++ 符号，给出看得出是类型的作用域与命名空间。</p>
+  <p>内容区把一个类打印成伪头文件：基类、按槽位排列的虚函数（自己没名字的沿基类补名，并标出是覆盖还是继承）、非虚成员函数与变量，槽位号与地址写在注释里；命名空间打印其中的自由函数与变量。点基类名跳到基类（基类在别的镜像也行），Inspector 显示主基类链与本镜像里的派生类，Filter Scope 多一组 C++，图标是绿色的 <code>C</code> 与 <code>N</code>。</p>
+  <p>C++ 对象只发给声明要它的请求方：<code>objectsInImage</code> 命令加一个可选字段，旧版对端跳过它、照旧只回 ObjC 与 Swift。本版里也只有侧栏、路径栏与镜像页去要，Find、导出、MCP、CLI 都看不到 C++ 对象，它们以后各自另写提案。</p>
+</section>
+
+<section id="decide">
+  <h2>要你定</h2>
+  <div class="callout">
+    <p class="callout-title">批准这份草案后从 <code>next</code> 切功能分支开工</p>
+    <ol>
+      <li>范围、第一版界面与界面形状已在澄清提问里定下（见决策日志）；剩下的只是整体批准。</li>
+    </ol>
+  </div>
+  <div class="callout callout-warning">
+    <p class="callout-title">与澄清提问里的样例不同的地方</p>
+    <ul>
+      <li>Itanium 修饰名只给函数模板特化记返回类型，所以大多数函数打印不出返回类型。</li>
+      <li>修饰名不区分静态成员，也不记访问级别，所以不写 <code>static</code>、不写 <code>public:</code>。</li>
+    </ul>
+  </div>
+</section>
+
+<section id="architecture">
+  <h2>架构图</h2>
+  <ul class="legend">
+    <li><i class="swatch swatch-added"></i>新增</li>
+    <li><i class="swatch swatch-changed"></i>修改</li>
+    <li><i class="swatch swatch-kept"></i>不变</li>
+  </ul>
+  <div class="figure">
+  <svg viewBox="0 0 1000 560" role="img" aria-label="What changed">
+    <rect class="group" x="10" y="10" width="300" height="120" rx="10"/>
+    <text class="group-label" x="22" y="32">MachOKitExtensions 3.1.0</text>
+    <rect class="box-kept" x="25" y="44" width="270" height="34" rx="6"/><text x="35" y="66">CPlusPlusSymbolIndexStore</text>
+    <rect class="box-kept" x="25" y="86" width="270" height="34" rx="6"/><text x="35" y="108">CPlusPlusClassIndexStore</text>
+
+    <rect class="group" x="340" y="10" width="650" height="330" rx="10"/>
+    <text class="group-label" x="352" y="32">RuntimeViewerCore</text>
+    <rect class="box-added" x="355" y="44" width="300" height="140" rx="6"/>
+    <text x="365" y="64">Sections/CPlusPlus/</text>
+    <text class="caption" x="365" y="84">RuntimeCPlusPlusSectionFactory&lt;Reading&gt;</text>
+    <text class="caption" x="365" y="102">RuntimeCPlusPlusSection&lt;Reading&gt;</text>
+    <text class="caption" x="365" y="120">CPlusPlusObjectTreeBuilder</text>
+    <text class="caption" x="365" y="138">CPlusPlusInterfacePrinter</text>
+    <text class="caption" x="365" y="160">built on demand, not part of indexing</text>
+    <rect class="box-kept" x="355" y="194" width="145" height="34" rx="6"/><text x="365" y="216">Sections/ObjC</text>
+    <rect class="box-kept" x="510" y="194" width="145" height="34" rx="6"/><text x="520" y="216">Sections/Swift</text>
+    <rect class="box-changed" x="675" y="44" width="300" height="44" rx="6"/><text x="685" y="62">RuntimeObjectKind</text><text class="caption" x="685" y="79">+ cPlusPlus(.class | .namespace)</text>
+    <rect class="box-changed" x="675" y="96" width="300" height="44" rx="6"/><text x="685" y="114">ObjectsInImageCommand</text><text class="caption" x="685" y="131">+ includesCPlusPlusObjects: Bool?</text>
+    <rect class="box-changed" x="675" y="148" width="300" height="44" rx="6"/><text x="685" y="166">RuntimeEngine</text><text class="caption" x="685" y="183">objects(in:includesCPlusPlusObjects:), C++ arms</text>
+    <rect class="box-changed" x="675" y="200" width="300" height="44" rx="6"/><text x="685" y="218">RuntimeImageCatalog</text><text class="caption" x="685" y="235">+ image(definingCPlusPlusTypeInfo…)</text>
+    <rect class="box-changed" x="675" y="252" width="300" height="34" rx="6"/><text x="685" y="274">RuntimeImageIndex: third factory</text>
+    <rect class="box-changed" x="355" y="252" width="300" height="34" rx="6"/><text x="365" y="274">Relationships: base chain, derived</text>
+    <rect class="box-changed" x="355" y="296" width="300" height="34" rx="6"/><text x="365" y="318">RuntimeInterfaceLanguage + "cpp"</text>
+
+    <rect class="group" x="10" y="360" width="980" height="190" rx="10"/>
+    <text class="group-label" x="22" y="382">RuntimeViewerAppCore / AppUI / App</text>
+    <rect class="box-changed" x="25" y="394" width="300" height="44" rx="6"/><text x="35" y="412">Sidebar list, jump bar, image page</text><text class="caption" x="35" y="429">ask with includesCPlusPlusObjects: true</text>
+    <rect class="box-changed" x="25" y="446" width="300" height="34" rx="6"/><text x="35" y="468">Filter Scope KindGroup + C++</text>
+    <rect class="box-changed" x="25" y="488" width="300" height="34" rx="6"/><text x="35" y="510">RuntimeObjectIcon: green C / N</text>
+    <rect class="box-changed" x="345" y="394" width="300" height="44" rx="6"/><text x="355" y="412">Content: linkTargetKind, "cpp"</text><text class="caption" x="355" y="429">bridge: semantic colours only</text>
+    <rect class="box-changed" x="345" y="446" width="300" height="44" rx="6"/><text x="355" y="464">Inspector tabs</text><text class="caption" x="355" y="481">hierarchy + "Derived Classes"</text>
+    <rect class="box-kept" x="665" y="394" width="310" height="44" rx="6"/><text x="675" y="412">Find, export, word cloud, MCP, CLI</text><text class="caption" x="675" y="429">default false: never see C++</text>
+
+    <path class="arrow" d="M 355 114 L 295 70"/>
+    <path class="arrow" d="M 355 120 L 295 103"/>
+    <path class="arrow" d="M 175 394 C 175 340, 600 300, 675 170"/>
+    <path class="arrow arrow-weak" d="M 820 394 L 820 292"/>
+  </svg>
+  </div>
+  <p class="figure-caption">C++ section 读两个上游 store；只有侧栏、路径栏与镜像页带上新字段去要 C++ 对象，其余消费方照旧。</p>
+
+  <div class="figure">
+  <svg viewBox="0 0 1000 300" role="img" aria-label="Opening an image">
+    <rect class="box-changed" x="10" y="20" width="260" height="44" rx="6"/><text x="20" y="38">SidebarRuntimeObjectListViewModel</text><text class="caption" x="20" y="55">objectsWithProgress(…, true)</text>
+    <rect class="box-changed" x="310" y="20" width="300" height="44" rx="6"/><text x="320" y="38">ObjectsInImageCommand</text><text class="caption" x="320" y="55">includesCPlusPlusObjects: true</text>
+    <rect class="box-kept" x="660" y="10" width="320" height="34" rx="6"/><text x="670" y="32">old peer: field skipped → ObjC + Swift</text>
+    <rect class="box-changed" x="660" y="56" width="320" height="34" rx="6"/><text x="670" y="78">this build: _localObjectsWithProgress</text>
+    <rect class="box-kept" x="660" y="110" width="150" height="34" rx="6"/><text x="670" y="132">ObjC section</text>
+    <rect class="box-kept" x="830" y="110" width="150" height="34" rx="6"/><text x="840" y="132">Swift section</text>
+    <rect class="box-added" x="660" y="160" width="320" height="44" rx="6"/><text x="670" y="178">RuntimeCPlusPlusSection</text><text class="caption" x="670" y="195">only when the field is true</text>
+    <rect class="box-kept" x="330" y="160" width="280" height="34" rx="6"/><text x="340" y="182">CPlusPlusSymbolIndexStore</text>
+    <rect class="box-kept" x="330" y="206" width="280" height="34" rx="6"/><text x="340" y="228">CPlusPlusClassIndexStore</text>
+    <rect class="box-added" x="660" y="230" width="320" height="34" rx="6"/><text x="670" y="252">CPlusPlusObjectTreeBuilder</text>
+    <path class="arrow" d="M 270 42 L 310 42"/>
+    <path class="arrow arrow-weak" d="M 610 36 L 660 28"/>
+    <path class="arrow" d="M 610 48 L 660 72"/>
+    <path class="arrow" d="M 735 90 L 735 110"/>
+    <path class="arrow" d="M 905 90 L 905 110"/>
+    <path class="arrow" d="M 820 90 C 990 120, 990 150, 900 160"/>
+    <path class="arrow" d="M 660 176 L 610 176"/>
+    <path class="arrow" d="M 660 196 L 610 222"/>
+    <path class="arrow" d="M 820 204 L 820 230"/>
+  </svg>
+  </div>
+  <p class="figure-caption">打开镜像：旧对端跳过字段只回 ObjC 与 Swift；本版对端在字段为真时才建 C++ section。</p>
+
+  <div class="figure">
+  <svg viewBox="0 0 1000 220" role="img" aria-label="Jumping to a base class">
+    <rect class="box-changed" x="10" y="20" width="300" height="44" rx="6"/><text x="20" y="38">link: google::protobuf::Message</text><text class="caption" x="20" y="55">kind .cPlusPlus(.class), imagePath TSTables</text>
+    <rect class="box-changed" x="350" y="20" width="280" height="44" rx="6"/><text x="360" y="38">_interface C++ arm</text><text class="caption" x="360" y="55">object(named:) in TSTables</text>
+    <rect class="box-added" x="350" y="90" width="280" height="44" rx="6"/><text x="360" y="108">mangledTypeName(ofBaseNamed:)</text><text class="caption" x="360" y="125">N6google8protobuf7MessageE</text>
+    <rect class="box-added" x="670" y="90" width="310" height="44" rx="6"/><text x="680" y="108">image(definingCPlusPlusTypeInfo…)</text><text class="caption" x="680" y="125">process: dlsym + dladdr; file: export trie</text>
+    <rect class="box-kept" x="670" y="160" width="310" height="34" rx="6"/><text x="680" y="182">section(for: TSPersistence) → print</text>
+    <path class="arrow" d="M 310 42 L 350 42"/>
+    <path class="arrow" d="M 490 64 L 490 90"/>
+    <path class="arrow" d="M 630 112 L 670 112"/>
+    <path class="arrow" d="M 825 134 L 825 160"/>
+  </svg>
+  </div>
+  <p class="figure-caption">点基类名：本镜像没有就要到基类的修饰名，按导出的 typeinfo 找定义它的镜像。</p>
+</section>
+
+<section id="map">
+  <h2>改动地图</h2>
+  <p>Core 指 <code>RuntimeViewerCore/Sources/RuntimeViewerCore/</code>，AppCore、AppUI 指 <code>RuntimeViewerPackages/Sources/</code> 下的两个 target，App 指 <code>RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/</code>。</p>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>文件 / 类型</th><th>动作</th><th>改什么</th><th>为什么</th><th>步骤</th></tr></thead>
+    <tbody>
+      <tr><td><code>RuntimeViewerCore/Package.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>MachOKitExtensions 下限 <code>from: "3.1.0"</code>；<code>RuntimeViewerCore</code> 加 <code>CPlusPlusSymbols</code> product</td><td>方案第 11 条</td><td class="numeric">1</td></tr>
+      <tr><td>各 <code>Package.resolved</code></td><td><span class="tag tag-changed">修改</span></td><td>MachOKitExtensions 移到 3.1.0</td><td>同上</td><td class="numeric">1</td></tr>
+      <tr><td>Core <code>Objects/RuntimeObjectKind.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>加 <code>.cPlusPlus(CPlusPlus)</code>、<code>level</code> 21–22、<code>allCases</code>、<code>description</code>、<code>isCPlusPlus</code></td><td>方案第 1 条</td><td class="numeric">1</td></tr>
+      <tr><td>Core <code>Interfaces/RuntimeInterfaceLanguage.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>加 <code>.cPlusPlus</code>（<code>"cpp"</code>）</td><td>方案第 1 条</td><td class="numeric">1</td></tr>
+      <tr><td>Core 里穷举种类的各处（<code>RuntimeEngine.swift</code>、<code>RuntimeObject+GeneratedInterface</code>、<code>+CounterpartKind</code>、<code>SharedCacheRelays</code>、<code>Search/*</code>、<code>Export/*</code>、<code>Relationships/*</code>）</td><td><span class="tag tag-changed">修改</span></td><td>第 1 步只补行为不变的臂；真实的 C++ 臂在第 3、4 步</td><td>新 case 让穷举 switch 编不过</td><td class="numeric">1</td></tr>
+      <tr><td><code>RuntimeViewerCrossReferences</code> 穷举种类的三处</td><td><span class="tag tag-changed">修改</span></td><td>补臂，C++ 不是可查引用的类型</td><td>同上</td><td class="numeric">1</td></tr>
+      <tr><td><code>CPlusPlusSectionCostProbeTests.swift</code></td><td><span class="tag tag-added">新增（临时）</span></td><td>release 下测进程内与 cache 文件建 Espresso、libc++ 索引的耗时，结论写进提案后删除</td><td>按需建的前提</td><td class="numeric">1</td></tr>
+      <tr><td>Core <code>Sections/CPlusPlus/RuntimeCPlusPlusSection.swift</code></td><td><span class="tag tag-added">新增</span></td><td>建对象树、按限定名查、基类修饰名、打印、层级与派生类</td><td>方案第 2、3 条</td><td class="numeric">2–4</td></tr>
+      <tr><td>Core <code>Sections/CPlusPlus/RuntimeCPlusPlusSectionFactory.swift</code></td><td><span class="tag tag-added">新增</span></td><td>按镜像缓存、合并构建、跨镜像找类、<code>removeAllSections()</code> 同时清两个上游 store</td><td>方案第 2、7 条</td><td class="numeric">2、3</td></tr>
+      <tr><td>Core <code>Sections/CPlusPlus/CPlusPlusObjectTreeBuilder.swift</code></td><td><span class="tag tag-added">新增</span></td><td>作用域树与类索引合成 <code>[RuntimeObject]</code></td><td>规则多、要单测</td><td class="numeric">2</td></tr>
+      <tr><td>Core <code>Sections/CPlusPlus/CPlusPlusInterfacePrinter.swift</code></td><td><span class="tag tag-added">新增</span></td><td>伪头文件的打印规则</td><td>方案第 6 条</td><td class="numeric">3</td></tr>
+      <tr><td>Core <code>Sections/RuntimeCPlusPlusSectionProviding.swift</code>、<code>RuntimeCPlusPlusSectioning.swift</code></td><td><span class="tag tag-added">新增</span></td><td>引擎持有工厂与 section 的协议</td><td>引擎不依赖具体读取器</td><td class="numeric">2</td></tr>
+      <tr><td>Core <code>Images/RuntimeImageIndex.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>建第三个工厂并交给关系解析器</td><td>唯一的装配点</td><td class="numeric">2</td></tr>
+      <tr><td>Core 的三种镜像目录</td><td><span class="tag tag-changed">修改</span></td><td>加 <code>image(definingCPlusPlusTypeInfoForMangledTypeName:)</code></td><td>方案第 7 条</td><td class="numeric">3</td></tr>
+      <tr><td>Core <code>Images/RuntimeImageReading.swift</code></td><td><span class="tag tag-changed">修改（视编译结果）</span></td><td>必要时把 <code>MachORepresentableWithCache</code> 加进 <code>MachO</code> 的约束</td><td>上游 store 要它</td><td class="numeric">1</td></tr>
+      <tr><td>Core <code>Engine/RuntimeEngine.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>持有第三个工厂；取对象带字段；<code>removeAllSections</code>；<code>_interface</code>、<code>_hierarchy</code> 的 C++ 臂；两个公开方法</td><td>方案第 4、7、9 条</td><td class="numeric">2–4</td></tr>
+      <tr><td>Core <code>Engine/RuntimeEngine+Commands.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>ObjectsInImageCommand</code> 加 <code>includesCPlusPlusObjects: Bool?</code></td><td>方案第 4 条</td><td class="numeric">2</td></tr>
+      <tr><td>Core <code>Objects/RuntimeObjectsLoadingProgress.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>两个只对声明了字段的请求发出的阶段</td><td>方案第 5 条</td><td class="numeric">2</td></tr>
+      <tr><td>Core <code>Relationships/*</code> 三个文件</td><td><span class="tag tag-changed">修改</span></td><td>C++ 类当 <code>class</code>；派生类；主基类链</td><td>方案第 9 条</td><td class="numeric">4</td></tr>
+      <tr><td>Core 测试：<code>CPlusPlusObjectTreeBuilderTests</code>、<code>CPlusPlusSectionTests</code>、<code>ObjectsInImageCPlusPlusWireTests</code>、<code>CPlusPlusInterfacePrinterTests</code></td><td><span class="tag tag-added">新增</span></td><td>建树、libc++abi 上的端到端（两种读法）、冻结的旧请求与旧服务端（JSON 与 <code>XPCEncoder</code>、经中转）、打印规则</td><td>第 2–4 步行为</td><td class="numeric">2–4</td></tr>
+      <tr><td><code>SharedCacheRoutingDeclarationTests</code></td><td><span class="tag">不变（核对）</span></td><td>不加命令，路由声明不变</td><td>Core 的路由规矩</td><td class="numeric">2</td></tr>
+      <tr><td>AppCore <code>SidebarRuntimeObjectListViewModel</code>、AppUI <code>EditorJumpBarItemStore</code>、AppCore <code>ContentImageViewModel</code></td><td><span class="tag tag-changed">修改</span></td><td>取对象传 <code>true</code>；路径栏按种类分组带 C++；镜像页计数带 C++</td><td>方案第 4、10 条</td><td class="numeric">5</td></tr>
+      <tr><td>AppCore <code>RuntimeObjectScope.KindGroup</code>、App <code>SidebarRuntimeObjectScopeViewController</code></td><td><span class="tag tag-changed">修改</span></td><td>C++ 一组与两个种类的按钮</td><td>方案第 10 条</td><td class="numeric">5</td></tr>
+      <tr><td>AppCore <code>RuntimeObjectIcon</code></td><td><span class="tag tag-changed">修改</span></td><td>绿色 <code>C</code> 与 <code>N</code></td><td>同上</td><td class="numeric">5</td></tr>
+      <tr><td>AppCore <code>ContentInterface.linkTargetKind</code></td><td><span class="tag tag-changed">修改</span></td><td>C++ 臂</td><td>跳转</td><td class="numeric">5</td></tr>
+      <tr><td>App <code>ContentSourceEditorViewController.languageIdentifier</code></td><td><span class="tag tag-changed">修改</span></td><td>C++ 传 <code>"cpp"</code></td><td>方案第 10 条</td><td class="numeric">5</td></tr>
+      <tr><td>AppCore <code>MainViewModel</code>、App <code>MainWindowController</code></td><td><span class="tag tag-changed">修改</span></td><td><code>UTType.cPlusPlusHeader</code> 与 <code>hpp</code></td><td>同上</td><td class="numeric">5</td></tr>
+      <tr><td>App <code>InspectorRuntimeObjectCoordinator</code>、AppCore <code>InspectorRelationshipsViewModel</code></td><td><span class="tag tag-changed">修改</span></td><td>C++ 类有层级页与「Derived Classes」页</td><td>方案第 9 条</td><td class="numeric">5</td></tr>
+      <tr><td>AppCore、AppUI、MCP、CLI 其余穷举种类的地方</td><td><span class="tag tag-changed">修改</span></td><td>补臂，C++ 走「不提供」的分支</td><td>新 case 让穷举 switch 编不过</td><td class="numeric">1、5</td></tr>
+      <tr><td><code>RuntimeViewerAppCoreTests/CPlusPlusPresentationTests.swift</code></td><td><span class="tag tag-added">新增</span></td><td>Filter Scope、图标、跳转种类、Inspector 页签与标题</td><td>第 5 步行为</td><td class="numeric">5</td></tr>
+      <tr><td><code>AGENTS.md</code>、<code>CommunicationAndEngineArchitecture.md</code> §4.4、<code>README.md</code>、两份索引</td><td><span class="tag tag-changed">修改</span></td><td>包结构与版本下限；线上兼容第五例；功能列表；登记</td><td>文档与代码同批</td><td class="numeric">6</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section id="proposal">
+  <h2>提议方案</h2>
+  <ol>
+    <li><strong>新种类</strong> <code>RuntimeObjectKind.cPlusPlus(.class | .namespace)</code>，排在 Swift 之后；新语言 <code>RuntimeInterfaceLanguage.cPlusPlus</code>（<code>"cpp"</code>）。修饰名分不出 struct 与 class，一律叫类。</li>
+    <li><strong>每个镜像一个按需建的 C++ section</strong>，第三个工厂照 ObjC 工厂的形状缓存与合并构建；不属于「已索引」，后台索引、语料都不碰它。</li>
+    <li><strong>对象树</strong>：类型作用域与 RTTI 类是类（按限定名合并，RTTI 优先）；命名空间与「未定」作用域是命名空间；函数作用域丢弃；只有 RTTI 的类按 <code>scopePath</code> 挂进去、缺的层补齐；空命名空间不列；全局有成员时列一个 <code>::</code>（Global Namespace）；同名隐藏类留 typeinfo 偏移最小的。</li>
+    <li><strong>只发给要它的请求方</strong>：<code>ObjectsInImageCommand</code> 加 <code>includesCPlusPlusObjects: Bool?</code>（<code>nil</code> 不编码），公开 API 默认 <code>false</code>；只有侧栏、路径栏、镜像页传 <code>true</code>。</li>
+    <li><strong>进度</strong>：两个新阶段，只在请求带字段时发出。</li>
+    <li><strong>伪头文件</strong>：类的头部注释、基类、每张 vtable 的虚函数（槽位号、地址、overrides / inherited）、非虚成员函数、变量、嵌套类型；构造与析构变体合并；元数据符号不当成员；只打印修饰名里有的；地址跟随 <code>addMethodIMPAddressComments</code>。</li>
+    <li><strong>跳转</strong>：C++ 记号按文字链接；本镜像找不到就要到基类修饰名，按导出的 <code>_ZTI…</code> 找定义它的镜像；非唯一 RTTI 找不到就不跳。</li>
+    <li><strong>补名的搜索路径</strong>：独立文件用目录的 <code>dependencySearchPaths(forImageAt:)</code>。</li>
+    <li><strong>Inspector</strong>：主基类链与本镜像里的派生类（「Derived Classes」）。</li>
+    <li><strong>App</strong>：Filter Scope 的 C++ 组、绿色 <code>C</code> / <code>N</code> 图标、<code>"cpp"</code> 语言标识（只按语义区间上色）、<code>cPlusPlusHeader</code> 与 <code>hpp</code>、镜像页计数。</li>
+    <li><strong>依赖</strong>：MachOKitExtensions 下限 3.1.0，Core 加 <code>CPlusPlusSymbols</code>，锁文件只移这一个包。</li>
+  </ol>
+  <details>
+    <summary>非目标</summary>
+    <div class="details-body">
+      <ul>
+        <li>Find（语料、成员搜索）、导出、MCP、CLI、命名词云、派生数据都不接 C++。</li>
+        <li>交叉引用：C++ 对象没有成员地址，不提供 Callers / Callees / Type References；交叉引用里的 C++ 名字仍不 demangle。</li>
+        <li>字段（RTTI 与 vtable 不带字段，protobuf 是上游之后的提案）。</li>
+        <li>参数里的类型跳转；返回类型、<code>static</code>、访问级别的推断。</li>
+        <li>函数作用域里的局部实体。</li>
+        <li>别的镜像里的派生类；借用 shared cache 镜像时跨 owner 合并 C++ 层级。</li>
+        <li>重建版 SourceEditor 的 C++ 语言（要读它的源码才能定）。</li>
+        <li>C++ 界面的注释标签（不标注释结构）。</li>
+        <li>新的 <code>RuntimeObject.Properties</code> 位（例如「只从 RTTI 恢复」）。</li>
+        <li>MachOKitExtensions 之外的 C++ 来源（ObjC ivar 编码里的 C++ 结构体）。</li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<section id="design">
+  <h2>详细设计</h2>
+  <details>
+    <summary>种类、语言、命令与公开 API</summary>
+    <div class="details-body">
+<pre><code><span class="token-keyword">public enum</span> <span class="token-type">CPlusPlus</span>: <span class="token-type">Codable</span>, <span class="token-type">Hashable</span>, <span class="token-type">Identifiable</span>, <span class="token-type">CaseIterable</span>, <span class="token-type">Sendable</span> {
+    <span class="token-keyword">case</span> `class`
+    <span class="token-keyword">case</span> namespace
+}
+<span class="token-keyword">case</span> cPlusPlus(<span class="token-type">CPlusPlus</span>)
+
+<span class="token-keyword">public static let</span> cPlusPlus = <span class="token-type">RuntimeInterfaceLanguage</span>(rawValue: <span class="token-string">"cpp"</span>)
+
+<span class="token-keyword">struct</span> <span class="token-type">ObjectsInImageCommand</span>: <span class="token-type">RuntimeEngineProgressCommand</span> {
+    <span class="token-keyword">let</span> image: <span class="token-type">String</span>
+    <span class="token-comment">/// nil is left out of the encoding; a peer of an earlier build skips the key.</span>
+    <span class="token-keyword">let</span> includesCPlusPlusObjects: <span class="token-type">Bool</span>?
+}
+
+<span class="token-keyword">public func</span> objects(in image: <span class="token-type">String</span>, includesCPlusPlusObjects: <span class="token-type">Bool</span> = <span class="token-keyword">false</span>) <span class="token-keyword">async throws</span> -&gt; [<span class="token-type">RuntimeObject</span>]
+<span class="token-keyword">public func</span> objectsWithProgress(in image: <span class="token-type">String</span>, includesCPlusPlusObjects: <span class="token-type">Bool</span> = <span class="token-keyword">false</span>) -&gt; <span class="token-type">AsyncThrowingStream</span>&lt;<span class="token-type">RuntimeObjectsLoadingEvent</span>, <span class="token-type">Swift.Error</span>&gt;</code></pre>
+      <p><code>level</code>：类 21、命名空间 22。命令把 <code>false</code> 编成 <code>nil</code>，只有 <code>true</code> 上线；借用 shared cache 镜像的 engine 把整条命令交给主人，字段随之过去。</p>
+    </div>
+  </details>
+  <details>
+    <summary>工厂、section 与协议</summary>
+    <div class="details-body">
+<pre><code><span class="token-keyword">protocol</span> <span class="token-type">RuntimeCPlusPlusSectionProviding</span>: <span class="token-type">Actor</span> {
+    <span class="token-keyword">associatedtype</span> <span class="token-type">Section</span>: <span class="token-type">RuntimeCPlusPlusSectioning</span>
+    <span class="token-keyword">func</span> existingSection(for imagePath: <span class="token-type">String</span>) -&gt; <span class="token-type">Section</span>?
+    <span class="token-keyword">func</span> section(for imagePath: <span class="token-type">String</span>, progressContinuation: <span class="token-type">LoadingEventContinuation</span>?) <span class="token-keyword">async throws</span> -&gt; (isExisted: <span class="token-type">Bool</span>, section: <span class="token-type">Section</span>)
+    <span class="token-keyword">func</span> section(definingClassWithMangledTypeName mangledTypeName: <span class="token-type">String</span>) <span class="token-keyword">async throws</span> -&gt; <span class="token-type">Section</span>?
+    <span class="token-keyword">func</span> removeAllSections()
+}
+
+<span class="token-keyword">protocol</span> <span class="token-type">RuntimeCPlusPlusSectioning</span>: <span class="token-type">Actor</span> {
+    <span class="token-keyword">nonisolated var</span> imagePath: <span class="token-type">String</span> { <span class="token-keyword">get</span> }
+    <span class="token-keyword">func</span> allObjects() -&gt; [<span class="token-type">RuntimeObject</span>]
+    <span class="token-keyword">func</span> object(named qualifiedName: <span class="token-type">String</span>) -&gt; <span class="token-type">RuntimeObject</span>?
+    <span class="token-keyword">func</span> mangledTypeName(ofBaseNamed qualifiedName: <span class="token-type">String</span>) -&gt; <span class="token-type">String</span>?
+    <span class="token-keyword">func</span> interface(for object: <span class="token-type">RuntimeObject</span>, options: <span class="token-type">RuntimeObjectInterface.GenerationOptions</span>) <span class="token-keyword">async throws</span> -&gt; <span class="token-type">RuntimeObjectInterface</span>
+    <span class="token-keyword">func</span> primaryBaseChain(of object: <span class="token-type">RuntimeObject</span>) <span class="token-keyword">async throws</span> -&gt; [(qualifiedName: <span class="token-type">String</span>, object: <span class="token-type">RuntimeObject</span>?)]
+    <span class="token-keyword">func</span> derivedClasses(of object: <span class="token-type">RuntimeObject</span>) -&gt; [<span class="token-type">RuntimeObject</span>]
+}</code></pre>
+      <ul>
+        <li>section 建成时依次 <code>prepare</code> 作用域树、取 <code>classes(in:)</code>，各报一个阶段（上游不报进度，只报 0/1 与 1/1），再交给建树。</li>
+        <li>section 只存对象树与两张字典；成员与 vtable 打印时向上游 store 取。</li>
+        <li><code>removeAllSections()</code> 让两个上游 store 丢掉这些镜像；上游补名顺带给基类镜像建的索引 RuntimeViewer 清不到，写进实现说明的已知局限。</li>
+      </ul>
+    </div>
+  </details>
+  <details>
+    <summary>打印示例与规则</summary>
+    <div class="details-body">
+<pre><code><span class="token-comment">// libc++abi · typeinfo 0x1A2B30 · vtable 0x1C4F00</span>
+<span class="token-keyword">class</span> <span class="token-type">std::bad_array_new_length</span> : <span class="token-keyword">public</span> <span class="token-type">std::bad_alloc</span> {
+    <span class="token-comment">// Virtual functions (primary vtable)</span>
+    <span class="token-keyword">virtual</span> ~bad_array_new_length();       <span class="token-comment">// slots 0–1  0x0004A3C0, 0x0004A3E0</span>
+    <span class="token-keyword">virtual</span> what() <span class="token-keyword">const</span>;                  <span class="token-comment">// slot 2  0x0004A510  overrides std::bad_alloc</span>
+
+    <span class="token-comment">// Member functions</span>
+    bad_array_new_length();                <span class="token-comment">// 0x0004A100, 0x0004A120</span>
+};</code></pre>
+      <ul>
+        <li>槽位注释的结尾：<code>overrides</code>、<code>inherited from</code>，或什么都不写（类自己引入，或基类读不到）。没名字的槽位写 <code>virtual /* unnamed */;</code>，纯虚 <code>= 0</code>，deleted <code>= delete</code>。</li>
+        <li>实现在别的镜像时写 <code>in &lt;install name&gt;</code> 或地址；副表标出子对象与 offset-to-top。</li>
+        <li>非 public 的基类写成 <code>/* not public */ 基类</code>。</li>
+        <li><code>hasTypeInfoSymbol == false</code> 注明「只从运行时类型信息恢复」；<code>hasUniqueTypeInfo == false</code> 注明 typeinfo 按名字比较。</li>
+        <li>命名空间：自由函数、变量、子项的前置声明；全局对象打印成 <code>// Global namespace</code> 加成员。</li>
+        <li>记号里的类名与命名空间名写完整限定名；跳转种类：<code>type(.class, _)</code> → 类，<code>type(.other, _)</code> → 命名空间。</li>
+      </ul>
+    </div>
+  </details>
+  <details>
+    <summary>Inspector</summary>
+    <div class="details-body">
+      <ul>
+        <li><code>.cPlusPlus(.class)</code>：层级页（父类链）与关系页；<code>.cPlusPlus(.namespace)</code>：都没有。</li>
+        <li>关系页标题「Derived Classes」，内容是 <code>relationships.subclasses</code>。</li>
+        <li><code>superclassChain</code> 的节点 <code>TypeKind</code> 用已有的 <code>class</code>，线上形状不变。</li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<section id="research">
+  <h2>调研</h2>
+  <details>
+    <summary>现状代码</summary>
+    <div class="details-body">
+      <ul>
+        <li>种类三支、合成 <code>Codable</code>；对象过 XPC 与 TCP、进语料快照、进书签，旧版本解不开新种类。</li>
+        <li>Filter Scope 记忆存排除的种类、逐条宽松解码；书签经 <code>@ResilientFileStorage</code> 逐条容错。</li>
+        <li>对象列表由 <code>_objects</code> / <code>_localObjectsWithProgress</code> 拼 ObjC 与 Swift 两个工厂的结果；工厂只在 <code>RuntimeImageIndex</code> 建；手工同调两个工厂的还有停止、加载、后台索引、语料。</li>
+        <li>App 里取对象的：侧栏、路径栏、镜像页、命名词云、导出、后台索引、MCP（七处）、CLI。</li>
+        <li>读取器：进程内 <code>MachOImage</code>，文件模式 <code>MachOFile</code>，两者都遵循 <code>MachORepresentableWithCache</code>；目录已有 <code>image(definingObjCType:)</code> 与 <code>dependencySearchPaths(forImageAt:)</code>。</li>
+        <li>界面按种类分派，颜色只看 <code>SemanticType</code>；ObjC/C 的跳转按记号文字；SourceEditor 桥接只认 <code>swift</code>、<code>objc</code>，别的标识只按语义区间上色。</li>
+        <li>线上规矩（§4.4）：改已有命令加可选字段；新命令会让经 Mach service 的旧版注入 payload 断线（PR121.73）。</li>
+      </ul>
+    </div>
+  </details>
+  <details>
+    <summary>上游能力（MachOKitExtensions 3.1.0）</summary>
+    <div class="details-body">
+      <ul>
+        <li>作用域树：<code>childScopes</code>、<code>scope(named:)</code>、<code>members(of:)</code>、<code>symbols(for:)</code>；作用域种类 namespace / type / function / undetermined。</li>
+        <li>名字：返回类型只有函数模板特化才有；不区分静态成员，不记访问级别。</li>
+        <li>类索引：<code>classes</code>、<code>class(named:)</code>、<code>derivedClasses</code>、<code>virtualTables</code>（独立文件可给依赖搜索路径）；类带基类、typeinfo 与 vtable 信息，槽位带实现、名字与基类函数。</li>
+        <li>耗时（debug）：Espresso 进程内建索引 0.29 秒、补名 2.2 秒，cache 文件 8.0 秒与 9.7 秒；TSTables 2.2 秒与 1.1 秒；JavaScriptCore 作用域树 release 约 0.15 秒。</li>
+        <li>已知局限：有虚基类且无 <code>__ZTV</code> 符号时可能取错表组；基类的基类里的虚基类不展开；JavaScriptCore 关了 RTTI。</li>
+        <li>平台与 Core 一致；Tuist 已列 <code>CPlusPlusDemangling</code>、<code>CPlusPlusSymbols</code>。</li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<section id="alternatives">
+  <h2>替代方案</h2>
+  <details>
+    <summary>9 条，均已否决</summary>
+    <div class="details-body">
+      <ul>
+        <li><strong>新命令分两次取</strong>：旧版注入 payload 会断线（PR121.73）。</li>
+        <li><strong>无条件并进回复</strong>：旧版 App 整张列表解不开；Find、导出、MCP、CLI 也会收到处理不了的对象。</li>
+        <li><strong>随索引一起建</strong>：Always Index 的每个镜像都要多建一次，而只有侧栏用得到。</li>
+        <li><strong>按 vtable 逐格的报告式界面</strong>：用户选了伪头文件。</li>
+        <li><strong>只列 RTTI 类 / 只列类型</strong>：用户选了类型与命名空间都列。</li>
+        <li><strong>一次接上 Find、导出、MCP、CLI</strong>：用户选了只接浏览用的界面。</li>
+        <li><strong>为 C++ 另加地址开关</strong>：要改生成选项的线上形状与设置页，共用 ObjC 的开关足够。</li>
+        <li><strong>猜返回类型、static、访问级别</strong>：猜错比不写更误导。</li>
+        <li><strong>放进单独的命令扩展模块</strong>：本提案不加命令，C++ 与 ObjC、Swift 并列，放进 Core 的 <code>Sections/</code>。</li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<section id="impact">
+  <h2>影响</h2>
+  <h3>用户可见变化</h3>
+  <ul>
+    <li>侧栏、Open Quickly、路径栏多出 C++ 的类与命名空间；镜像页计数多两行。</li>
+    <li>内容区显示伪头文件、可跳转；Inspector 有层级页与「Derived Classes」页；Filter Scope 多一组 C++。</li>
+    <li>没有移除任何已有界面；ObjC 与 Swift 完全不变；C++ 暂不出现在 Find、导出、MCP、CLI 里。</li>
+  </ul>
+  <h3>可发现性</h3>
+  <p>默认开启，打开带 C++ 的镜像就列出；嫌多可用 Filter Scope 关掉，按 Engine 与镜像记住。</p>
+  <h3>数据与配置兼容</h3>
+  <ul>
+    <li>书签：降级到旧版时只丢 C++ 的那几条（逐条容错），不做迁移。</li>
+    <li>Filter Scope 记忆：旧记忆里没有 C++，C++ 默认显示；旧版读新记忆只丢那一条。</li>
+    <li>派生数据格式不变；线上两种新旧组合由冻结测试守住。</li>
+  </ul>
+  <h3>平台与最低版本</h3>
+  <p>最低版本不变；iOS、visionOS、越狱版共用侧栏的 ViewModel，也列出 C++ 对象；注入 payload 多带一份 <code>ItaniumDemangle</code>，第 1 步记下体积增量。</p>
+  <h3>发布</h3>
+  <p>无新权限、entitlement 或隐私清单条目，不影响公证与 Sparkle；发版前照常编 Distribution workspace。</p>
+</section>
+
+<section id="steps">
+  <h2>落地步骤</h2>
+  <ol>
+    <li><strong>依赖、种类与测量</strong>：<code>cPlusPlusKindsSortAfterSwiftKinds</code>、<code>cPlusPlusKindRoundTripsThroughJSON</code>、<code>cPlusPlusKindDescriptionsNameTheLanguage</code>；探针结论与 payload 体积写进提案后删探针。</li>
+    <li><strong>C++ section 与对象列表</strong>：<code>typeScopeBecomesClassObject</code>、<code>typeInfoOnlyClassIsPlacedUnderItsScopePath</code>、<code>missingParentOfTypeInfoOnlyClassBecomesNamespace</code>、<code>typeInfoTurnsUndeterminedScopeIntoClass</code>、<code>functionScopesAreDropped</code>、<code>emptyNamespacesAreDropped</code>、<code>globalMembersGetGlobalNamespaceObject</code>、<code>libcxxabiListsBadArrayNewLengthUnderStd</code>、<code>objectsWithoutFlagCarryNoCPlusPlusObjects</code>、<code>requestWithoutFlagEncodesAsBefore</code>、<code>frozenOldServerAnswersFlaggedRequestWithObjCAndSwiftOnly</code>、<code>relayForwardsTheFlag</code>、<code>progressReportsCPlusPlusPhasesOnlyWhenAsked</code>、<code>stoppingEngineRemovesCPlusPlusIndexes</code>、<code>concurrentRequestsBuildOneCPlusPlusSection</code>。</li>
+    <li><strong>界面与跨镜像跳转</strong>：<code>classPrintsBasesWithVirtualAndAccess</code>、<code>virtualDestructorSlotsCollapseIntoOneLine</code>、<code>constructorVariantsCollapseIntoOneLine</code>、<code>slotNamedThroughBaseSaysInheritedOrOverrides</code>、<code>unnamedSlotPrintsSlotNumberOnly</code>、<code>pureAndDeletedSlotsPrintTheirMarkers</code>、<code>secondaryTableNamesItsSubobject</code>、<code>virtualFunctionsAreNotRepeatedAsMemberFunctions</code>、<code>metadataSymbolsAreNotPrintedAsMembers</code>、<code>returnTypePrintedOnlyWhenMangled</code>、<code>addressCommentsFollowIMPAddressOption</code>、<code>typeInfoOnlyClassSaysSo</code>、<code>namespacePrintsFunctionsVariablesAndChildren</code>、<code>typeTokensCarryQualifiedNames</code>、<code>baseInAnotherImageResolvesThroughExportedTypeInfo</code>、<code>nonUniqueTypeInfoBaseDoesNotResolve</code>。</li>
+    <li><strong>层级与派生类</strong>：<code>hierarchyFollowsPrimaryBases</code>、<code>hierarchyCrossesIntoTheImageDefiningTheBase</code>、<code>superclassChainNodesResolveCPlusPlusObjects</code>、<code>relationshipsListDerivedClassesInTheImage</code>、<code>namespaceHasNoHierarchy</code>。</li>
+    <li><strong>App 接入</strong>：<code>filterScopeHasCPlusPlusGroup</code>、<code>cPlusPlusIconsAreGreenCAndN</code>、<code>cPlusPlusLinkTargetsAreClassesAndNamespaces</code>、<code>cPlusPlusClassGetsHierarchyAndDerivedClassesTabs</code>、<code>sidebarAsksForCPlusPlusObjects</code>、<code>exportAndFindDoNotAskForCPlusPlusObjects</code>、<code>imagePageCountsCPlusPlusKinds</code>；<code>./TuistScript.sh check</code> 通过。</li>
+    <li><strong>文档</strong>：<code>AGENTS.md</code>、§4.4 第五例、<code>README.md</code>、索引；判断实现说明（倾向写 <code>Documentations/CPlusPlusObjects.md</code>）与术语表。</li>
+  </ol>
+</section>
+
+<section id="log">
+  <h2>决策日志</h2>
+  <details>
+    <summary>4 条，最近一条：不打印修饰名里没有的东西</summary>
+    <div class="details-body">
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>日期</th><th>变更</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td class="numeric">2026-11-21</td><td>Created as Draft</td><td>用户要求把 MachOKitExtensions 新增的 C++ 恢复（0005 作用域树、0006 RTTI 与 vtable）接进 RuntimeViewer。走轻量档，问了一轮。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>定下范围与形状</td><td>用户选定：类型与命名空间都列（接受 <code>std</code> 一类命名空间的噪音，由 Filter Scope 收起）；第一版只接浏览用的界面，Find、导出、MCP、CLI 以后另起提案；内容区写成伪头文件。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>线上形状：字段而非命令</td><td>经 Mach service 的旧版注入 payload 会把不认识的命令当成客户端离开（PR121.73），所以 C++ 对象经 <code>objectsInImage</code> 的可选字段取。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>不打印修饰名里没有的东西</td><td>样例里画了返回类型与 <code>static</code>，但修饰名只给函数模板特化记返回类型、不区分静态成员、不记访问级别；界面只打印修饰名里有的。</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+  </details>
+</section>
+
+</main>
+</div>
+</body>
+</html>
