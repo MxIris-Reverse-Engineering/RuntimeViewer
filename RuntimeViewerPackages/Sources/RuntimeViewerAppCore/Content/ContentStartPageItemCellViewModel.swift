@@ -101,6 +101,17 @@ public final class ContentStartPageItemCellViewModel: NSObject, @unchecked Senda
     }
 }
 
+/// A row opened — from the start page's lists or Open Quickly's bar — and where it goes.
+public struct ContentStartPageItemOpening {
+    public let item: ContentStartPageItemCellViewModel
+    public let destination: SelectionRoute.Destination
+
+    public init(item: ContentStartPageItemCellViewModel, destination: SelectionRoute.Destination) {
+        self.item = item
+        self.destination = destination
+    }
+}
+
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
 
 extension ContentStartPageItemCellViewModel: Differentiable {

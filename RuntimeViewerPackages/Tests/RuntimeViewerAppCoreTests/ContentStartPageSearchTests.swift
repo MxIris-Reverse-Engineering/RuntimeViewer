@@ -25,7 +25,7 @@ struct ContentStartPageSearchTests {
         let searchText: PublishRelay<String>
         let selectionMoves: PublishRelay<Int>
         let commits: PublishRelay<SelectionRoute.Destination>
-        let resultOpenings: PublishRelay<ContentPlaceholderViewModel.ItemOpening>
+        let resultOpenings: PublishRelay<ContentStartPageItemOpening>
         let cancellations: PublishRelay<Void>
         let clearedFieldCount: Box<Int>
         let disposeBag = DisposeBag()
@@ -59,7 +59,7 @@ struct ContentStartPageSearchTests {
         let searchText = PublishRelay<String>()
         let selectionMoves = PublishRelay<Int>()
         let commits = PublishRelay<SelectionRoute.Destination>()
-        let resultOpenings = PublishRelay<ContentPlaceholderViewModel.ItemOpening>()
+        let resultOpenings = PublishRelay<ContentStartPageItemOpening>()
         let cancellations = PublishRelay<Void>()
         let output = viewModel.transform(.init(
             searchText: searchText.asSignal(),

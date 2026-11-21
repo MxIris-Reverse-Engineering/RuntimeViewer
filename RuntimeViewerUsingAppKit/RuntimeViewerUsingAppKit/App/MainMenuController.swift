@@ -79,7 +79,7 @@ final class MainMenuController {
     private func openQuicklyItem() -> NSMenuItem {
         NSMenuItem(
             "Open Quickly…",
-            action: #selector(SidebarRuntimeObjectListViewController.openQuickly(_:)),
+            action: #selector(MainWindowController.openQuickly(_:)),
             keyEquivalent: "O",
         )
         .image(SFSymbols(systemName: .bolt).nsImage)

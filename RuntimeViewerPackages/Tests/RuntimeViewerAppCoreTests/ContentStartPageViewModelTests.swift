@@ -19,7 +19,7 @@ struct ContentStartPageViewModelTests {
         let viewModel: ContentPlaceholderViewModel
         let output: ContentPlaceholderViewModel.Output
         let showAllClicks: PublishRelay<Void>
-        let recentItemOpenings: PublishRelay<ContentPlaceholderViewModel.ItemOpening>
+        let recentItemOpenings: PublishRelay<ContentStartPageItemOpening>
         let pageAppearances: PublishRelay<Void>
     }
 
@@ -29,7 +29,7 @@ struct ContentStartPageViewModelTests {
             ContentPlaceholderViewModel(documentState: environment.documentState, router: router, editorPaneID: editorPaneID)
         }
         let showAllClicks = PublishRelay<Void>()
-        let recentItemOpenings = PublishRelay<ContentPlaceholderViewModel.ItemOpening>()
+        let recentItemOpenings = PublishRelay<ContentStartPageItemOpening>()
         let pageAppearances = PublishRelay<Void>()
         let output = viewModel.transform(.init(
             pageWillAppear: pageAppearances.asSignal(),

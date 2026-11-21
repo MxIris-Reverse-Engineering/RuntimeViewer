@@ -51,6 +51,24 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 
     private let resetFontSizeRelay = PublishRelay<Void>()
 
+    // MARK: - Open Quickly
+
+    /// File › Open Quickly… (⇧⌘O): the floating bar, which searches what an empty editor pane's
+    /// start page searches (`OpenQuicklyViewModel`, proposal `editor-start-page`).
+    private let openQuicklyBar = QuickActionBar()
+
+    /// The term the bar is waiting for matches of; matches of any other term are not its answer.
+    private var openQuicklySearchTask: QuickActionBar.SearchTask?
+
+    private let openQuicklySearchTextRelay = PublishRelay<String>()
+
+    private let openQuicklyItemOpenedRelay = PublishRelay<ContentStartPageItemOpening>()
+
+    private let openQuicklyDismissedRelay = PublishRelay<Void>()
+
+    /// Its own bag: `setupBindings(for:)` of the window's view model renews `rx.disposeBag`.
+    private var openQuicklyDisposeBag = DisposeBag()
+
     /// Draws the engines' icons the view model describes by identifier, and says when one it could
     /// not draw before has been recorded, so the pickers draw them again.
     @Dependency(\.runtimeEngineIconProvider) private var runtimeEngineIconProvider
@@ -354,6 +372,41 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         }
     }
 
+    /// Binds the File › Open Quickly… bar to its view model; the window's coordinator calls it with
+    /// the view model of the window's whole life.
+    func setupBindings(forOpenQuickly viewModel: OpenQuicklyViewModel) {
+        openQuicklyDisposeBag = DisposeBag()
+        openQuicklyBar.contentSource = self
+        openQuicklyBar.rowHeight = OpenQuicklyMetrics.rowHeight
+
+        let output = viewModel.transform(.init(
+            searchText: openQuicklySearchTextRelay.asSignal(),
+            itemOpened: openQuicklyItemOpenedRelay.asSignal(),
+            dismissed: openQuicklyDismissedRelay.asSignal()
+        ))
+
+        output.matches.emitOnNext { [weak self] matches in
+            guard let self, let searchTask = openQuicklySearchTask, searchTask.searchTerm == matches.searchText else { return }
+            searchTask.complete(with: matches.items)
+            openQuicklySearchTask = nil
+        }
+        .disposed(by: openQuicklyDisposeBag)
+    }
+
+    /// File › Open Quickly… (⇧⌘O): the floating bar over the window, as Xcode's Open Quickly window;
+    /// what it finds opens in the focused pane.
+    @objc func openQuickly(_ sender: Any?) {
+        openQuicklyBar.cancel()
+        openQuicklyBar.present(
+            parentWindow: contentWindow,
+            placeholderText: "Open Quickly",
+            searchImage: nil,
+            initialSearchText: nil,
+            showKeyboardShortcuts: false,
+            canBecomeMainWindow: false
+        ) {}
+    }
+
     @objc func exportInterface(_ sender: Any?) {
         viewModel?.router.trigger(.exportInterfaces)
     }
@@ -575,6 +628,41 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 }
 
 extension MainWindowController: MainToolbarController.Delegate {}
+
+extension MainWindowController {
+    /// The bar's rows: the start page's rows, at the height of Xcode's Open Quickly rows.
+    fileprivate enum OpenQuicklyMetrics {
+        static let rowHeight: CGFloat = 56
+        static let rowHorizontalInset: CGFloat = 12
+    }
+}
+
+extension MainWindowController: QuickActionBarContentSource {
+    func quickActionBar(_ quickActionBar: QuickActionBar, itemsForSearchTermTask task: QuickActionBar.SearchTask) {
+        openQuicklySearchTask = task
+        openQuicklySearchTextRelay.accept(task.searchTerm)
+    }
+
+    func quickActionBar(_ quickActionBar: QuickActionBar, viewForItem item: AnyHashable, searchTerm: String) -> NSView? {
+        guard let cellViewModel = item as? ContentStartPageItemCellViewModel else { return nil }
+        let cellView: ContentStartPageItemCellView = quickActionBar.dequeueView() ?? ContentStartPageItemCellView()
+        cellView.configure(with: cellViewModel)
+        cellView.showsSeparator = false
+        cellView.contentHorizontalInset = OpenQuicklyMetrics.rowHorizontalInset
+        return cellView
+    }
+
+    func quickActionBar(_ quickActionBar: QuickActionBar, didActivateItem item: AnyHashable) {
+        guard let cellViewModel = item as? ContentStartPageItemCellViewModel else { return }
+        let destination = SelectionRoute.Destination(listClickModifierFlags: NSApp.currentEvent?.modifierFlags ?? [])
+        openQuicklyItemOpenedRelay.accept(.init(item: cellViewModel, destination: destination))
+    }
+
+    func quickActionBarDidCancel(_ quickActionBar: QuickActionBar) {
+        openQuicklySearchTask = nil
+        openQuicklyDismissedRelay.accept(())
+    }
+}
 
 extension MainWindowController: NSMenuItemValidation {
     /// Enabling is `responds(to:)`'s; this only checks Generated Interface while the focused tab

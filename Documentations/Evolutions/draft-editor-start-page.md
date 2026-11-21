@@ -96,7 +96,7 @@ IDEKit（`/Applications/Xcode.app`，27.2 27B52，Swift 接口导出在 `/Volume
 - **最近列表按 Engine 记**，相当于 Xcode 按工作区记；切到别的 Engine 的窗口看到的是那个 Engine 的列表。上限 10 个，没有清空按钮。Xcode 的页面只在出现时读一次，RV 的跟着存储实时刷新（另一窗口刚看的对象立刻出现）。
 - **路径行写「Engine 名 〉 镜像名」**，图标是 Engine 的图标，照 Xcode 路径行「第一段的图标 + 各段名字」的形状。
 - **存下来的对象不带 `children`**：列表只按身份列出与打开对象，子树可能有成千上万个节点，而存储每次变化都整文件重写。打开时内容区按身份重新取接口，不受影响；Inspector 的 Specialization 页对这样打开的泛型类型不列出本次会话里做过的特化，直到从侧栏重新选中它。
-- **Open Quickly 框的范围是整个 Engine（镜像 + 已索引镜像的对象）**，不跟着侧栏当前镜像走，所以新窗口里也能用；⇧⌘O 的浮动 Open Quickly 不变，仍只搜侧栏当前镜像。
+- **Open Quickly 框的范围是整个 Engine（镜像 + 已索引镜像的对象）**，不跟着侧栏当前镜像走，所以新窗口里也能用。⇧⌘O 的浮动 Open Quickly 也改成同一个范围（第 6 步，用户看过初版后要求）：Xcode 里两者是同一套搜索。
 - **结果列表盖在最近列表的位置上**，而不是做成浮出的窗口；Xcode 也是在页面里浮在框下。结果行用起始页同一种行，56 高，与 Xcode Open Quickly 的行同高。
 - **已知、不在本提案处理**：`AppDefaults` 的文件存储放在不分版本的 `Application Support/AppStorage`，Debug 版与发布版同时开着时会互相覆盖最近列表（书签与 Filter Scope 记忆同样如此）；每个用过的 Engine 键都会留下一份最多 10 个对象的列表，不清理。两者列入后续项。
 - **页面背景沿用内容区现在的背景**，起始页不另画背景。
@@ -104,7 +104,7 @@ IDEKit（`/Applications/Xcode.app`，27.2 27B52，Swift 接口导出在 `/Volume
 ### 非目标
 
 - App 级的欢迎窗口（另一会话在做）。
-- 改 ⇧⌘O 的浮动 Open Quickly 的范围或外观。
+- 改 ⇧⌘O 浮动 Open Quickly 的外观（范围在第 6 步改成与起始页相同）。
 - 为搜索建 Engine 端的名字索引、或为搜索触发索引；没索引的镜像里的对象搜不到，打开镜像页后（会先索引）再搜就有。
 - 最近列表的右键菜单、移除单条、清空、拖出；Xcode 的 `.empty(message:)` 样式与错误横幅（`errorBanner`，缺文件时用）。
 - iOS、visionOS 的起始页。
@@ -124,8 +124,15 @@ IDEKit（`/Applications/Xcode.app`，27.2 27B52，Swift 接口导出在 `/Volume
 | `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/Document/DocumentSession.swift` · `DocumentSession` | 修改 | `open()` 里启动记录器（macOS） | 每个窗口都记 | 2 |
 | `RuntimeViewerCore/Sources/RuntimeViewerCore/Objects/RuntimeObject.swift` · `RuntimeObject.withChildren(_:)` | 新增 | 换掉 `children` 的拷贝，与 `withImagePath(_:)` 并列 | 存最近对象时去掉子树，不在 App 一侧逐字段复制（以后加字段不会悄悄丢） | 2 |
 | `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/Storage/AppDefaults.swift` · `AppDefaults` | 修改 | 新增 `recentRuntimeObjectsByEngine: [String: [RuntimeObject]]`（`@ResilientFileStorage`） | 按 Engine 存盘 | 2 |
-| `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/Content/OpenQuicklyCatalog.swift` · `OpenQuicklyCatalog`、`RuntimeImageNode.leafImagePaths` | 新增 | 一次搜索的条目（镜像 + 已索引镜像的对象，连同嵌套的）、从 Engine 读（同时最多 8 个镜像）、匹配与截断 | 起始页搜索框的范围与匹配 | 4 |
+| `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/OpenQuickly/OpenQuicklyCatalog.swift`（第 6 步从 `Content/` 挪来） · `OpenQuicklyCatalog`、`RuntimeImageNode.leafImagePaths` | 新增 | 一次搜索的条目（镜像 + 已索引镜像的对象，连同嵌套的）、从 Engine 读（同时最多 8 个镜像）、匹配与截断 | 起始页搜索框的范围与匹配 | 4 |
 | `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Content/ContentPlaceholderViewController.swift` · `OpenQuicklyField`、`SearchResultsTableView`、`EmphasizedTableRowView`、`StartPageView`，`NSTextFieldDelegate`、`NSTableViewDelegate`、`EditorPaneContent` 的一致性 | 新增 / 修改 | 搜索框照 Xcode 重画（胶囊加外扩的光环）；结果板是 `FloatingPlatterView` 里不取焦点、选中照常着色的表；框的按键经文本框委托；编辑栏取得焦点时进搜索框；点页面空白处取焦点 | 第 4 步的界面 | 4 |
+| `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/OpenQuickly/OpenQuicklySearch.swift` · `OpenQuicklySearch` | 新增 | 一次搜索：第一次匹配时读目录、`end()` 丢掉，匹配在主线程之外 | 起始页与 ⇧⌘O 共用一套搜索 | 6 |
+| `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/OpenQuickly/OpenQuicklyViewModel.swift` · `OpenQuicklyViewModel` | 新增 | ⇧⌘O 浮动条的 VM：每个词的匹配连同这个词一起输出，打开、关掉即结束搜索、换 Engine 结束搜索 | 窗口一层的 Open Quickly | 6 |
+| `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/EditorArea/EditorArea.swift` · `shownForm(of:)` | 新增 | 按身份找正显示某对象的标签、取它的形态 | 起始页与 ⇧⌘O 打开对象时共用 | 6 |
+| `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/Content/ContentStartPageItemCellViewModel.swift` · `ContentStartPageItemOpening` | 新增 | 原 `ContentPlaceholderViewModel.ItemOpening` 提为顶层类型 | 两个 VM 共用 | 6 |
+| `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Content/ContentStartPageItemCellView.swift` · `ContentStartPageItemCellView` | 新增 | 原起始页控制器的私有 `ItemCellView` 提为 App 里的共用视图 | 起始页与 ⇧⌘O 浮动条两处用 | 6 |
+| `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Main/MainWindowController.swift`、`MainCoordinator.swift`、`App/MainMenuController.swift` | 修改 | ⇧⌘O 的命令、浮动条与绑定挪到窗口；协调器创建 `OpenQuicklyViewModel`；菜单项指向窗口的命令 | 有文档窗口时总可用 | 6 |
+| `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Sidebar/RuntimeObject/SidebarRuntimeObjectListViewController.swift` | 修改 | 去掉它自己的 `QuickActionBar` 与 `openQuickly(_:)` | 命令归窗口 | 6 |
 | `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/Filtering/OpenQuicklyRanking.swift` · `OpenQuicklyRanking` | 新增 | 从 `SidebarRuntimeObjectListViewModel.rankByRelevance` 抽出的排序 | 两处 Open Quickly 同一排序 | 4 |
 | `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/Sidebar/RuntimeObject/SidebarRuntimeObjectListViewModel.swift` | 修改 | 改调 `OpenQuicklyRanking`，行为不变 | 去重 | 4 |
 | `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Content/ContentCoordinator.swift` · `ContentCoordinator` | 修改 | 建占位 VM 时传 `editorPaneID` | 打开前聚焦这一栏 | 1 |
@@ -387,6 +394,17 @@ public struct OpenQuicklyCatalog: Sendable {
    - 行为：侧栏 Open Quickly 的排序不变（既有测试照旧通过）
 5. **文档**（已完成） —— `RuntimeViewerUsingAppKit/AGENTS.md`、索引、本提案的决策日志
 
+6. **⇧⌘O 与起始页同一个搜索**（已完成） —— 搜索逻辑抽成共用的 `OpenQuicklySearch`（`RuntimeViewerAppCore/OpenQuickly/`，`OpenQuicklyCatalog` 一并挪过去），起始页 VM 改用它；新增窗口一层的 `OpenQuicklyViewModel`；⇧⌘O 的命令从侧栏对象列表挪到 `MainWindowController`，浮动条（UIFoundation 的 `QuickActionBar`）列出与起始页相同的行（共用的 `ContentStartPageItemCellView`）；`ItemOpening` 改为顶层的 `ContentStartPageItemOpening`
+   - 行为：⇧⌘O 在有文档窗口时总是可用，不再要求侧栏列着某个镜像的对象
+   - 行为：浮动条搜这个 Engine 的镜像名与已索引镜像里的对象，与起始页相同，不为搜索触发索引
+   - 行为：一个字符起就搜（Xcode 只给起始页写死了 3 个字符）；空输入不列任何东西
+   - 行为：浮动条只收下与当前输入对应的结果，不用旧输入的结果顶替
+   - 行为：选中一项在焦点栏的当前标签打开（⌥ 下一栏、⇧⌥ 新标签），镜像打开镜像页
+   - 行为：浮动条关掉或窗口换到别的 Engine 时结束这次搜索、丢掉目录
+   - 行为：起始页的搜索照旧（既有测试照旧通过）
+7. **删掉侧栏自己的 Open Quickly** —— `SidebarRuntimeObjectListViewController` 的 `QuickActionBar` 与命令、`SidebarRuntimeObjectListViewModel` 的 Open Quickly 输入输出与按需物化机制、只为它存在的测试与文档段落
+   - 行为：侧栏对象列表的其余行为不变（既有测试照旧通过）
+
 只能在界面上看到的行为（布局、尺寸、颜色、焦点环、结果浮层的位置）在 ViewModel 层测不到，列为目视验证。
 
 ### 后续项
@@ -427,3 +445,4 @@ public struct OpenQuicklyCatalog: Sendable {
 | 2026-11-21 | 自审 | `/code-review medium` 审功能分支相对 `next` 的全部改动，六条逐条按四问核实，记在 [`KnownIssues/2026-11-21-editor-start-page-review-findings.md`](../KnownIssues/2026-11-21-editor-start-page-review-findings.md)：回车打开旧查询的结果（SP.1）与读目录时回车被吞（SP.2）一并修掉，带两条回归测试；页面空白处的方向键等不再转进输入框（SP.3）；图标照 Xcode 占 32 点的位、按 24 点画（SP.4）；目录在一次搜索期间不刷新（SP.5）与输入框文字经 relay 上报（SP.6）不修，理由留档。 |
 | 2026-11-21 | 自审第二轮 | 只审 SP.1–SP.4 的修复，又找出两条：挂起的回车在用户接着打字后会为新文字自动打开（SP.7，已修，带回归测试）；挂起期间方向键选的是旧结果里的行（SP.8，不修）。 |
 | 2026-11-21 | 实现完成，待用户看过后收尾 | 五步都已完成并推送功能分支。文档判断：不另写使用指南或实现说明——调用方契约只在 App 内部，维护要知道的「一栏一页、要复位」「度量照 Xcode」两条写进了 `RuntimeViewerUsingAppKit/AGENTS.md`；新术语「起始页」登记进 `Documentations/Glossary.md`。没做的验证：界面目视（布局、颜色、焦点、结果板）与 macOS 27 上的点击取焦点都没有在 App 里实测——这次没有启动 App 做界面操作，只编过 App、跑了 ViewModel 层的测试，留给用户看效果时确认。 |
+| 2026-11-21 | 用户要求 ⇧⌘O 与起始页统一范围 | 用户看过初版后问 Xcode 的两个 Open Quickly 是否同一个：逆向显示起始页的搜索框与 ⇧⌘O 的窗口用同一套输入框、结果列表与按键处理，只是起始页嵌在页面里、自己持有一份结果；⇧⌘O 由 App 级的 `IDEApplicationCommands.openQuickly:` 打开浮动窗口。RV 原先的 ⇧⌘O 只搜侧栏当前镜像，与起始页范围不同，用户要求改成一样。加第 6 步（统一范围）与第 7 步（删掉侧栏那套从此没人用的 Open Quickly 机制）；浮动条从一个字符起就搜，因为 Xcode 只给起始页写死了 3 个字符。 |
