@@ -145,6 +145,78 @@ struct ContentHighlightRequestTests {
         let request = ContentHighlightRequest(lineNumber: 3, lineText: "a line the pane no longer shows", matchRangeInLine: nil, query: #"locale:\(\w+\)"#, matchMode: .regularExpression, isCaseSensitive: true)
         #expect(request.locate(in: displayedText) == utf16Range(of: "locale:(id)", in: displayedText))
     }
+
+    // MARK: - Break Long Types (proposal multiline-type-formatting)
+
+    /// The corpus prints a declaration on one line; the pane, with Break Long Types on, lays its
+    /// type out over several.
+    private static let brokenCorpusLine = "    var nested: Pair<Pair<Swift.Int, Swift.String>, Swift.Double>"
+
+    private static let brokenDeclaration = """
+        var nested: Pair<
+            Pair<
+                Swift.Int,
+                Swift.String
+            >,
+            Swift.Double
+        >
+    """
+
+    private func corpusRange(of substring: String) -> RuntimeTextRange {
+        let range = utf16Range(of: substring, in: Self.brokenCorpusLine)
+        return RuntimeTextRange(location: range.location, length: range.length)
+    }
+
+    @Test("a corpus line broken over several lines on screen is located, the hit on the same characters")
+    func aCorpusLineBrokenAcrossDisplayedLinesIsLocated() {
+        let text = "struct Holder {\n" + Self.brokenDeclaration + "\n}"
+        // No query to fall back to: only the broken line itself can place the hit.
+        let request = ContentHighlightRequest(lineNumber: 2, lineText: Self.brokenCorpusLine, matchRangeInLine: corpusRange(of: "Swift.String"), query: "", isCaseSensitive: true)
+        #expect(request.locate(in: text) == utf16Range(of: "Swift.String", in: text))
+    }
+
+    @Test("a hit across a break the formatting inserted covers the break")
+    func aHitAcrossAnInsertedBreakCoversTheBreak() {
+        let text = "struct Holder {\n" + Self.brokenDeclaration + "\n}"
+        let request = ContentHighlightRequest(lineNumber: 2, lineText: Self.brokenCorpusLine, matchRangeInLine: corpusRange(of: "Swift.Int, Swift.String"), query: "Swift.Int, Swift.String", isCaseSensitive: true)
+        let start = utf16Range(of: "Swift.Int", in: text).location
+        let end = utf16Range(of: "Swift.String", in: text).upperBound
+        #expect(request.locate(in: text) == NSRange(location: start, length: end - start))
+    }
+
+    @Test("of several broken occurrences, the one nearest the corpus line number wins")
+    func theNearestBrokenOccurrenceWins() {
+        let text = "struct First {\n" + Self.brokenDeclaration + "\n}\nstruct Second {\n" + Self.brokenDeclaration + "\n}"
+        let request = ContentHighlightRequest(lineNumber: 12, lineText: Self.brokenCorpusLine, matchRangeInLine: corpusRange(of: "Swift.Double"), query: "", isCaseSensitive: true)
+        #expect(request.locate(in: text) == utf16Range(of: "Swift.Double", in: text, occurrence: 1))
+    }
+
+    @Test("a line equal to the corpus line still wins over a broken occurrence nearer to it")
+    func aWholeLineMatchStillWinsFirst() {
+        let text = Self.brokenCorpusLine + "\nstruct Holder {\n" + Self.brokenDeclaration + "\n}"
+        let request = ContentHighlightRequest(lineNumber: 4, lineText: Self.brokenCorpusLine, matchRangeInLine: corpusRange(of: "Swift.Double"), query: "Swift.Double", isCaseSensitive: true)
+        #expect(request.locate(in: text) == utf16Range(of: "Swift.Double", in: text))
+    }
+
+    @Test("a run of characters inside a longer line is not taken for a corpus line")
+    func aRunInsideALongerLineIsNotTakenForTheCorpusLine() {
+        let text = "let value = Pair<Swift.Int,\n    Swift.String>"
+        let request = ContentHighlightRequest(lineNumber: 1, lineText: "Swift.Int, Swift.String", matchRangeInLine: RuntimeTextRange(location: 0, length: 9), query: "", isCaseSensitive: true)
+        #expect(request.locate(in: text) == nil)
+    }
+
+    @Test("a window of a long line the pane broke over several lines is located, the hit on the same characters")
+    func aWindowOfABrokenLongLineIsLocated() {
+        let arguments = (0 ..< 40).map { "Module.Argument\($0)" }
+        let corpusLine = "    typealias Body = Module.Container<" + arguments.joined(separator: ", ") + ">"
+        let displayedLines = ["    typealias Body = Module.Container<"] + arguments.dropLast().map { "        \($0)," } + ["        \(arguments.last!)", "    >"]
+        let text = "extension Holder {\n" + displayedLines.joined(separator: "\n") + "\n}"
+        let hitRange = (corpusLine as NSString).range(of: "Module.Argument30")
+        #expect(corpusLine.utf16.count > 320)
+        let window = Self.window(of: corpusLine, around: hitRange)
+        let request = ContentHighlightRequest(lineNumber: 2, lineText: window.text, matchRangeInLine: window.rangeInWindow, query: "", isCaseSensitive: true)
+        #expect(request.locate(in: text) == utf16Range(of: "Module.Argument30", in: text))
+    }
 }
 
 extension NSRange {

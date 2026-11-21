@@ -211,11 +211,12 @@ private func formatted(_ print: SemanticString) -> SemanticString {
 3. **面板与导出元数据**（已完成；面板一行未经 App 构建验证，见决策日志） —— 改动地图第 6、7 行
    - 行为：面板 Swift 一栏出现「Break Long Types」，勾上后内容区刷新为拆开的文字（无测试目标，人工核对）
    - 行为：`exportMetadataDescribesBreakLongTypes`
-4. **查找跨行定位** —— 改动地图第 8、9 行
+4. **查找跨行定位**（已完成） —— 改动地图第 8、9 行
    - 行为：`aCorpusLineBrokenAcrossDisplayedLinesIsLocated`
-   - 行为：`aHitInsideABrokenTypeMapsToTheSameCharacters`
+   - 行为：`aHitAcrossAnInsertedBreakCoversTheBreak`
    - 行为：`theNearestBrokenOccurrenceWins`
-   - 行为：`aWholeLineMatchStillWinsFirst`
+   - 行为：`aWindowOfABrokenLongLineIsLocated`
+   - 行为：`aWholeLineMatchStillWinsFirst`、`aRunInsideALongerLineIsNotTakenForTheCorpusLine`（旧行为不变）
 5. **抬依赖 pin**（MachOSwiftSection 推送 `next` 之后） —— 改动地图第 10 行
    - 行为：不带本地依赖的构建通过
 6. **文档** —— 改动地图第 11 行
@@ -237,3 +238,5 @@ private func formatted(_ print: SemanticString) -> SemanticString {
 | 2026-11-21 | Accepted | 用户批准，开始实现。功能分支 `feature/multiline-type-formatting`，从 `next` 切出；先用本地依赖开发，MachOSwiftSection 推送 `next` 后再抬 pin。机器负载高时构建用低优先级跑。 |
 | 2026-11-21 | 宏展开块不格式化 | 方案原写在 `interfaceParts(of:in:)` 里格式化宏展开的每一块。实现时发现每一块带着嵌套宏属性相对自身文字的 UTF-8 范围（`MacroExpansionPart.NestedExpansion.attributeUTF8Range`），插入换行会让它们指错位置；展开出来的又都是很短的成员声明。改为不格式化，正文照常格式化、宏归属不受影响。 |
 | 2026-11-21 | 查找的跨行定位也覆盖「窗口」 | 方案只写了整行对不上时的跨行比对。实现时发现引擎会把超过 320 个 UTF-16 单元的语料行截成一段带 `…` 的窗口交给查找——SwiftUI 的 `Body` 正是这种——走的是另一条分支。两条分支统一改用一份「去掉空白的正文」：整行的情况要求比对上的一段恰好从某行第一个可见字符开始、到某行最后一个可见字符结束；窗口的情况允许落在行中间。命中位置都按「去空白后的第几个 UTF-16 单元」映射回正文。 |
+| 2026-11-21 | 查找测试先在旧代码上变红 | 新测试不带查询词，免得旧的「按查询词就近匹配」碰巧找到同一处；换回改动前的 `ContentHighlightRequest` 跑过一次，四条新测试（拆开的整行、跨插入换行的命中、多处取最近、拆开的长行窗口）都失败，两条旧行为保护通过；换回新代码后全部通过。 |
+| 2026-11-21 | 实现完成，待用户看过后收尾 | 第 1–4 步完成，在 JHs-Mac-Studio-Ultra 上用本地依赖（`USING_LOCAL_DEPENDENCIES=1`，MachOSwiftSection 本地 `next` 已含 `MultilineTypeFormatting`）以低优先级构建：`RuntimeViewerCore` 定向 42 个测试（含 `RuntimeInterfaceCorpusVisibilityTests`，它不按选项自动枚举，新选项不影响它）、`RuntimeViewerPackages` 的 `ContentHighlightRequestTests` 与 `ContentTextHighlightTests` 20 个测试全过。面板那一行（`GenerationOptionsViewController`）在 App target 里，没有单独的测试目标，机器负载高、没做 App 构建，也没在界面上人工看过。第 5 步（MachOSwiftSection 推送 `next` 后抬 pin）与第 6 步（落地时补齐本分支的索引行）留到收尾。文档判断：不另写说明或指南，没有新术语；CLI 与 agent 插件不变。 |
