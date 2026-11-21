@@ -185,6 +185,30 @@ private struct CTypePresets: View {
     @Binding var module: Transformer.CType
 
     var body: some View {
+        #if os(macOS)
+        buttons
+        #else
+        // An iOS section header has no room for four buttons beside its title.
+        Menu("Presets") {
+            Button("stdint") {
+                module.replacements = Transformer.CType.Presets.stdint
+            }
+            Button("Foundation") {
+                module.replacements = Transformer.CType.Presets.foundation
+            }
+            Button("Mixed") {
+                module.replacements = Transformer.CType.Presets.mixed
+            }
+            Divider()
+            Button("Clear", role: .destructive) {
+                module.replacements.removeAll()
+            }
+        }
+        #endif
+    }
+
+    #if os(macOS)
+    private var buttons: some View {
         HStack(spacing: 6) {
             Button("stdint") {
                 module.replacements = Transformer.CType.Presets.stdint
@@ -213,29 +237,21 @@ private struct CTypePresets: View {
             .controlSize(.small)
         }
     }
+    #endif
 }
 
 // MARK: - ObjC Ivar Offset Editor
 
 private struct ObjCIvarOffsetEditor: View {
     @Binding var module: Transformer.ObjCIvarOffset
-    @State private var textFieldHeight: CGFloat = 24
 
     var body: some View {
-        Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 10) {
-            GridRow {
-                Text("Template")
-                    .foregroundStyle(.secondary)
-                    .gridColumnAlignment(.trailing)
-
-                TokenTemplateTextField(text: $module.template, height: $textFieldHeight)
-                    .frame(height: max(24, textFieldHeight))
+        EditorGrid {
+            EditorRow(label: "Template") {
+                TemplateField(text: $module.template)
             }
 
-            GridRow {
-                Text("Radix")
-                    .foregroundStyle(.secondary)
-
+            EditorRow(label: "Radix") {
                 Picker("", selection: $module.useHexadecimal) {
                     Text("Decimal").tag(false)
                     Text("Hexadecimal").tag(true)
@@ -245,21 +261,15 @@ private struct ObjCIvarOffsetEditor: View {
                 .fixedSize()
             }
 
-            GridRow {
-                Text("Tokens")
-                    .foregroundStyle(.secondary)
-
-                HStack(spacing: 8) {
+            EditorRow(label: "Tokens") {
+                FlowLayout(spacing: 8) {
                     ForEach(Transformer.ObjCIvarOffset.Token.allCases, id: \.self) { token in
                         CopyableTokenChip(token: token, placeholder: token.placeholder)
                     }
                 }
             }
 
-            GridRow {
-                Text("Presets")
-                    .foregroundStyle(.secondary)
-
+            EditorRow(label: "Presets") {
                 FlowLayout(spacing: 6) {
                     ForEach(Transformer.ObjCIvarOffset.Templates.all, id: \.name) { preset in
                         Button(preset.name) {
@@ -580,25 +590,16 @@ private struct CopyableTokenChip<Token: RawRepresentable & Hashable>: View where
 
 private struct SwiftFieldOffsetEditor: View {
     @Binding var module: Transformer.SwiftFieldOffset
-    @State private var textFieldHeight: CGFloat = 24
 
     var body: some View {
-        Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 10) {
+        EditorGrid {
             // Token-styled template editor
-            GridRow {
-                Text("Template")
-                    .foregroundStyle(.secondary)
-                    .gridColumnAlignment(.trailing)
-
-                TokenTemplateTextField(text: $module.template, height: $textFieldHeight)
-                    .frame(height: max(24, textFieldHeight))
+            EditorRow(label: "Template") {
+                TemplateField(text: $module.template)
             }
 
             // Radix picker
-            GridRow {
-                Text("Radix")
-                    .foregroundStyle(.secondary)
-
+            EditorRow(label: "Radix") {
                 Picker("", selection: $module.useHexadecimal) {
                     Text("Decimal").tag(false)
                     Text("Hexadecimal").tag(true)
@@ -609,11 +610,8 @@ private struct SwiftFieldOffsetEditor: View {
             }
 
             // Copyable token chips
-            GridRow {
-                Text("Tokens")
-                    .foregroundStyle(.secondary)
-
-                HStack(spacing: 8) {
+            EditorRow(label: "Tokens") {
+                FlowLayout(spacing: 8) {
                     ForEach(Transformer.SwiftFieldOffset.Token.allCases, id: \.self) { token in
                         CopyableTokenChip(token: token, placeholder: token.placeholder)
                     }
@@ -621,10 +619,7 @@ private struct SwiftFieldOffsetEditor: View {
             }
 
             // Preset buttons
-            GridRow {
-                Text("Presets")
-                    .foregroundStyle(.secondary)
-
+            EditorRow(label: "Presets") {
                 FlowLayout(spacing: 6) {
                     ForEach(Transformer.SwiftFieldOffset.Templates.all, id: \.name) { preset in
                         Button(preset.name) {
@@ -643,26 +638,16 @@ private struct SwiftFieldOffsetEditor: View {
 
 private struct SwiftVTableOffsetEditor: View {
     @Binding var module: Transformer.SwiftVTableOffset
-    @State private var templateFieldHeight: CGFloat = 24
-    @State private var labeledTemplateFieldHeight: CGFloat = 24
 
     var body: some View {
-        Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 10) {
+        EditorGrid {
             // Template editor (no label)
-            GridRow {
-                Text("Template")
-                    .foregroundStyle(.secondary)
-                    .gridColumnAlignment(.trailing)
-
-                TokenTemplateTextField(text: $module.template, height: $templateFieldHeight)
-                    .frame(height: max(24, templateFieldHeight))
+            EditorRow(label: "Template") {
+                TemplateField(text: $module.template)
             }
 
             // Preset buttons for template
-            GridRow {
-                Text("Presets")
-                    .foregroundStyle(.secondary)
-
+            EditorRow(label: "Presets") {
                 FlowLayout(spacing: 6) {
                     ForEach(Transformer.SwiftVTableOffset.Templates.all, id: \.name) { preset in
                         Button(preset.name) {
@@ -674,24 +659,15 @@ private struct SwiftVTableOffsetEditor: View {
                 }
             }
 
-            Divider()
-                .gridCellColumns(2)
+            EditorDivider()
 
             // Labeled template editor
-            GridRow {
-                Text("Labeled\nTemplate")
-                    .foregroundStyle(.secondary)
-                    .gridColumnAlignment(.trailing)
-
-                TokenTemplateTextField(text: $module.labeledTemplate, height: $labeledTemplateFieldHeight)
-                    .frame(height: max(24, labeledTemplateFieldHeight))
+            EditorRow(label: "Labeled\nTemplate") {
+                TemplateField(text: $module.labeledTemplate)
             }
 
             // Preset buttons for labeled template
-            GridRow {
-                Text("Presets")
-                    .foregroundStyle(.secondary)
-
+            EditorRow(label: "Presets") {
                 FlowLayout(spacing: 6) {
                     ForEach(Transformer.SwiftVTableOffset.Templates.allLabeled, id: \.name) { preset in
                         Button(preset.name) {
@@ -703,14 +679,10 @@ private struct SwiftVTableOffsetEditor: View {
                 }
             }
 
-            Divider()
-                .gridCellColumns(2)
+            EditorDivider()
 
             // Radix picker
-            GridRow {
-                Text("Radix")
-                    .foregroundStyle(.secondary)
-
+            EditorRow(label: "Radix") {
                 Picker("", selection: $module.useHexadecimal) {
                     Text("Decimal").tag(false)
                     Text("Hexadecimal").tag(true)
@@ -721,11 +693,8 @@ private struct SwiftVTableOffsetEditor: View {
             }
 
             // Copyable token chips
-            GridRow {
-                Text("Tokens")
-                    .foregroundStyle(.secondary)
-
-                HStack(spacing: 8) {
+            EditorRow(label: "Tokens") {
+                FlowLayout(spacing: 8) {
                     ForEach(Transformer.SwiftVTableOffset.Token.allCases, id: \.self) { token in
                         CopyableTokenChip(token: token, placeholder: token.placeholder)
                     }
@@ -739,25 +708,16 @@ private struct SwiftVTableOffsetEditor: View {
 
 private struct SwiftMemberAddressEditor: View {
     @Binding var module: Transformer.SwiftMemberAddress
-    @State private var textFieldHeight: CGFloat = 24
 
     var body: some View {
-        Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 10) {
+        EditorGrid {
             // Token-styled template editor
-            GridRow {
-                Text("Template")
-                    .foregroundStyle(.secondary)
-                    .gridColumnAlignment(.trailing)
-
-                TokenTemplateTextField(text: $module.template, height: $textFieldHeight)
-                    .frame(height: max(24, textFieldHeight))
+            EditorRow(label: "Template") {
+                TemplateField(text: $module.template)
             }
 
             // Radix picker
-            GridRow {
-                Text("Radix")
-                    .foregroundStyle(.secondary)
-
+            EditorRow(label: "Radix") {
                 Picker("", selection: $module.useHexadecimal) {
                     Text("Decimal").tag(false)
                     Text("Hexadecimal").tag(true)
@@ -768,11 +728,8 @@ private struct SwiftMemberAddressEditor: View {
             }
 
             // Copyable token chips
-            GridRow {
-                Text("Tokens")
-                    .foregroundStyle(.secondary)
-
-                HStack(spacing: 8) {
+            EditorRow(label: "Tokens") {
+                FlowLayout(spacing: 8) {
                     ForEach(Transformer.SwiftMemberAddress.Token.allCases, id: \.self) { token in
                         CopyableTokenChip(token: token, placeholder: token.placeholder)
                     }
@@ -780,10 +737,7 @@ private struct SwiftMemberAddressEditor: View {
             }
 
             // Preset buttons
-            GridRow {
-                Text("Presets")
-                    .foregroundStyle(.secondary)
-
+            EditorRow(label: "Presets") {
                 FlowLayout(spacing: 6) {
                     ForEach(Transformer.SwiftMemberAddress.Templates.all, id: \.name) { preset in
                         Button(preset.name) {
@@ -802,25 +756,16 @@ private struct SwiftMemberAddressEditor: View {
 
 private struct SwiftTypeLayoutEditor: View {
     @Binding var module: Transformer.SwiftTypeLayout
-    @State private var textFieldHeight: CGFloat = 24
 
     var body: some View {
-        Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 10) {
+        EditorGrid {
             // Token-styled template editor
-            GridRow {
-                Text("Template")
-                    .foregroundStyle(.secondary)
-                    .gridColumnAlignment(.trailing)
-
-                TokenTemplateTextField(text: $module.template, height: $textFieldHeight)
-                    .frame(height: max(24, textFieldHeight))
+            EditorRow(label: "Template") {
+                TemplateField(text: $module.template)
             }
 
             // Radix picker
-            GridRow {
-                Text("Radix")
-                    .foregroundStyle(.secondary)
-
+            EditorRow(label: "Radix") {
                 Picker("", selection: $module.useHexadecimal) {
                     Text("Decimal").tag(false)
                     Text("Hexadecimal").tag(true)
@@ -831,10 +776,7 @@ private struct SwiftTypeLayoutEditor: View {
             }
 
             // Copyable token chips
-            GridRow {
-                Text("Tokens")
-                    .foregroundStyle(.secondary)
-
+            EditorRow(label: "Tokens") {
                 FlowLayout(spacing: 6) {
                     ForEach(Transformer.SwiftTypeLayout.Token.allCases, id: \.self) { token in
                         CopyableTokenChip(token: token, placeholder: token.placeholder)
@@ -843,10 +785,7 @@ private struct SwiftTypeLayoutEditor: View {
             }
 
             // Preset buttons
-            GridRow {
-                Text("Presets")
-                    .foregroundStyle(.secondary)
-
+            EditorRow(label: "Presets") {
                 FlowLayout(spacing: 6) {
                     ForEach(Transformer.SwiftTypeLayout.Templates.all, id: \.name) { preset in
                         Button(preset.name) {
@@ -865,27 +804,16 @@ private struct SwiftTypeLayoutEditor: View {
 
 private struct SwiftEnumLayoutEditor: View {
     @Binding var module: Transformer.SwiftEnumLayout
-    @State private var strategyFieldHeight: CGFloat = 24
-    @State private var caseFieldHeight: CGFloat = 24
-    @State private var memoryOffsetFieldHeight: CGFloat = 24
 
     var body: some View {
-        Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 10) {
+        EditorGrid {
             // Strategy header template editor
-            GridRow {
-                Text("Strategy\nTemplate")
-                    .foregroundStyle(.secondary)
-                    .gridColumnAlignment(.trailing)
-
-                TokenTemplateTextField(text: $module.template, height: $strategyFieldHeight)
-                    .frame(height: max(24, strategyFieldHeight))
+            EditorRow(label: "Strategy\nTemplate") {
+                TemplateField(text: $module.template)
             }
 
             // Strategy token chips
-            GridRow {
-                Text("Tokens")
-                    .foregroundStyle(.secondary)
-
+            EditorRow(label: "Tokens") {
                 FlowLayout(spacing: 6) {
                     ForEach(Transformer.SwiftEnumLayout.Token.allCases, id: \.self) { token in
                         CopyableTokenChip(token: token, placeholder: token.placeholder)
@@ -894,10 +822,7 @@ private struct SwiftEnumLayoutEditor: View {
             }
 
             // Strategy preset buttons
-            GridRow {
-                Text("Presets")
-                    .foregroundStyle(.secondary)
-
+            EditorRow(label: "Presets") {
                 FlowLayout(spacing: 6) {
                     ForEach(Transformer.SwiftEnumLayout.Templates.all, id: \.name) { preset in
                         Button(preset.name) {
@@ -909,24 +834,15 @@ private struct SwiftEnumLayoutEditor: View {
                 }
             }
 
-            Divider()
-                .gridCellColumns(2)
+            EditorDivider()
 
             // Per-case template editor
-            GridRow {
-                Text("Case\nTemplate")
-                    .foregroundStyle(.secondary)
-                    .gridColumnAlignment(.trailing)
-
-                TokenTemplateTextField(text: $module.caseTemplate, height: $caseFieldHeight)
-                    .frame(height: max(24, caseFieldHeight))
+            EditorRow(label: "Case\nTemplate") {
+                TemplateField(text: $module.caseTemplate)
             }
 
             // Case token chips
-            GridRow {
-                Text("Tokens")
-                    .foregroundStyle(.secondary)
-
+            EditorRow(label: "Tokens") {
                 FlowLayout(spacing: 6) {
                     ForEach(Transformer.SwiftEnumLayout.CaseToken.allCases, id: \.self) { token in
                         CopyableTokenChip(token: token, placeholder: token.placeholder)
@@ -935,10 +851,7 @@ private struct SwiftEnumLayoutEditor: View {
             }
 
             // Case preset buttons
-            GridRow {
-                Text("Presets")
-                    .foregroundStyle(.secondary)
-
+            EditorRow(label: "Presets") {
                 FlowLayout(spacing: 6) {
                     ForEach(Transformer.SwiftEnumLayout.CaseTemplates.all, id: \.name) { preset in
                         Button(preset.name) {
@@ -950,24 +863,15 @@ private struct SwiftEnumLayoutEditor: View {
                 }
             }
 
-            Divider()
-                .gridCellColumns(2)
+            EditorDivider()
 
             // Memory offset template editor
-            GridRow {
-                Text("Memory\nOffset")
-                    .foregroundStyle(.secondary)
-                    .gridColumnAlignment(.trailing)
-
-                TokenTemplateTextField(text: $module.memoryOffsetTemplate, height: $memoryOffsetFieldHeight)
-                    .frame(height: max(24, memoryOffsetFieldHeight))
+            EditorRow(label: "Memory\nOffset") {
+                TemplateField(text: $module.memoryOffsetTemplate)
             }
 
             // Memory offset token chips
-            GridRow {
-                Text("Tokens")
-                    .foregroundStyle(.secondary)
-
+            EditorRow(label: "Tokens") {
                 FlowLayout(spacing: 6) {
                     ForEach(Transformer.SwiftEnumLayout.MemoryOffsetToken.allCases, id: \.self) { token in
                         CopyableTokenChip(token: token, placeholder: token.placeholder)
@@ -976,10 +880,7 @@ private struct SwiftEnumLayoutEditor: View {
             }
 
             // Memory offset preset buttons
-            GridRow {
-                Text("Presets")
-                    .foregroundStyle(.secondary)
-
+            EditorRow(label: "Presets") {
                 FlowLayout(spacing: 6) {
                     ForEach(Transformer.SwiftEnumLayout.MemoryOffsetTemplates.all, id: \.name) { preset in
                         Button(preset.name) {
@@ -991,14 +892,10 @@ private struct SwiftEnumLayoutEditor: View {
                 }
             }
 
-            Divider()
-                .gridCellColumns(2)
+            EditorDivider()
 
             // Radix picker (shared)
-            GridRow {
-                Text("Radix")
-                    .foregroundStyle(.secondary)
-
+            EditorRow(label: "Radix") {
                 Picker("", selection: $module.useHexadecimal) {
                     Text("Decimal").tag(false)
                     Text("Hexadecimal").tag(true)
@@ -1008,6 +905,83 @@ private struct SwiftEnumLayoutEditor: View {
                 .fixedSize()
             }
         }
+    }
+}
+
+// MARK: - Editor Layout
+
+/// The rows of an output format editor: on macOS a grid with the labels in a
+/// trailing-aligned column beside their controls; on iOS and visionOS, where a
+/// settings row is too narrow for a label column, each label above its control.
+private struct EditorGrid<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        #if os(macOS)
+        Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 10) {
+            content
+        }
+        #else
+        VStack(alignment: .leading, spacing: 14) {
+            content
+        }
+        #endif
+    }
+}
+
+/// One labeled row of an ``EditorGrid``. A line break in `label` is for the
+/// macOS label column; above a control it reads as a space.
+private struct EditorRow<Content: View>: View {
+    let label: String
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        #if os(macOS)
+        GridRow {
+            Text(LocalizedStringKey(label))
+                .foregroundStyle(.secondary)
+                .gridColumnAlignment(.trailing)
+
+            content
+        }
+        #else
+        VStack(alignment: .leading, spacing: 6) {
+            Text(LocalizedStringKey(label.replacingOccurrences(of: "\n", with: " ")))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            content
+        }
+        #endif
+    }
+}
+
+/// A divider across an ``EditorGrid``.
+private struct EditorDivider: View {
+    var body: some View {
+        Divider()
+            .gridCellColumns(2)
+    }
+}
+
+// MARK: - Template Field
+
+/// A template editor as tall as its text: the AppKit field reports the
+/// height it needs, the UIKit one works it out from the width it is offered.
+private struct TemplateField: View {
+    @Binding var text: String
+
+    #if os(macOS)
+    @State private var height: CGFloat = 24
+    #endif
+
+    var body: some View {
+        #if os(macOS)
+        TokenTemplateTextField(text: $text, height: $height)
+            .frame(height: max(24, height))
+        #else
+        TokenTemplateTextField(text: $text)
+        #endif
     }
 }
 

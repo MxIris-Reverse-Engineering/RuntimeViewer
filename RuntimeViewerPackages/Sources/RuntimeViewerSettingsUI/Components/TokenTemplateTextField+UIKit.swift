@@ -5,8 +5,8 @@ import UIKit
 
 // The UIKit template editor, the counterpart of the AppKit one in
 // TransformerSettingsView.swift: `${name}` placeholders show as accent-tinted
-// tokens, the bound text keeps the placeholders, and the field grows with its
-// content.
+// tokens, the bound text keeps the placeholders, and the field takes the width
+// it is offered and the height its wrapped text needs.
 
 // MARK: - Token Text Attachment
 
@@ -56,10 +56,8 @@ private final class TokenTextAttachment: NSTextAttachment {
 
 private final class TokenTemplateTextView: UITextView, UITextViewDelegate {
     var didChangeTextHandler: ((String) -> Void)?
-    var didChangeHeightHandler: ((CGFloat) -> Void)?
 
     private var isTokenizing = false
-    private var lastReportedWidth: CGFloat = 0
 
     private static let defaultAttributes: [NSAttributedString.Key: Any] = [
         .font: UIFont.monospacedSystemFont(ofSize: UIFont.systemFontSize, weight: .regular),
@@ -81,6 +79,10 @@ private final class TokenTemplateTextView: UITextView, UITextViewDelegate {
         textContainer.lineFragmentPadding = 4
         textContainerInset = UIEdgeInsets(top: 2, left: 0, bottom: 2, right: 0)
         typingAttributes = Self.defaultAttributes
+        // With scrolling off, the intrinsic width is the whole template on one
+        // line; the field wraps to the width it is given instead.
+        setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        setContentHuggingPriority(.defaultLow, for: .horizontal)
     }
 
     @available(*, unavailable)
@@ -99,25 +101,11 @@ private final class TokenTemplateTextView: UITextView, UITextViewDelegate {
         tokenize()
     }
 
-    /// The height the text needs at the current width.
-    var contentHeight: CGFloat {
-        let width = bounds.width > 0 ? bounds.width : 320
-        return sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height
-    }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        // The first layout, and every width change, wraps the text anew.
-        if bounds.width != lastReportedWidth {
-            lastReportedWidth = bounds.width
-            didChangeHeightHandler?(contentHeight)
-        }
-    }
-
     func textViewDidChange(_ textView: UITextView) {
         tokenize()
         didChangeTextHandler?(templateString)
-        didChangeHeightHandler?(contentHeight)
+        // A new line of text asks SwiftUI for the height again.
+        invalidateIntrinsicContentSize()
     }
 
     /// Copies the selection with its tokens as `${name}`, so pasting it
@@ -172,10 +160,12 @@ private final class TokenTemplateTextView: UITextView, UITextViewDelegate {
 // MARK: - Token Template Text Field (SwiftUI wrapper)
 
 /// The template editor the transformer page shows: `text` keeps the
-/// `${name}` placeholders, `height` follows the text.
+/// `${name}` placeholders.
 struct TokenTemplateTextField: UIViewRepresentable {
     @Binding var text: String
-    @Binding var height: CGFloat
+
+    /// The height of an empty field, as on macOS.
+    private static let minimumHeight: CGFloat = 24
 
     func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
@@ -187,26 +177,27 @@ struct TokenTemplateTextField: UIViewRepresentable {
             guard let coordinator, !coordinator.isUpdatingFromSwiftUI else { return }
             coordinator.parent.text = newTemplate
         }
-        textView.didChangeHeightHandler = { [weak coordinator = context.coordinator] newHeight in
-            guard let coordinator, !coordinator.isUpdatingFromSwiftUI else { return }
-            // Out of the view update that laid the text view out.
-            DispatchQueue.main.async {
-                coordinator.parent.height = newHeight
-            }
-        }
         context.coordinator.textView = textView
         textView.setTemplate(text)
         return textView
     }
 
     func updateUIView(_ uiView: UITextView, context: Context) {
+        context.coordinator.parent = self
         guard let textView = context.coordinator.textView, textView.templateString != text else { return }
         context.coordinator.isUpdatingFromSwiftUI = true
         textView.setTemplate(text)
         context.coordinator.isUpdatingFromSwiftUI = false
-        DispatchQueue.main.async {
-            self.height = textView.contentHeight
-        }
+        textView.invalidateIntrinsicContentSize()
+    }
+
+    /// The width SwiftUI offers, and the height the text needs wrapped to it.
+    /// Left to its intrinsic size, a text view that does not scroll lays the
+    /// template out on one line and pushes the row wider than the screen.
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
+        guard let width = proposal.width, width.isFinite, width > 0 else { return nil }
+        let fittingSize = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+        return CGSize(width: width, height: max(Self.minimumHeight, ceil(fittingSize.height)))
     }
 
     final class Coordinator: NSObject {

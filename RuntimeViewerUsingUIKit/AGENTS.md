@@ -33,7 +33,9 @@ the macOS app's:
   without another callback, and a scene's `sceneDidEnterBackground(_:)` fires while other scenes can still
   be in front.
 - The file is `Library/Application Support/RuntimeViewer[-Debug]/settings.json` in the app's container.
-  The derived data of the Find corpora is not enabled here: the apps have no Find yet.
+  The jailbroken variant has no container (`no-container`, `no-sandbox`), so its file is under
+  `/var/mobile/Library/Application Support/RuntimeViewer[-Debug]/`. The derived data of the Find corpora
+  is not enabled here: the apps have no Find yet.
 
 Background: `Documentations/Evolutions/0100-settings-storage-on-ios.md`.
 
@@ -48,6 +50,17 @@ Background: `Documentations/Evolutions/0100-settings-storage-on-ios.md`.
   reaches for AppKit gets a UIKit branch, as the Transformer page's template editor has
   (`TokenTemplateTextField+UIKit.swift`, with the placeholder rules shared with AppKit in
   `TokenTemplatePlaceholder` and pinned by `TokenTemplatePlaceholderTests`).
+- **Where iOS has its own idiom, the page follows iOS.** The Appearance section draws iOS Settings ›
+  Display & Brightness — the light and dark devices (`DeviceAppearancePicker`, the images exported
+  from iOS 27 as `AppearanceLight-iOS` / `AppearanceDark-iOS`) and a Match System switch in place of
+  the System choice — after the recipe reversed from `DBSDeviceAppearanceOptionView`, recorded in the
+  proposal's decision log. The Theme page's font size shows its value in the stepper's label, since the
+  iOS `Stepper` has no field.
+- **A page has to fit an iPhone's width.** The Transformer editors lay their rows out through
+  `EditorGrid` / `EditorRow` (a label column on macOS, each label above its control on iOS); chips and
+  buttons that can outgrow a row go in `FlowLayout`. The UIKit template field sizes itself in
+  `sizeThatFits` to the width it is offered: give it no fixed height, and never leave a non-scrolling
+  `UITextView` to its intrinsic size, which is its text on one line.
 - **`AppearanceController` applies the Appearance setting to every window** through
   `overrideUserInterfaceStyle`: all connected scenes when the setting changes, and `SceneDelegate`
   applies it to each window it creates.
