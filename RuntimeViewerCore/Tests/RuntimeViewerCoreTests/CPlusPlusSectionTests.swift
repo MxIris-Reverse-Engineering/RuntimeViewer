@@ -202,7 +202,7 @@ struct CPlusPlusSectionTests {
         #expect(interface.interfaceString.string.contains("class \(base.qualifiedName)"))
     }
 
-    @Test("a base its image re-exports symbol by symbol stays in that image")
+    @Test("a base its image re-exports symbol by symbol resolves to the image defining it")
     func reExportedBaseStaysInTheReferringImage() async throws {
         let engine = try await Self.makeEngine("cross-image")
         defer { Task { await engine.stop() } }
@@ -217,14 +217,12 @@ struct CPlusPlusSectionTests {
         let baseInterface = try #require(try await engine.interface(for: link, options: Self.options()))
         #expect(baseInterface.interfaceString.string.contains("class std::exception {"))
         // libc++ re-exports `std::exception`'s destructors and `what()` one by
-        // one, as `N_INDR` symbol-table entries, and MachOKitExtensions 3.1.0's
-        // symbol sweep files them as libc++'s own symbols at the string-table
-        // index their value holds — so libc++ lists a `std::exception` of its
-        // own, and the link stays there. Fails as intended once the sweep
-        // leaves indirect entries out.
-        withKnownIssue("MachOKitExtensions 3.1.0 indexes N_INDR entries as defined symbols") {
-            #expect(baseInterface.object.imagePath == Self.libcxxabiPath)
-        }
+        // one, as `N_INDR` symbol-table entries. MachOKitExtensions before
+        // 3.2.1 indexed them as libc++'s own symbols, so libc++ listed a
+        // `std::exception` of its own and the link stayed there.
+        #expect(baseInterface.object.imagePath == Self.libcxxabiPath)
+        let libcxxObjects = Self.flattened(try await engine.objects(in: Self.libcxxPath, includesCPlusPlusObjects: true))
+        #expect(libcxxObjects["std::exception"] == nil)
     }
 
     @Test("a class the referring image defines symbols of is printed from that image")

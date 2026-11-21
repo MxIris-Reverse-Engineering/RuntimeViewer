@@ -261,10 +261,11 @@ sidebar's text-token filter fields need — a comparison type's `valuePrefix` / 
 token whose comparison the field does not offer, and the delegate's `filterTokenField(_:editingStringFor:)` —
 and `NSNavigationPopoverController`, which the runtime source picker's list is; `0.19.0` stops a window that
 showed a navigation popover from never being freed, and filters a long list in one quickly.
-MachOKitExtensions is declared `from: "3.1.0"` in `RuntimeViewerCore`, the first release with
-`CPlusPlusClassIndexStore` — the C++ classes, vtables and slot names read from run-time type information —
-which the C++ section reads; `3.0.0` brought the scope tree and is what MachOSwiftSection and
-MachOObjCSection require.
+MachOKitExtensions is declared `from: "3.2.1"` in `RuntimeViewerCore`, the first release that leaves
+indirect symbol-table entries (`N_INDR`, symbols re-exported by name) out of the symbol index — before it,
+libc++ listed a `std::exception` of its own with members at string-table indexes. `3.1.0` brought
+`CPlusPlusClassIndexStore`, the C++ classes, vtables and slot names the C++ section reads, and `3.0.0` the
+scope tree, the floor MachOSwiftSection and MachOObjCSection require.
 SwiftyXPC (the `MxIris-macOS-Library-Forks` fork) is declared `from: "0.5.106"`, the first release with
 connections to an instance of an embedded service of their own (`ConnectionType.remoteServiceInstance`, which
 each file's process is started with) and with listener handlers that reach connections accepted before

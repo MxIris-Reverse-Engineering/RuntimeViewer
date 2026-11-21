@@ -130,7 +130,7 @@ RuntimeViewer 新增第三种对象语言：C++。镜像的对象列表在 Objec
    - 关系页的标题是「Derived Classes」，内容是本镜像里直接派生自它的类（`derivedClasses(of:in:)`）；别的镜像里的派生类不找。
    - 多重继承的其余基类只在界面头部列出。
 10. **App 一侧。** Filter Scope 加 C++ 一组（类、命名空间两个勾选项）；图标是绿色的 `C`（类）与 `N`（命名空间），与 C 的结构体、Find 里 C/C++ 函数的绿色同属 C 家族；SourceEditor 面板对 C++ 传 `"cpp"`，桥接不认识它，只按语义区间上色；内容的文件类型是 `UTType.cPlusPlusHeader`，分享与拖出时扩展名 `hpp`；镜像页的按种类计数带上 C++。
-11. **依赖。** RuntimeViewerCore 的 MachOKitExtensions 下限改为 `from: "3.1.0"`，`RuntimeViewerCore` target 加 `CPlusPlusSymbols` product；用 `UpdatePackagesScript.sh` 更新三个 workspace 与各包的锁文件，只让 MachOKitExtensions 移到 3.1.0（其余依赖若一并移动，逐个核对后再提交）。
+11. **依赖。** RuntimeViewerCore 的 MachOKitExtensions 下限改为 `from: "3.2.1"`（3.1.0 带来类索引，3.2.1 修了 `N_INDR` 条目，见「已知问题」），`RuntimeViewerCore` target 加 `CPlusPlusSymbols` product；各锁文件只让 MachOKitExtensions 移动。3.2.0 新增的两个测试支持 target（`MachOFixtureSupport`、`MachOTestingSupport`）补进 `Tuist.swift` 的 `sourceDependencyTargetNames`。
 
 ### 非目标
 
@@ -149,9 +149,9 @@ RuntimeViewer 新增第三种对象语言：C++。镜像的对象列表在 Objec
 - **新的 `RuntimeObject.Properties` 位**（例如「只从 RTTI 恢复」）：本提案不加，界面头部的注释已经说明；加位要同时加 Filter Scope 的行（`AGENTS.md` 开发规则第 9 条），以后需要时另议。
 - **MachOKitExtensions 之外的 C++ 来源**（ObjC ivar 编码里的 C++ 结构体）。
 
-### 已知问题（实现时发现，上游）
+### 已知问题（实现时发现，上游，已在 3.2.1 修复）
 
-- **MachOKitExtensions 3.1.0 把 `N_INDR` 符号表条目当成定义的符号。** libc++ 用 `N_INDR` 逐个转出 libc++abi 的符号（`std::exception` 的析构函数与 `what()` 等），`MachOSymbols` 的扫描没有排除这种条目，把它的值（转出目标名字在字符串表里的位置）当成偏移，于是 libc++ 的作用域树里有一个 `std::exception`，成员地址是 `0x34C4B2EA` 这样无意义的数。RuntimeViewer 照树列出，所以 libc++ 下会多一个 `std::exception`，从 libc++ 的类点它的基类 `std::exception` 也停在 libc++ 这一份。修法在上游：扫描时跳过 `type == .indr` 的条目。测试 `reExportedBaseStaysInTheReferringImage` 用 `withKnownIssue` 记着它，上游修好后会提示改测试。
+- **MachOKitExtensions 3.2.0 及以前把 `N_INDR` 符号表条目当成定义的符号。** libc++ 用 `N_INDR` 逐个转出 libc++abi 的符号（`std::exception` 的析构函数与 `what()` 等），`MachOSymbols` 的扫描没有排除这种条目，把它的值（转出目标名字在字符串表里的位置）当成偏移，于是 libc++ 的作用域树里有一个 `std::exception`，成员地址是 `0x34C4B2EA` 这样无意义的数。RuntimeViewer 照树列出，所以 libc++ 下会多一个 `std::exception`，从 libc++ 的类点它的基类 `std::exception` 也停在 libc++ 这一份。上游 3.2.1（`039ebbc`）起两条符号表路径都跳过 `type == .indr` 的条目；本提案把下限抬到 3.2.1，测试 `reExportedBaseStaysInTheReferringImage` 改为正面断言 libc++ 不再列出 `std::exception`、点它的基类会到 libc++abi。
 
 ## 改动地图
 
@@ -522,7 +522,7 @@ case .cPlusPlus:
 | 2026-11-21 | 界面请求按需建 section | `_interface` 的 C++ 分支用 `section(for:)` 而不是 `existingSection`：恢复的标签或书签可能在列表之前请求界面，此时现建。关系请求仍只看已建的 section（跨 owner 合并时，没列过这个镜像 C++ 对象的参与者答空）。 |
 | 2026-11-21 | 主基类的取法简化 | 层级取「第一个非虚、偏移为 0 的直接基类」。上游补名用的主基类还要求它有 vtable，并在没有时考虑「几乎为空的虚基类」；这两种情况在层级里差别很小，不为它读基类的 vtable。 |
 | 2026-11-21 | 引用镜像有符号时打印引用镜像这一份 | libc++ 定义了 `std::runtime_error` 取 `std::string` 的构造函数，所以从 libc++ 点 `std::runtime_error` 打开的是 libc++ 这一份（只有那几个构造函数），不是 libc++abi 带 vtable 的那一份。跳转只在引用镜像完全没有这个名字时才去导出 typeinfo 的镜像，与侧栏点同一个对象看到的一致；测试 `classWithSymbolsInTheReferringImageIsPrintedThere` 钉住这一点。 |
-| 2026-11-21 | 发现上游 N_INDR 问题 | 见「已知问题」；不在本分支修，记为后续项。 |
+| 2026-11-21 | 发现上游 N_INDR 问题 | 见「已知问题」。 |
 | 2026-11-21 | 线上测试按解码层写 | 「旧服务端收到带字段的请求」按冻结的旧请求类型解码来测（JSON 与 `XPCEncoder`），没有搭一个只认旧请求的真实服务端：旧服务端的行为就是解码时丢掉字段、照旧取对象；真实连接上测的是两种传输与中转都把字段带过去。 |
 | 2026-11-21 | 三条 App 层行为没写测试 | `sidebarAsksForCPlusPlusObjects`、`exportAndFindDoNotAskForCPlusPlusObjects`、`imagePageCountsCPlusPlusKinds` 没有写成测试：前一条是侧栏 ViewModel 里一个参数，后两条是「不改就不会要」的默认值，测它们要替身引擎记录请求，花费与价值不相称。线上测试已经证明不带字段的请求拿不到 C++ 对象。 |
 | 2026-11-21 | 不另写实现说明 | 维护时会踩的约定——C++ section 不进索引、只有三处要它、为什么是字段不是命令、跳转先看引用镜像——已经分别写进 `AGENTS.md`、`CommunicationAndEngineArchitecture.md` §4.4 与代码的文档注释，提案本身记着全部决定与实测；再写一份实现说明只是第四处副本。 |
@@ -531,4 +531,5 @@ case .cPlusPlus:
 | 2026-11-21 | 空命名空间按会打印的成员判断 | App 层测试里路径栏列出 libobjc 的对象时，出现了 `_read_images`、`call_load_methods` 这样的命名空间：作用域树把只装着 block 调用的作用域判为「未定」，按规则成了命名空间，界面却什么也打印不出。命名空间「有没有成员」改为只算界面会打印的成员（`RuntimeCPlusPlusSection.isPrinted(_:)`），测试 `listedNamespacesHaveSomethingToShow` 在 libobjc 上核对每个没有子对象的命名空间都打印出函数或变量。 |
 | 2026-11-21 | 路径栏测试跟着改 | `EditorJumpBarTests` 的「an image's objects become its children once read…」原来拿不带 C++ 的对象列表当期望值；路径栏现在也列 C++ 对象，期望值改为带 C++ 的列表，并断言 libobjc 确有 C++ 对象。 |
 | 2026-11-21 | Tuist 检查的既有红 | `./TuistScript.sh check` 报 `sourceDependencyTargetNames` 缺 MachOSwiftSection 的 `SwiftSectionTestingMacros`；origin/next 的 `Tuist.swift` 同样缺，是抬 MachOSwiftSection pin（`161be627`）时带进来的，不是本分支引入。本分支没有改原生工程，检查的其余部分一致。记为后续项。 |
+| 2026-11-21 | 上游修 N_INDR 并抬到 3.2.1 | 用户批准去上游修。MachOKitExtensions 新增 SPI `NlistProtocol.isIndirect`，`SymbolSweep` 两条符号表路径跳过 `N_INDR` 条目，复现测试 `IndirectSymbolEntryTests`、`IndirectSymbolEntryScopeTests` 先红后绿，按同一规则算期望值的旧测试一并改；发布为 3.2.1。Foundation 也有 196 个这样的 C 符号此前被收成了假偏移。本提案的下限随之改为 3.2.1，`Tuist.swift` 补上 3.2.0 新增的两个 target，`withKnownIssue` 改为正面断言。 |
 | 2026-11-21 | 实现完成，待用户看过后收尾 | Core 包全量（三条红单独重跑全过：一条是种类数量的既有断言，已随新种类改成 23；两条是满载偶发）、App 层两个测试包（红灯单独重跑全过，其余是记忆里登记过的既有红灯）、整个 App（Tuist workspace，Debug）都编过；没做界面目视。 |

@@ -197,11 +197,9 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 
 <section id="decide">
   <h2>要你定</h2>
-  <div class="callout">
-    <p class="callout-title">实现中发现的上游问题怎么处理</p>
-    <ol>
-      <li>MachOKitExtensions 3.1.0 把 <code>N_INDR</code> 符号表条目当成定义的符号：libc++ 下会多出一个成员地址无意义的 <code>std::exception</code>。修法在上游（扫描时跳过 <code>N_INDR</code>），本分支不修，测试用 <code>withKnownIssue</code> 记着。</li>
-    </ol>
+  <div class="callout callout-note">
+    <p class="callout-title">没有待定的事</p>
+    <p>实现中发现的上游问题（<code>N_INDR</code> 条目被当成定义的符号）已按用户批准在 MachOKitExtensions 3.2.1 修复，本提案的下限随之抬到 3.2.1。</p>
   </div>
   <div class="callout callout-warning">
     <p class="callout-title">与澄清提问里的样例不同的地方</p>
@@ -359,7 +357,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
     <li><strong>补名的搜索路径</strong>：独立文件用目录的 <code>dependencySearchPaths(forImageAt:)</code>。</li>
     <li><strong>Inspector</strong>：主基类链与本镜像里的派生类（「Derived Classes」）。</li>
     <li><strong>App</strong>：Filter Scope 的 C++ 组、绿色 <code>C</code> / <code>N</code> 图标、<code>"cpp"</code> 语言标识（只按语义区间上色）、<code>cPlusPlusHeader</code> 与 <code>hpp</code>、镜像页计数。</li>
-    <li><strong>依赖</strong>：MachOKitExtensions 下限 3.1.0，Core 加 <code>CPlusPlusSymbols</code>，锁文件只移这一个包。</li>
+    <li><strong>依赖</strong>：MachOKitExtensions 下限 3.2.1，Core 加 <code>CPlusPlusSymbols</code>，锁文件只移这一个包；<code>Tuist.swift</code> 补上 3.2.0 新增的两个 target。</li>
   </ol>
   <details>
     <summary>非目标</summary>
@@ -480,8 +478,8 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
   </div>
   <p>按需建、不进索引的方案不变。两个 C++ target 的代码段合计约 350 KB（链接与剥离之前）。</p>
   <div class="callout callout-warning">
-    <p class="callout-title">已知问题（上游）</p>
-    <p>MachOKitExtensions 3.1.0 的符号扫描没有排除 <code>N_INDR</code> 条目，libc++ 逐个转出的 <code>std::exception</code> 符号被当成 libc++ 自己的，于是 libc++ 下多一个 <code>std::exception</code>，从 libc++ 点这个基类也停在 libc++。修法在上游。</p>
+    <p class="callout-title">已知问题（上游，已在 3.2.1 修复）</p>
+    <p>MachOKitExtensions 3.2.0 及以前的符号扫描没有排除 <code>N_INDR</code> 条目，libc++ 逐个转出的 <code>std::exception</code> 符号被当成 libc++ 自己的。3.2.1 起两条符号表路径都跳过它们，本提案的下限抬到 3.2.1。</p>
   </div>
   <details>
     <summary>现状代码</summary>
@@ -569,7 +567,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <section id="log">
   <h2>决策日志</h2>
   <details>
-    <summary>20 条，最近一条：实现完成，待用户看过后收尾</summary>
+    <summary>21 条，最近一条：实现完成，待用户看过后收尾</summary>
     <div class="details-body">
       <div class="table-wrap">
       <table>
@@ -586,7 +584,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
           <tr><td class="numeric">2026-11-21</td><td>界面请求按需建 section</td><td>恢复的标签或书签可能在列表之前请求界面；关系请求只看已建的 section。</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>主基类的取法简化</td><td>层级取第一个非虚、偏移为 0 的直接基类，不读基类的 vtable。</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>引用镜像有符号时打印引用镜像这一份</td><td>从 libc++ 点 <code>std::runtime_error</code> 打开 libc++ 这一份；只有引用镜像完全没有这个名字时才去导出 typeinfo 的镜像。</td></tr>
-          <tr><td class="numeric">2026-11-21</td><td>发现上游 N_INDR 问题</td><td>不在本分支修，记为后续项。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>发现上游 N_INDR 问题</td><td>见「已知问题」。</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>线上测试按解码层写</td><td>旧服务端的行为就是解码时丢掉字段；真实连接上测两种传输与中转。</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>停止引擎清的是进程里共用的 store</td><td>同一进程里别的引擎下次用到会重建；App 的服务进程只服务一个引擎。</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>三条 App 层行为没写测试</td><td>侧栏、导出与 Find、镜像页三处只是一个参数或默认值；线上测试已证明不带字段拿不到 C++ 对象。</td></tr>
@@ -595,6 +593,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
           <tr><td class="numeric">2026-11-21</td><td>空命名空间按会打印的成员判断</td><td>libobjc 里只装着 block 调用的作用域曾显示成 <code>_read_images</code> 一类空命名空间。</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>路径栏测试跟着改</td><td>期望值改为带 C++ 的对象列表。</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>Tuist 检查的既有红</td><td><code>Tuist.swift</code> 缺 MachOSwiftSection 的 <code>SwiftSectionTestingMacros</code>，origin/next 同样缺，不是本分支引入。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>上游修 N_INDR 并抬到 3.2.1</td><td>用户批准去上游修；MachOKitExtensions 3.2.1 起扫描跳过 <code>N_INDR</code> 条目，复现测试先红后绿。下限改为 3.2.1，<code>withKnownIssue</code> 改为正面断言。</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>实现完成，待用户看过后收尾</td><td>Core 全量、App 层两个测试包与整个 App 都过；红灯单独重跑全过或是既有红灯；没做界面目视。</td></tr>
         </tbody>
       </table>

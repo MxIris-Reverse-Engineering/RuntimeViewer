@@ -117,12 +117,12 @@ let package = Package(
         ),
         // MachODependencies, which RuntimeViewerCore imports, moved here from
         // MachOSwiftSection in 2.0.0. The package has no `next` branch, so it is
-        // taken by version. 3.1.0 is the first release with
-        // `CPlusPlusClassIndexStore`, the C++ classes, vtables and virtual
-        // function names recovered from run-time type information, which the
-        // C++ section reads; `CPlusPlusSymbolIndexStore`, the scope tree, came
-        // in 3.0.0, the floor the `next` of MachOSwiftSection and
-        // MachOObjCSection require.
+        // taken by version. 3.2.1 is the first release that leaves indirect
+        // symbol-table entries (`N_INDR`, symbols re-exported by name) out of
+        // the symbol index; before it libc++ listed a `std::exception` of its
+        // own, its members at string-table indexes. `CPlusPlusClassIndexStore`,
+        // the C++ classes, vtables and slot names the C++ section reads, came
+        // in 3.1.0, and `CPlusPlusSymbolIndexStore`, the scope tree, in 3.0.0.
         .package(
             local: .package(
                 path: "../../MachOKitExtensions",
@@ -130,7 +130,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOKitExtensions",
-                from: "3.1.0"
+                from: "3.2.1"
             ),
         ),
         .package(
