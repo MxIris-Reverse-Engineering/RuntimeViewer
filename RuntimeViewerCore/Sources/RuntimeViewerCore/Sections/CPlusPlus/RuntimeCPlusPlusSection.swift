@@ -300,8 +300,10 @@ actor RuntimeCPlusPlusSection<Reading: RuntimeImageReading>: RuntimeCPlusPlusSec
         if name.functionQualifiers.contains(.rValueReference) { qualifiers.append("&&") }
         return CPlusPlusInterfacePrinter.Function(
             returnType: name.returnType,
+            returnTypeRanges: name.returnTypeReferences.map(\.range),
             name: name.baseName + (name.templateArguments ?? ""),
             parameters: name.parameters ?? "()",
+            parameterTypeRanges: name.parameters == nil ? [] : name.parameterTypeReferences.map(\.range),
             qualifiers: qualifiers
         )
     }

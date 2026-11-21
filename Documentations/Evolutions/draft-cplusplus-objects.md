@@ -122,15 +122,15 @@ RuntimeViewer 新增第三种对象语言：C++。镜像的对象列表在 Objec
    - 返回类型只在修饰名带着时打印；不写 `static`、不写访问级别（修饰名里没有，不猜）。
    - 命名空间：`namespace 限定名 {`，依次是自由函数、变量、子命名空间与类的前置声明；未定种类的作用域在头部注释里说明。
    - 地址注释跟随生成选项里的 `addMethodIMPAddressComments`（ObjC 头文件的同一个开关；C++ 与它同是头文件，不为 C++ 另加选项）；地址的口径与 ObjC 的 IMP 地址注释相同。槽位号与「overrides / inherited」不受开关影响。
-   - 语义类型：`class`、`namespace`、`virtual`、`const`、`delete` 是 `keyword`；类名在声明处是 `type(.class, .declaration)`，基类与前置声明里的类是 `type(.class, .name)`，命名空间名是 `type(.other, …)`；函数名是 `function(.declaration)`、变量名是 `member(.declaration)`；参数串是 `standard`；注释是 `comment`。这些记号里的类名与命名空间名一律写完整限定名，供跳转按文字查找。
-7. **跳转与跨镜像找类。** `ContentInterface.linkTargetKind` 对 C++ 对象把 `type(.class, _)` 映射到 `.cPlusPlus(.class)`、`type(.other, _)` 映射到 `.cPlusPlus(.namespace)`，目标对象的 `imagePath` 是当前镜像（与 ObjC 相同）。引擎的 `_interface` 加 C++ 臂：在对象的镜像里按限定名找；找不到时，问这个镜像的 section 它是不是某个类的基类、要到基类的修饰名，再经目录的新方法 `image(definingCPlusPlusTypeInfoForMangledTypeName:)` 找到定义它的镜像——进程内用 `dlsym` 找 `_ZTI<修饰名>` 再 `dladdr` 得到镜像，文件模式查各镜像的导出表找 `__ZTI<修饰名>`（与 `image(definingObjCType:)` 同一写法）。非唯一 RTTI（每个镜像各留一份隐藏副本）的类型没有导出的 typeinfo，找不到就不跳。参数串里的类型不建链接。
+   - 语义类型：`class`、`namespace`、`virtual`、`const`、`delete` 是 `keyword`；类名在声明处是 `type(.class, .declaration)`，基类与前置声明里的类是 `type(.class, .name)`，命名空间名是 `type(.other, …)`；函数名是 `function(.declaration)`、变量名是 `member(.declaration)`；参数与返回类型里的命名类型按上游给的位置（`parameterTypeReferences`、`returnTypeReferences`，3.3.0 起）打印成 `type(.class, .name)`，嵌套的只取最外层（模板连同实参是一个记号），其余（标点、内置类型、`const`、`*`、`&`）是 `standard`；注释是 `comment`。这些记号里的类名与命名空间名一律写完整限定名，供跳转按文字查找。
+7. **跳转与跨镜像找类。** `ContentInterface.linkTargetKind` 对 C++ 对象把 `type(.class, _)` 映射到 `.cPlusPlus(.class)`、`type(.other, _)` 映射到 `.cPlusPlus(.namespace)`，目标对象的 `imagePath` 是当前镜像（与 ObjC 相同）。引擎的 `_interface` 加 C++ 臂：在对象的镜像里按限定名找；找不到时，问这个镜像的 section 它是不是某个类的基类、要到基类的修饰名，再经目录的新方法 `image(definingCPlusPlusTypeInfoForMangledTypeName:)` 找到定义它的镜像——进程内用 `dlsym` 找 `_ZTI<修饰名>` 再 `dladdr` 得到镜像，文件模式查各镜像的导出表找 `__ZTI<修饰名>`（与 `image(definingObjCType:)` 同一写法）。非唯一 RTTI（每个镜像各留一份隐藏副本）的类型没有导出的 typeinfo，找不到就不跳。参数与返回类型里的类名同样建链接（与 ObjC 界面一样，按记号文字找）：本镜像列出的类能跳到；不是任何类的基类、本镜像又没有的，点了没有反应。
 8. **补名用的依赖搜索路径。** 文件模式的独立文件调 `virtualTables(of:in:dependencySearchPaths:)`，路径取目录的 `dependencySearchPaths(forImageAt:)`，`@rpath` 指向的兄弟框架照文件模式已有的规则找；进程内与 cache 里的镜像调不带路径的重载。
 9. **Inspector。** C++ 类有层级页与关系页：
    - 层级是主基类链（每层取第一个偏移为 0、非虚的基类，与上游补名用的主基类相同），基类在别的镜像就按第 7 条找到那个镜像再往上走；`hierarchy(for:)` 给名字，`superclassChain(for:)` 给能跳转的对象；
    - 关系页的标题是「Derived Classes」，内容是本镜像里直接派生自它的类（`derivedClasses(of:in:)`）；别的镜像里的派生类不找。
    - 多重继承的其余基类只在界面头部列出。
 10. **App 一侧。** Filter Scope 在 C 与 Objective-C 之间加 C++ 一组（类、命名空间两个勾选项）；图标是绿色的 `C`（类）与 `N`（命名空间），与 C 的结构体、Find 里 C/C++ 函数的绿色同属 C 家族；SourceEditor 面板对 C++ 传 `"cpp"`，桥接把它对应到重建版的 `SourceModelEditorLanguage.cpp`：与 ObjC、Swift 一样，框架自己的解析给关键字着色，语义区间把类型与成员重新标注；内容的文件类型是 `UTType.cPlusPlusHeader`，分享与拖出时扩展名 `hpp`；镜像页的按种类计数带上 C++。
-11. **依赖。** RuntimeViewerCore 的 MachOKitExtensions 下限改为 `from: "3.2.1"`（3.1.0 带来类索引，3.2.1 修了 `N_INDR` 条目，见「已知问题」），`RuntimeViewerCore` target 加 `CPlusPlusSymbols` product；各锁文件只让 MachOKitExtensions 移动。3.2.0 新增的两个测试支持 target（`MachOFixtureSupport`、`MachOTestingSupport`）补进 `Tuist.swift` 的 `sourceDependencyTargetNames`。
+11. **依赖。** RuntimeViewerCore 的 MachOKitExtensions 下限改为 `from: "3.3.0"`（3.1.0 带来类索引，3.2.1 修了 `N_INDR` 条目，3.3.0 给出签名里的类型位置并把 ObjC 方法的局部实体归到函数作用域，见「已知问题」），`RuntimeViewerCore` target 加 `CPlusPlusSymbols` product；各锁文件只让 MachOKitExtensions 移动。3.2.0 新增的两个测试支持 target（`MachOFixtureSupport`、`MachOTestingSupport`）补进 `Tuist.swift` 的 `sourceDependencyTargetNames`。
 
 ### 非目标
 
@@ -141,14 +141,16 @@ RuntimeViewer 新增第三种对象语言：C++。镜像的对象列表在 Objec
 - **命名词云**不数 C++ 名字。
 - **派生数据**不存 C++ 的任何东西，每次启动重建。
 - **字段**：RTTI 与 vtable 不带字段，类不打印数据成员（变量只来自符号表里的静态数据）；protobuf 描述符还原是上游之后的提案。
-- **参数里的类型跳转**、返回类型、`static` 与访问级别的推断。
+- 返回类型（修饰名没记的那些）、`static` 与访问级别的推断。
 - **函数作用域里的局部实体**（`kind == .function` 的作用域）。
 - **别的镜像里的派生类**、跨 owner 合并 C++ 的层级（借用 shared cache 镜像的 engine 上，C++ 的层级只在镜像的主人那里求）。
 - **注释标签**：C++ 界面不标注释结构（`marksCommentStructure` 对它不起作用），注释以普通注释显示。
 - **新的 `RuntimeObject.Properties` 位**（例如「只从 RTTI 恢复」）：本提案不加，界面头部的注释已经说明；加位要同时加 Filter Scope 的行（`AGENTS.md` 开发规则第 9 条），以后需要时另议。
 - **MachOKitExtensions 之外的 C++ 来源**（ObjC ivar 编码里的 C++ 结构体）。
 
-### 已知问题（实现时发现，上游，已在 3.2.1 修复）
+### 已知问题（实现时发现，上游，已在 3.2.1、3.3.0 修复）
+
+- **MachOKitExtensions 3.2.1 及以前把 ObjC 方法当成「未定」作用域。** ObjC++ 方法里的局部静态变量（`dispatch_once` 令牌一类）修饰成 `Z 26-[CAMetalDrawable texture] E 9onceToken`，外层只是一段不带参数的名字，上游只在外层带参数时才标成函数，于是 `-[CAMetalDrawable texture]` 判成「未定」，RuntimeViewer 把它列成命名空间（QuartzCore 里成片出现）。上游 3.3.0（提案 0008，`541972d`）起这类外层也是函数作用域，RuntimeViewer 照规则丢掉；测试 `objectiveCMethodLocalsMakeNoNamespace` 钉住。同一版本加了签名里的类型位置，见方案第 6 条。
 
 - **MachOKitExtensions 3.2.0 及以前把 `N_INDR` 符号表条目当成定义的符号。** libc++ 用 `N_INDR` 逐个转出 libc++abi 的符号（`std::exception` 的析构函数与 `what()` 等），`MachOSymbols` 的扫描没有排除这种条目，把它的值（转出目标名字在字符串表里的位置）当成偏移，于是 libc++ 的作用域树里有一个 `std::exception`，成员地址是 `0x34C4B2EA` 这样无意义的数。RuntimeViewer 照树列出，所以 libc++ 下会多一个 `std::exception`，从 libc++ 的类点它的基类 `std::exception` 也停在 libc++ 这一份。上游 3.2.1（`039ebbc`）起两条符号表路径都跳过 `type == .indr` 的条目；本提案把下限抬到 3.2.1，测试 `reExportedBaseStaysInTheReferringImage` 改为正面断言 libc++ 不再列出 `std::exception`、点它的基类会到 libc++abi。
 
@@ -158,8 +160,8 @@ RuntimeViewer 新增第三种对象语言：C++。镜像的对象列表在 Objec
 
 | 文件 / 类型 | 动作 | 改什么 | 为什么 | 步骤 |
 |---|---|---|---|---|
-| `RuntimeViewerCore/Package.swift` | 修改 | MachOKitExtensions 下限 `from: "3.2.1"`，注释写明 3.2.1 不再收 `N_INDR` 条目、3.1.0 带来 `CPlusPlusClassIndexStore`；`RuntimeViewerCore` target 加 `.product(name: "CPlusPlusSymbols", package: "MachOKitExtensions")` | 方案第 11 条 | 1 |
-| 各 `Package.resolved`（三个 workspace、`RuntimeViewerCore`、`RuntimeViewerPackages`、`RuntimeViewerCommandLine`） | 修改 | MachOKitExtensions 移到 3.2.1 | 同上 | 1 |
+| `RuntimeViewerCore/Package.swift` | 修改 | MachOKitExtensions 下限 `from: "3.3.0"`，注释写明 3.3.0 给出签名里的类型位置、3.2.1 不再收 `N_INDR` 条目、3.1.0 带来 `CPlusPlusClassIndexStore`；`RuntimeViewerCore` target 加 `.product(name: "CPlusPlusSymbols", package: "MachOKitExtensions")` | 方案第 11 条 | 1 |
+| 各 `Package.resolved`（三个 workspace、`RuntimeViewerCore`、`RuntimeViewerPackages`、`RuntimeViewerCommandLine`） | 修改 | MachOKitExtensions 移到 3.3.0 | 同上 | 1 |
 | Core `Objects/RuntimeObjectKind.swift` · `RuntimeObjectKind`、新的嵌套 `CPlusPlus` | 修改 | 加 `.cPlusPlus(CPlusPlus)`，`level` 2–3（C 之后、ObjC 之前，其后的种类顺延）、`allCases` 同序、`description`（`C++ Class`、`C++ Namespace`）、`isCPlusPlus` | 方案第 1 条 | 1 |
 | Core `Interfaces/RuntimeInterfaceLanguage.swift` | 修改 | 加 `static let cPlusPlus = RuntimeInterfaceLanguage(rawValue: "cpp")` | 方案第 1 条 | 1 |
 | Core 里穷举 `RuntimeObjectKind` 的各处：`Engine/RuntimeEngine.swift`（`_interface`、`_imageName(ofObjectName:)`、`_hierarchy`、`_memberAddresses`）、`Objects/RuntimeObject+GeneratedInterface.swift`、`Objects/RuntimeObject+CounterpartKind.swift`、`SharedCache/RuntimeEngine+SharedCacheRelays.swift`、`Search/RuntimeEngine+Search.swift`、`Search/Matching/*`、`Export/*`、`Relationships/*` | 修改 | 第 1 步只补让它编过、行为不变的臂（C++ 走「无」的分支：没有生成界面、没有对应面、不进语料、导出按头文件）；`_interface`、`_hierarchy` 的真实 C++ 臂在第 3、4 步 | 新 case 让穷举 switch 编不过 | 1 |
@@ -169,6 +171,7 @@ RuntimeViewer 新增第三种对象语言：C++。镜像的对象列表在 Objec
 | Core `Sections/CPlusPlus/RuntimeCPlusPlusSectionFactory.swift` · `RuntimeCPlusPlusSectionFactory<Reading>`（actor） | 新增 | 按镜像缓存、`RuntimeSectionBuild` 合并构建、`existingSection`、`section(for:progressContinuation:)`、`section(definingClassWithMangledTypeName:)`、`removeAllSections()`（同时调两个上游 store 的 `remove(for:)`） | 方案第 2、7 条 | 2、3 |
 | Core `Sections/CPlusPlus/CPlusPlusObjectTreeBuilder.swift` · `CPlusPlusObjectTreeBuilder`（internal） | 新增 | 把作用域树与类索引合成 `[RuntimeObject]`；与 section 分开，单元测试直接喂作用域与类 | 方案第 3 条，规则多、要单测 | 2 |
 | Core `Sections/CPlusPlus/CPlusPlusInterfacePrinter.swift` · `CPlusPlusInterfacePrinter`（internal） | 新增 | 方案第 6 条的打印规则 | 方案第 6 条 | 3 |
+| Core `Sections/CPlusPlus/RuntimeCPlusPlusSection.swift` · `function(of:)`；`CPlusPlusInterfacePrinter.Function` 的 `parameterTypeRanges`、`returnTypeRanges` | 修改 | 把上游的 `parameterTypeReferences`、`returnTypeReferences` 传给打印器，打印器按范围输出类名记号（只取最外层） | 方案第 6 条，用户看过后要求参数类型着色 | 3 |
 | Core `Sections/RuntimeCPlusPlusSectionProviding.swift`、`Sections/RuntimeCPlusPlusSectioning.swift` | 新增 | 引擎持有工厂与 section 用的协议，照 ObjC 的两份 | 引擎不依赖具体读取器 | 2 |
 | Core `Images/RuntimeImageIndex.swift` | 修改 | 建第三个工厂并交给关系解析器 | 唯一的装配点 | 2 |
 | Core `Images/RuntimeImageCatalog.swift`（协议）、`RuntimeProcessImageCatalog.swift`、`RuntimeFileImageCatalog.swift`，以及框架实例的目录 | 修改 | 加 `image(definingCPlusPlusTypeInfoForMangledTypeName:)`：进程内 `dlsym` + `dladdr`，文件模式查导出表并缓存结果 | 方案第 7 条 | 3 |
@@ -207,7 +210,7 @@ RuntimeViewer 新增第三种对象语言：C++。镜像的对象列表在 Objec
 改了什么：
 
 ```text
-MachOKitExtensions 3.2.1 (package, floor 3.0.0 -> 3.2.1)
+MachOKitExtensions 3.3.0 (package, floor 3.0.0 -> 3.3.0)
   CPlusPlusSymbols  (product)         CPlusPlusSymbolIndexStore (scopes), CPlusPlusClassIndexStore (RTTI, vtables)
 
 RuntimeViewerCore
@@ -445,7 +448,7 @@ case .cPlusPlus:
 
 ### 发布
 
-不需要新的权限、entitlement 或隐私清单条目。不影响公证与 Sparkle。MachOKitExtensions 3.2.1 已发布，发版前照常编 `RuntimeViewer-Distribution.xcworkspace` 核对锁文件。
+不需要新的权限、entitlement 或隐私清单条目。不影响公证与 Sparkle。MachOKitExtensions 3.3.0 已发布，发版前照常编 `RuntimeViewer-Distribution.xcworkspace` 核对锁文件。
 
 ## 落地步骤
 
@@ -461,6 +464,7 @@ case .cPlusPlus:
    - 行为：`typeInfoTurnsUndeterminedScopeIntoClass`
    - 行为：`functionScopesAreDropped`
    - 行为：`emptyNamespacesAreDropped`
+   - 行为：`objectiveCMethodLocalsMakeNoNamespace`（QuartzCore 不再列出 `-[…]` 命名空间）
    - 行为：`globalMembersGetGlobalNamespaceObject`
    - 行为：`libcxxabiListsBadArrayNewLengthUnderStd`（进程内与 cache 文件各一遍）
    - 行为：`objectsWithoutFlagCarryNoCPlusPlusObjects`
@@ -485,6 +489,8 @@ case .cPlusPlus:
    - 行为：`typeInfoOnlyClassSaysSo`
    - 行为：`namespacePrintsFunctionsVariablesAndChildren`
    - 行为：`typeTokensCarryQualifiedNames`
+   - 行为：`signatureTypesPrintAsClassNames`（参数与返回类型里的类型是类名记号，模板连同实参一个）
+   - 行为：`signatureTypesAreClassNames`（libc++ 的 `std::runtime_error` 构造函数参数里的 `std::__1::basic_string<…>`）
    - 行为：`baseInAnotherImageResolvesThroughExportedTypeInfo`（进程内：libc++ 的类跳到 libc++abi 的 `std::exception`）
    - 行为：`nonUniqueTypeInfoBaseDoesNotResolve`
 4. **[完成] 层级与派生类** —— `_hierarchy`、关系解析器、类型关系解析器、`RuntimeRelationshipNode.TypeKind`
@@ -538,3 +544,4 @@ case .cPlusPlus:
 | 2026-11-21 | 实现完成，待用户看过后收尾 | Core 包全量（三条红单独重跑全过：一条是种类数量的既有断言，已随新种类改成 23；两条是满载偶发）、App 层两个测试包（红灯单独重跑全过，其余是记忆里登记过的既有红灯）、整个 App（Tuist workspace，Debug）都编过；没做界面目视。 |
 | 2026-11-21 | C++ 排到 C 与 Objective-C 之间 | 用户在 App 里看过后要求 C++ 放在 C 下面、Objective-C 上面。`RuntimeObjectKind` 的 `level` 改为 C++ 紧接 C（类 2、命名空间 3，其后顺延），`allCases` 同序；`KindGroup` 与 Filter Scope 弹窗的组顺序改为 C、C++、Objective-C、Swift。侧栏分节、路径栏、镜像页计数都按 `level` 排，一处改动全部跟上；引擎回复里对象的先后不变（各处都会排序）。 |
 | 2026-11-21 | 内容区用重建版的 C++ 语言着色 | 用户发现 C++ 界面整页没有颜色。读重建版 27.2.0-alpha.2 的源码查明：桥接对不认识的标识不给语言，数据源就没有语言服务，语义区间的调整器也装不上，所以前期调研里「只按语义区间上色」的说法不成立。重建版自带 `SourceModelEditorLanguage.cpp` 与 `C++.xclangspec`，桥接把 `"cpp"` 对应到它；原先列在「不做」里的「SourceEditor 的 C++ 语言」随之去掉。桥接测试 `aCPlusPlusInterfaceIsParsedAndRetyped` 修复前红、修复后绿。 |
+| 2026-11-21 | 参数类型着色，经上游 3.3.0 | 用户看过后指出参数里的类型（`CA::Render::Surface*`）没有颜色，侧栏还把 `-[CAMetalDrawable texture]` 这类 ObjC 方法列成了命名空间；两处根子都在 MachOKitExtensions。用户选择到上游加接口、发 3.3.0，而不是在 RuntimeViewer 里解析参数文本（名字成分从节点取，不解析打印文本）。上游提案 0008：`CPlusPlusSymbolName.parameterTypeReferences`、`returnTypeReferences` 在打印时从 AST 记下每个命名类型的位置；外层不带参数的局部名也是函数作用域。本提案的下限抬到 3.3.0，打印器把这些范围输出成 `type(.class, .name)`，于是参数类型与基类一样着色、可跳转——原先列在「不做」里的「参数里的类型跳转」随之去掉。`signatureTypesAreClassNames` 在不传范围时红、接上后绿；`objectiveCMethodLocalsMakeNoNamespace` 的修复前红灯由上游的 store 测试演示（RuntimeViewer 这边没有回到 3.2.1 重跑）。 |

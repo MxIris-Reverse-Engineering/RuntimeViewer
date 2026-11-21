@@ -41,6 +41,24 @@ struct CPlusPlusInterfacePrinterTests {
         return spans
     }
 
+    @Test("the named types of a signature print as class names, a template with its arguments as one")
+    func signatureTypesPrintAsClassNames() {
+        let returnType = "CA::Render::Layer"
+        let parameters = "(std::__1::vector<CA::Foo> const&, int, CA::Render::Surface*)"
+        // As the upstream orders them: by start, a template before its arguments.
+        let parameterTypeRanges = ["std::__1::vector<CA::Foo>", "CA::Foo", "CA::Render::Surface"].compactMap { parameters.range(of: $0) }
+        let function = Printer.Function(
+            returnType: returnType,
+            returnTypeRanges: [returnType.startIndex ..< returnType.endIndex],
+            name: "make",
+            parameters: parameters,
+            parameterTypeRanges: parameterTypeRanges
+        )
+        let string = Printer(showsAddresses: false).interface(of: Self.widget(functions: [.init(function: function, addresses: [])]))
+        #expect(string.string.contains("    CA::Render::Layer make(std::__1::vector<CA::Foo> const&, int, CA::Render::Surface*);\n"))
+        #expect(Self.spans(of: .type(.class, .name), in: string) == ["ui::View", "CA::Render::Layer", "std::__1::vector<CA::Foo>", "CA::Render::Surface"])
+    }
+
     @Test("a class prints its bases with virtual and their access")
     func classPrintsBasesWithVirtualAndAccess() {
         let text = Self.text(Self.widget(bases: [

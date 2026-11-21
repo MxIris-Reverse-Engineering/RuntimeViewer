@@ -261,8 +261,11 @@ sidebar's text-token filter fields need — a comparison type's `valuePrefix` / 
 token whose comparison the field does not offer, and the delegate's `filterTokenField(_:editingStringFor:)` —
 and `NSNavigationPopoverController`, which the runtime source picker's list is; `0.19.0` stops a window that
 showed a navigation popover from never being freed, and filters a long list in one quickly.
-MachOKitExtensions is declared `from: "3.2.1"` in `RuntimeViewerCore`, the first release that leaves
-indirect symbol-table entries (`N_INDR`, symbols re-exported by name) out of the symbol index — before it,
+MachOKitExtensions is declared `from: "3.3.0"` in `RuntimeViewerCore`, the first release that says where
+a C++ signature spells each named type (`CPlusPlusSymbolName.parameterTypeReferences`), which the C++
+interface prints as class names, and that files an Objective-C method's static locals under a function
+scope — before it, QuartzCore listed `-[CAMetalDrawable texture]` as a namespace. `3.2.1` left indirect
+symbol-table entries (`N_INDR`, symbols re-exported by name) out of the symbol index — before it,
 libc++ listed a `std::exception` of its own with members at string-table indexes. `3.1.0` brought
 `CPlusPlusClassIndexStore`, the C++ classes, vtables and slot names the C++ section reads, and `3.0.0` the
 scope tree, the floor MachOSwiftSection and MachOObjCSection require.
