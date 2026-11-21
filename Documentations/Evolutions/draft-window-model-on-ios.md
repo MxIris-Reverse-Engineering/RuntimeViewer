@@ -1,6 +1,6 @@
 # Draft - iOS 的窗口模型与打开文件
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-21
 - **最后更新**: 2026-11-21
@@ -100,12 +100,12 @@ target。`MainViewModel` / `MainRoute` 的合并留到第四步。Mac 的行为�
 
 ## 提议方案
 
-1. **AppCore 在所有平台上链接引擎管理**：`Package.swift` 里 AppCore 对 `RuntimeViewerEngineManagement` 的依赖去掉平台条件；
-   `HelperClient`、`CatalystExtensions`、`Injection` 照旧只在 macOS。`MainViewModel`、`MainRoute` 及其依赖的那批文件仍是
-   `#if os(macOS)`，第四步再放开。
+1. **AppCore 在所有平台上链接引擎管理**：`Package.swift` 里对 `RuntimeViewerEngineManagement` 的依赖一律去掉平台条件
+   （AppCore、AppUI、SettingsUI 与引擎管理的测试 target 四处；它从 0099 起各平台都编）；`HelperClient`、`CatalystExtensions`、
+   `Injection` 照旧只在 macOS。`MainViewModel`、`MainRoute` 及其依赖的那批文件仍是 `#if os(macOS)`，第四步再放开。
 2. **共用的文档会话 `DocumentSession`**（AppCore `Document/`）：持有 `DocumentState`，有一个进程内从 1 起的编号；`open()`
-   在界面绑定之前启动引擎的后台工作，`close()` 离开后台工作、关掉这个文档带来的成员，两者都只生效一次。Mac 的 `Document`
-   持有一个，MCP 编号写成 `"document\(session.number)"`，行为不变。
+   在界面绑定之前启动引擎的后台工作，`close()` 离开后台工作、关掉这个文档带来的成员——开过没开过都收尾，关过之后
+   `open()` 不再生效；两者都只生效一次。Mac 的 `Document` 持有一个，MCP 编号写成 `"document\(session.number)"`，行为不变。
 3. **iOS 的窗口模型**：
    - iOS 与越狱版打开 `UIApplicationSupportsMultipleScenes`（visionOS 本来就开着）。
    - AppCore 新增 `DocumentSessionRegistry`：按窗口的标识（`UISceneSession.persistentIdentifier`）给每个窗口一个会话，
@@ -113,7 +113,7 @@ target。`MainViewModel` / `MainRoute` 的合并留到第四步。Mac 的行为�
      （`application(_:didDiscardSceneSessions:)`）时 `close()`。为文件开的新窗口先在注册表里预留引擎，拿一个请求号，
      scene 连接时凭请求号取走；取不到（App 重启后系统恢复的窗口）就用本机。
    - `SceneDelegate` 从注册表取会话，先 `open()` 再建界面，与 Mac 的顺序相同；iPad 的「新窗口」与恢复的窗口都从本机开始。
-4. **打开文件的共用部分 `RuntimeFileOpener`**（AppCore `File/`）：`startReading(fileAt:)` 在主线程外读文件头，已列出的文件
+4. **打开文件的共用部分 `RuntimeFileOpener`**（AppCore `Engine/`，与 parking、依赖缓存放在一起）：`startReading(fileAt:)` 在主线程外读文件头，已列出的文件
    优先，否则配默认依赖缓存，交给 `runtimeEngineManager.startReading(_:)`，返回引擎；URL 带安全作用域时开始访问并一直保持，
    直到引擎被放走（文件夹里的镜像是用到时才打开的，提案 0077）。`letGoOfFile(readBy:)` 放走一个引擎：在 file service 里读的
    挂起（与今天相同），在进程里读的从管理器拿掉并结束访问。Mac 的 `FileController` 改用它，`NSDocumentController`、开窗、
@@ -121,9 +121,10 @@ target。`MainViewModel` / `MainRoute` 的合并留到第四步。Mac 的行为�
 5. **`RuntimeFileEngineParking` 放开平台限定**：最后一个文档离开 30 秒后调 `runtimeFileOpener.letGoOfFile(readBy:)`；
    Mac 上效果与今天相同，iOS 上关掉的文件 30 秒后释放内存与文件描述符，再打开就重新读。为此
    `RuntimeEngineManager` 公开一个只读的 `readsFilesInThisProcess`。
-6. **依赖缓存按本机配对**：`Settings.File.platformNamesPairedWithThisMac` 改名为 `platformNamesPairedWithThisDevice`，
-   按平台取值——macOS 上仍是 macOS 与 Mac Catalyst，iOS 上是 iOS，visionOS 上是 visionOS；iOS 与 visionOS 上本机缓存打不开
-   （`FullDyldCache.cachedHost` 为 `nil`）时不配对，文件单独读，而不是整个打不开。
+6. **依赖缓存按本机配对**：`Settings.File.platformNamesPairedWithThisMac` 改名为 `platformNamesPairedWithThisDevice`、
+   `canPairWithThisMacsCache(_:)` 改名为 `canPairWithThisDevicesCache(_:)`，按平台取值——macOS 上仍是 macOS 与 Mac
+   Catalyst，iOS 上是 iOS，visionOS 上是 visionOS。在进程里读的文件按默认配了本机缓存、而本机缓存打不开
+   （`RuntimeFileError.dependencyCacheUnavailable`）时，`RuntimeFileOpener` 改为单独读这个文件，而不是整个打不开。
 7. **iOS 的打开入口**（iOS target `App/FileController.swift`，Mac 同名控制器的对应物）：
    - 侧栏根页齿轮旁多一个打开按钮。普通 iOS 与 visionOS 上按下就是文档选择器（文件、文件夹都能选）；越狱版上是一个菜单：
      「Choose File…」与「Open Path…」（输入或粘贴绝对路径）。「越狱版」在运行时判断：App 没有容器（主目录不在
@@ -162,7 +163,7 @@ target。`MainViewModel` / `MainRoute` 的合并留到第四步。Mac 的行为�
 
 | 文件 / 类型 | 动作 | 改什么 | 为什么 | 步骤 |
 |---|---|---|---|---|
-| `RuntimeViewerPackages/Package.swift` | 修改 | AppCore 对 `RuntimeViewerEngineManagement` 的依赖去掉 `condition` | 打开文件、跟随设置的共用逻辑要用管理器 | 1 |
+| `RuntimeViewerPackages/Package.swift` | 修改 | 对 `RuntimeViewerEngineManagement` 的四处依赖（AppCore、AppUI、SettingsUI、引擎管理的测试）都去掉 `condition` | 打开文件、跟随设置的共用逻辑要用管理器；守卫测试把清单里任何一处带平台条件的模块都当作 macOS 专属 | 1 |
 | `RuntimeViewerAppCore/Document/DocumentSession.swift` · `DocumentSession` | 新增 | 编号、`documentState`、`open()`、`close()`，各只生效一次 | 两端共用的文档会话 | 1 |
 | `RuntimeViewerUsingAppKit/.../App/Document.swift` · `Document` | 修改 | 持有 `DocumentSession`；`makeWindowControllers` 调 `open()`，`close()` 调会话的 `close()`；`mcpIdentifier` 由编号拼出；`documentState` 转发会话的 | Mac 改用共用会话，行为不变 | 1 |
 | `RuntimeViewerUsingAppKit/.../App/AppMCPBridgeDocumentProvider.swift` | 修改（可能不动） | 只要 `Document.mcpIdentifier`、`documentState` 的形状不变就不动 | 同上 | 1 |
@@ -174,9 +175,9 @@ target。`MainViewModel` / `MainRoute` 的合并留到第四步。Mac 的行为�
 | `RuntimeViewerUsingUIKit/.../App/SceneDelegate.swift` | 修改 | 从注册表取会话（看 `connectionOptions.userActivities` 里的请求号），先 `open()` 再建界面；去掉直接 `DocumentState()` | iOS 的窗口模型 | 2 |
 | `RuntimeViewerUsingUIKit/.../App/AppDelegate.swift` | 修改 | `didDiscardSceneSessions` 交给注册表关会话 | 窗口关掉时收尾 | 2 |
 | `RuntimeViewerEngineManagement/RuntimeEngineManager.swift` | 修改 | 公开只读的 `readsFilesInThisProcess` | 放走文件引擎时分两种做法 | 3 |
-| `RuntimeViewerAppCore/File/RuntimeFileOpener.swift` · `RuntimeFileOpener` | 新增 | `startReading(fileAt:)`、`letGoOfFile(readBy:)`、安全作用域访问的保持与结束；`@DependencyEntry` 的 `runtimeFileOpener` | 打开文件的共用部分 | 3 |
+| `RuntimeViewerAppCore/Engine/RuntimeFileOpener.swift` · `RuntimeFileOpener` | 新增 | `startReading(fileAt:)`、`letGoOfFile(readBy:)`、安全作用域访问的保持与结束；`@DependencyEntry` 的 `runtimeFileOpener` | 打开文件的共用部分 | 3 |
 | `RuntimeViewerAppCore/Engine/RuntimeFileEngineParking.swift` | 修改 | 去掉 `#if os(macOS)`；放走引擎改调 `runtimeFileOpener.letGoOfFile(readBy:)` | iOS 上关掉的文件也释放 | 3 |
-| `RuntimeViewerSettings/Settings+File.swift` | 修改 | `platformNamesPairedWithThisMac` 改名 `platformNamesPairedWithThisDevice` 并按平台取值；iOS 与 visionOS 上本机缓存打不开时不配对 | iOS 的二进制配上设备自己的缓存 | 3 |
+| `RuntimeViewerSettings/Settings+File.swift` | 修改 | `platformNamesPairedWithThisMac` 改名 `platformNamesPairedWithThisDevice` 并按平台取值；`canPairWithThisMacsCache(_:)` 改名 `canPairWithThisDevicesCache(_:)`（调用者 `RuntimeFileDependencyCaches` 跟着改） | iOS 的二进制配上设备自己的缓存 | 3 |
 | `RuntimeViewerUsingAppKit/.../App/FileController.swift` | 修改 | 读文件头、选缓存、`startReading` 改调 `runtimeFileOpener.startReading(fileAt:)`；其余不变 | Mac 改用共用部分 | 3 |
 | `Tests/RuntimeViewerAppCoreTests/RuntimeFileOpenerTests.swift`、`RuntimeFileEngineParkingTests`（已有的补用例） | 新增 / 修改 | 见步骤 3 的行为清单 | 打开与放走的契约 | 3 |
 | `Tests/RuntimeViewerSettingsTests/…`（`Settings.File` 的已有测试） | 修改 | 跟着改名；macOS 上配对不变 | 防回归 | 3 |
@@ -185,9 +186,9 @@ target。`MainViewModel` / `MainRoute` 的合并留到第四步。Mac 的行为�
 | `RuntimeViewerUsingUIKit/.../Main/MainCoordinator.swift` | 修改 | 把两个新请求转给 `FileController` / 文件窗口的持有者；知道自己是不是文件窗口 | 同上 | 4 |
 | `RuntimeViewerUsingUIKit/RuntimeViewerUsingUIKit/Info.plist`、`…-Jailbroken-Info.plist` | 修改 | `CFBundleDocumentTypes`（`public.data`、`public.directory`，`LSHandlerRank` = `Alternate`）、`LSSupportsOpeningDocumentsInPlace` = `true` | 「用其他 App 打开」 | 4 |
 | `RuntimeViewerUsingUIKit/.../App/SceneDelegate.swift` | 修改 | 连接时的 `urlContexts` 与 `scene(_:openURLContexts:)` 交给 `FileController` | 同上 | 4 |
-| `RuntimeViewerAppCore/Diagnostics/ApplicationLogs.swift` · `ApplicationLogs` | 新增 | `formattedEntries(since:)` | 导出日志的共用部分 | 5 |
+| `RuntimeViewerAppCore/App/ApplicationLogs.swift` · `ApplicationLogs` | 新增 | `formattedEntries(since:)` | 导出日志的共用部分 | 5 |
 | `RuntimeViewerUsingAppKit/.../App/DebugMenuController.swift` | 修改 | 改用 `ApplicationLogs`；菜单、保存面板、Finder 不变 | Mac 改用共用部分 | 5 |
-| `RuntimeViewerAppCore/Settings/RuntimeEngineManagerSettingsFollower.swift` · `RuntimeEngineManagerSettingsFollower` | 新增 | `startFollowing()`：共享缓存开关的生效值写进管理器，之后每次变化都写 | 两端共用 | 5 |
+| `RuntimeViewerAppCore/Engine/RuntimeEngineManagerSettingsFollower.swift` · `RuntimeEngineManagerSettingsFollower` | 新增 | `startFollowing()`：共享缓存开关的生效值写进管理器，之后每次变化都写 | 两端共用 | 5 |
 | `RuntimeViewerUsingAppKit/.../App/SettingsLifecycleController.swift` | 修改 | `followSharedCacheSharing()` 换成启动 follower | 同上 | 5 |
 | `RuntimeViewerUsingUIKit/.../App/SettingsLifecycleController.swift` | 修改 | 读完设置后启动 follower | iOS 跟 Mac 一样 | 5 |
 | `Tests/RuntimeViewerAppCoreTests/ApplicationLogsTests.swift`、`RuntimeEngineManagerSettingsFollowerTests.swift` | 新增 | 见步骤 5 的行为清单 | 契约 | 5 |
@@ -203,10 +204,10 @@ RuntimeViewerAppCore  (iOS / visionOS / macOS)
   ~ depends on RuntimeViewerEngineManagement: macOS only -> every platform
   + Document/DocumentSession              number, documentState, open() -> startBackgroundWork(), close() -> documentWillClose()
   + Document/DocumentSessionRegistry      window ID -> DocumentSession; reserved engine by request ID; discard -> close()
-  + File/RuntimeFileOpener                URL -> RuntimeFile -> runtimeEngineManager.startReading(_:); security-scoped access
+  + Engine/RuntimeFileOpener                URL -> RuntimeFile -> runtimeEngineManager.startReading(_:); security-scoped access
   ~ Engine/RuntimeFileEngineParking       #if os(macOS) removed; lets go through RuntimeFileOpener
-  + Diagnostics/ApplicationLogs           OSLogStore -> "[time] [subsystem/category] message"
-  + Settings/RuntimeEngineManagerSettingsFollower   developer.effectiveSharesSharedCacheImages -> manager
+  + App/ApplicationLogs           OSLogStore -> "[time] [subsystem/category] message"
+  + Engine/RuntimeEngineManagerSettingsFollower   developer.effectiveSharesSharedCacheImages -> manager
     Main/MainViewModel, Main/MainRoute, App/AppRoute ...   still #if os(macOS) (step 4)
 
 RuntimeViewerEngineManagement
@@ -283,8 +284,8 @@ public final class DocumentSession {
     public func open()
 
     /// Leaves the engine's background work and closes what this document
-    /// brought into being. Only the first call does anything, and only after
-    /// `open()`.
+    /// brought into being, opened or not. Only the first call does anything,
+    /// and `open()` does nothing after it.
     public func close()
 }
 ```
@@ -334,7 +335,7 @@ public final class DocumentSessionRegistry {
 ```
 
 ```swift
-// RuntimeViewerAppCore/File/RuntimeFileOpener.swift
+// RuntimeViewerAppCore/Engine/RuntimeFileOpener.swift
 /// Opens files from disk into engines, on every platform: what the Mac's
 /// File › Open… and the iOS open button share.
 @MainActor
@@ -379,14 +380,14 @@ extension Settings.File {
 ```
 
 ```swift
-// RuntimeViewerAppCore/Diagnostics/ApplicationLogs.swift
+// RuntimeViewerAppCore/App/ApplicationLogs.swift
 public enum ApplicationLogs {
     /// The entries this process logged under a RuntimeViewer subsystem since
     /// `date`, one line each: `[HH:mm:ss.SSS] [subsystem/category] message`.
     public static func formattedEntries(since date: Date) async throws -> String
 }
 
-// RuntimeViewerAppCore/Settings/RuntimeEngineManagerSettingsFollower.swift
+// RuntimeViewerAppCore/Engine/RuntimeEngineManagerSettingsFollower.swift
 /// Writes the settings the engine manager takes into it — Settings ›
 /// Developer's shared cache switch — from the stored values on, and every
 /// change after. Start it once the stored settings are read: loading replaces
@@ -410,8 +411,9 @@ public final class RuntimeEngineManagerSettingsFollower {
 - **安全作用域**：`RuntimeFileOpener` 按引擎的来源记下已开始访问的 URL；`letGoOfFile(readBy:)` 拿掉引擎之后
   `stopAccessingSecurityScopedResource()`。读失败（`startReading` 抛错）时当场结束访问。Mac 的 URL 不带安全作用域，
   `startAccessingSecurityScopedResource()` 返回 `false`，什么也不记。
-- **默认依赖缓存**：`platformNamesPairedWithThisDevice` 用 `#if os(macOS)` / `os(iOS)` / `os(visionOS)` 给值；iOS 与
-  visionOS 上 `defaultDependencyCache(for:)` 在 `FullDyldCache.cachedHost` 为 `nil` 时返回 `nil`。
+- **默认依赖缓存**：`platformNamesPairedWithThisDevice` 用 `#if os(macOS)` / `os(visionOS)` / `os(iOS)` 给值；设置不判断本机
+  缓存能不能打开，由 `RuntimeFileOpener` 在进程内读文件、本机缓存打不开（`RuntimeFileError.dependencyCacheUnavailable`）时
+  把文件改成单独读、再读一次。
 - **后台工作在 iOS 上开始跑**：`open()` 之后，交叉引用的预建（默认开）、Always Index（默认关）、Find 语料按设置运行，
   与 Mac 相同；iOS 上没有 Report 页看它们，暂由日志观察。
 
@@ -459,23 +461,23 @@ iPhone 一个窗口、文件窗口叠在上面；iPad 与 visionOS 多窗口。�
 
 ## 落地步骤
 
-1. **AppCore 链接引擎管理，共用的文档会话** —— 改动地图里步骤 1 的行
+1. **AppCore 链接引擎管理，共用的文档会话**（已完成）—— 改动地图里步骤 1 的行
    - 行为：`documentSessionOpensOnlyOnce`
    - 行为：`documentSessionClosesOnlyOnceAndOnlyAfterOpening`
    - 行为：`documentSessionNumbersCountUpFromOne`
    - 行为：`macDocumentBehavesAsBefore`（macOS App 构建、MCP 的文档编号不变）
    - 行为：`appCoreBuildsWithEngineManagementOnIOSAndVisionOS`（三个 iOS 系 App 编过）
-2. **iOS 的窗口模型** —— 步骤 2 的行
+2. **iOS 的窗口模型**（已完成，设备上待用户看）—— 步骤 2 的行
    - 行为：`registryGivesAWindowOneSessionAndKeepsIt`
    - 行为：`registryHandsAReservedEngineToTheWindowThatAsksForIt`
    - 行为：`registryFallsBackToLocalForAnUnknownRequest`
    - 行为：`registryClosesTheSessionsOfDiscardedWindows`
    - 行为：`iOSWindowJoinsTheEngineBackgroundWork`（设备上看日志）
    - 行为：`iPadOpensASecondWindowOnThisDevice`（模拟器或设备上看，由用户看）
-3. **打开文件的共用部分与放走** —— 步骤 3 的行
+3. **打开文件的共用部分与放走**（已完成）—— 步骤 3 的行
    - 行为：`openerReadsTheListedFileAsTheUserPairedIt`
    - 行为：`openerPairsANewFileWithTheDefaultCache`
-   - 行为：`openerEndsSecurityScopedAccessWhenReadingFails`
+   - 行为：`openerThrowsAndListsNothingForAnUnreadableFile`
    - 行为：`parkingLetsGoOfAnInProcessFileEngineAfterTheGracePeriod`
    - 行为：`parkingStillSuspendsAFileServiceEngine`
    - 行为：`macFilesStillPairWithThisMacsCache`
@@ -519,3 +521,4 @@ iPhone 一个窗口、文件窗口叠在上面；iPad 与 visionOS 多窗口。�
 | 2026-11-21 | 自定：依赖缓存按本机配对，打不开就单独读 | 原来只认 macOS 与 Mac Catalyst，iOS 的二进制配不到设备自己的缓存；沙盒里能不能打开本机缓存没验证，打不开就退回单独读而不是整个打不开 |
 | 2026-11-21 | 自定：这一步 AppCore 里新代码都不弹窗，暂不需要新的跨层客户端 | 打开文件、导出日志的共用部分都只返回结果或抛错，提示留在各端的控制器；用户认可的「经客户端提示」留给真需要 AppCore 发起提示的地方 |
 | 2026-11-21 | 用户批准，开始实现 | 看过简报后批准；从 `next` 切 `feature/window-model-on-ios` |
+| 2026-11-21 | 实现中的调整（步骤 1–3） | 一、`RuntimeViewerEngineManagement` 在清单里的四处平台条件一起去掉：`CrossPlatformSourceGuardTests` 把清单里任何一行带 `appkitPlatforms` 条件的模块都算作 macOS 专属，只去掉 AppCore 那一处，它仍会拦住 AppCore 里用到引擎管理的跨平台文件；模块本身从 0099 起各平台都编。二、`DocumentSession.close()` 不要求先 `open()`：`DocumentState.documentWillClose()` 本来就不要求，Mac 的文档没显示过就关时也要收尾，照旧。三、`RuntimeFileOpener` 放在 AppCore 的 `Engine/`（没有 `File/` 目录），`ApplicationLogs` 放 `App/`，跟随设置的类型放 `Engine/`。四、本机缓存打不开时退回单独读，做在 `RuntimeFileOpener` 里（捕获 `dependencyCacheUnavailable` 后去掉配对再读一次），设置只按平台给默认配对：判断缓存能否打开要用到 Core 里的 `FullDyldCache`，设置模块不该依赖它。五、`canPairWithThisMacsCache(_:)` 跟着改名为 `canPairWithThisDevicesCache(_:)`。六、行为 `openerEndsSecurityScopedAccessWhenReadingFails` 换成 `openerThrowsAndListsNothingForAnUnreadableFile`：测试里的文件 URL 不带安全作用域，看不到访问计数；安全作用域在设备上验。 |
