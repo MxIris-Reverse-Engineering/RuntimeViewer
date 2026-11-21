@@ -25,7 +25,7 @@ enum RuntimeFileDependencyCaches {
         guard let file = runtimeEngineManager.file(of: engine) else { return [] }
         if case .dyldSharedCache = file.content { return [] }
         var choices: [RuntimeSourcePickerContent.DependencyCacheChoice] = []
-        if Settings.File.canPairWithThisMacsCache(file) {
+        if Settings.File.canPairWithThisDevicesCache(file) {
             choices.append(.init(title: "This Mac's Dyld Shared Cache", dependencyCache: .systemDyldSharedCache, isCurrent: file.dependencyCache == .systemDyldSharedCache))
         }
         let namesPlatforms = file.content == .folder

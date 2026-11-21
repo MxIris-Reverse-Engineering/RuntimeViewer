@@ -59,16 +59,17 @@ extension Settings.File {
     /// The dyld shared cache `file` reads what it links from, unless the user
     /// picks another.
     ///
-    /// A file built for macOS or Mac Catalyst: this Mac's cache. Otherwise
-    /// the registered caches of the file's platform — a simulator's file only
-    /// pairs with that simulator's caches — and among them the oldest one no
-    /// older than the SDK the file was built with, or the newest when all are
-    /// older. `nil` — the file alone — when no registered cache matches, the
-    /// file says nothing about its platform, or it is a cache itself.
+    /// A file built for this device's platform (``platformNamesPairedWithThisDevice``):
+    /// this device's cache. Otherwise the registered caches of the file's
+    /// platform — a simulator's file only pairs with that simulator's caches —
+    /// and among them the oldest one no older than the SDK the file was built
+    /// with, or the newest when all are older. `nil` — the file alone — when no
+    /// registered cache matches, the file says nothing about its platform, or
+    /// it is a cache itself.
     public func defaultDependencyCache(for file: RuntimeFile) -> RuntimeFile.DependencyCache? {
         if case .dyldSharedCache = file.content { return nil }
         guard let platform = file.platform else { return nil }
-        if Self.platformNamesPairedWithThisMac.contains(platform.name) {
+        if Self.platformNamesPairedWithThisDevice.contains(platform.name) {
             return .systemDyldSharedCache
         }
         let candidates = dependencyCaches
@@ -93,22 +94,34 @@ extension Settings.File {
         return dependencyCaches(forPlatformNamed: file.platform?.name ?? "")
     }
 
-    /// Whether `file` can be paired with this Mac's own dyld shared cache: a
-    /// file built for macOS or Mac Catalyst, or a folder, whatever its first
-    /// binary was built for.
-    public static func canPairWithThisMacsCache(_ file: RuntimeFile) -> Bool {
+    /// Whether `file` can be paired with this device's own dyld shared cache:
+    /// a file built for this device's platform, or a folder, whatever its
+    /// first binary was built for.
+    public static func canPairWithThisDevicesCache(_ file: RuntimeFile) -> Bool {
         switch file.content {
         case .folder:
             true
         case .dyldSharedCache:
             false
         case .machO, .bundle:
-            file.platform.map { platformNamesPairedWithThisMac.contains($0.name) } ?? false
+            file.platform.map { platformNamesPairedWithThisDevice.contains($0.name) } ?? false
         }
     }
 
-    /// Platforms whose files read this Mac's own dyld shared cache.
-    public static let platformNamesPairedWithThisMac: Set<String> = ["macOS", "macCatalyst"]
+    /// Platforms whose files read this device's own dyld shared cache: macOS
+    /// and Mac Catalyst on a Mac, iOS on an iPhone or iPad, visionOS on a
+    /// Vision Pro.
+    public static let platformNamesPairedWithThisDevice: Set<String> = {
+        #if os(macOS)
+        ["macOS", "macCatalyst"]
+        #elseif os(visionOS)
+        ["visionOS"]
+        #elseif os(iOS)
+        ["iOS"]
+        #else
+        []
+        #endif
+    }()
 
     /// `27.0.1` as `[27, 0, 1]`, padded so `27` and `27.0` compare equal.
     private static func versionComponents(_ version: String) -> [Int] {

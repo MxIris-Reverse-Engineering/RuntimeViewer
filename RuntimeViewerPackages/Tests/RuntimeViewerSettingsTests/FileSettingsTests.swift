@@ -69,7 +69,7 @@ struct FileSettingsTests {
         let folder = Self.file(platform: "iOS", content: .folder)
 
         #expect(fileSettings.dependencyCaches(for: folder).map(\.platformName) == ["iOS", "tvOS"])
-        #expect(Settings.File.canPairWithThisMacsCache(folder))
+        #expect(Settings.File.canPairWithThisDevicesCache(folder))
     }
 
     @Test("A file or a bundle is offered the caches of its own platform, and this Mac's only when it was built for macOS or Mac Catalyst")
@@ -77,9 +77,9 @@ struct FileSettingsTests {
         let fileSettings = Settings.File(dependencyCaches: [Self.cache("iOS", "27.0"), Self.cache("tvOS", "27.0")])
 
         #expect(fileSettings.dependencyCaches(for: Self.file(platform: "iOS", content: .bundle)).map(\.platformName) == ["iOS"])
-        #expect(!Settings.File.canPairWithThisMacsCache(Self.file(platform: "iOS", content: .bundle)))
-        #expect(Settings.File.canPairWithThisMacsCache(Self.file(platform: "macCatalyst")))
-        #expect(!Settings.File.canPairWithThisMacsCache(Self.file(platform: "macOS", content: .dyldSharedCache)), "a cache is its own")
+        #expect(!Settings.File.canPairWithThisDevicesCache(Self.file(platform: "iOS", content: .bundle)))
+        #expect(Settings.File.canPairWithThisDevicesCache(Self.file(platform: "macCatalyst")))
+        #expect(!Settings.File.canPairWithThisDevicesCache(Self.file(platform: "macOS", content: .dyldSharedCache)), "a cache is its own")
     }
 
     @Test("A cache, a file of another platform with nothing registered, or a file that names no platform reads alone")
