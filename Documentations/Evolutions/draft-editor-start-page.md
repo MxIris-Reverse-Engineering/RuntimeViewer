@@ -124,7 +124,8 @@ IDEKit（`/Applications/Xcode.app`，27.2 27B52，Swift 接口导出在 `/Volume
 | `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/Document/DocumentSession.swift` · `DocumentSession` | 修改 | `open()` 里启动记录器（macOS） | 每个窗口都记 | 2 |
 | `RuntimeViewerCore/Sources/RuntimeViewerCore/Objects/RuntimeObject.swift` · `RuntimeObject.withChildren(_:)` | 新增 | 换掉 `children` 的拷贝，与 `withImagePath(_:)` 并列 | 存最近对象时去掉子树，不在 App 一侧逐字段复制（以后加字段不会悄悄丢） | 2 |
 | `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/Storage/AppDefaults.swift` · `AppDefaults` | 修改 | 新增 `recentRuntimeObjectsByEngine: [String: [RuntimeObject]]`（`@ResilientFileStorage`） | 按 Engine 存盘 | 2 |
-| `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/Content/OpenQuicklyCatalog.swift` · `OpenQuicklyCatalog` | 新增 | 一次搜索会话的条目（镜像 + 已索引镜像的对象）、从 Engine 读、匹配与截断 | 起始页搜索框的范围与匹配 | 4 |
+| `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/Content/OpenQuicklyCatalog.swift` · `OpenQuicklyCatalog`、`RuntimeImageNode.leafImagePaths` | 新增 | 一次搜索的条目（镜像 + 已索引镜像的对象，连同嵌套的）、从 Engine 读（同时最多 8 个镜像）、匹配与截断 | 起始页搜索框的范围与匹配 | 4 |
+| `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Content/ContentPlaceholderViewController.swift` · `OpenQuicklyField`、`SearchResultsTableView`、`EmphasizedTableRowView`、`StartPageView`，`NSTextFieldDelegate`、`NSTableViewDelegate`、`EditorPaneContent` 的一致性 | 新增 / 修改 | 搜索框照 Xcode 重画（胶囊加外扩的光环）；结果板是 `FloatingPlatterView` 里不取焦点、选中照常着色的表；框的按键经文本框委托；编辑栏取得焦点时进搜索框；点页面空白处取焦点 | 第 4 步的界面 | 4 |
 | `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/Filtering/OpenQuicklyRanking.swift` · `OpenQuicklyRanking` | 新增 | 从 `SidebarRuntimeObjectListViewModel.rankByRelevance` 抽出的排序 | 两处 Open Quickly 同一排序 | 4 |
 | `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/Sidebar/RuntimeObject/SidebarRuntimeObjectListViewModel.swift` | 修改 | 改调 `OpenQuicklyRanking`，行为不变 | 去重 | 4 |
 | `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Content/ContentCoordinator.swift` · `ContentCoordinator` | 修改 | 建占位 VM 时传 `editorPaneID` | 打开前聚焦这一栏 | 1 |
@@ -365,18 +366,21 @@ public struct OpenQuicklyCatalog: Sendable {
    - 行为：macOS 27 上单击一行后列表取得焦点、回车打开它（目视；`mouseDown` 覆写，同 `StatefulOutlineView`）
    - 行为：用键盘把焦点移进列表且没有选中时选中第一行；点击取焦点不先闪第一行（目视）
    - 行为：Show Less 收掉了选中行时，取得焦点的列表选中第一行（目视）
-4. **Open Quickly 搜索框** —— `OpenQuicklyCatalog`、`OpenQuicklyRanking`、侧栏改用共用排序、VM 的搜索输入输出、视图的键盘处理
+4. **Open Quickly 搜索框**（已完成） —— `OpenQuicklyCatalog`、`OpenQuicklyRanking`、侧栏改用共用排序、VM 的搜索输入输出、视图的键盘处理、照 Xcode 重画的搜索框、浮在框下的结果板、`EditorPaneContent` 的焦点、点空白处取焦点
    - 行为：输入少于 3 个字符时不搜索；已有结果时留着上一次的结果
+   - 行为：搜索中删到不足 3 个字符时，那次搜索照常完成（不会一直停在读取中）
+   - 行为：窗口换到别的 Engine 时结束搜索
    - 行为：清空输入时结果消失
    - 行为：结果包含名字匹配的镜像与已索引镜像里的对象
    - 行为：未索引镜像里的对象不在结果里，搜索也不触发索引
    - 行为：排序与侧栏的 Open Quickly 相同（命中自身名字、位置靠前、名字短的在前）
-   - 行为：读取条目期间显示进度，读完显示结果
+   - 行为：读取条目期间搜索框尾部转圈，读完显示结果（转圈要读得慢的目录才出现，没有测试，目视）
    - 行为：回车打开第一项；↓ / ↑ 移动选中后回车打开选中项
    - 行为：打开镜像结果显示该镜像的镜像页
    - 行为：打开结果或按 Esc 后输入框清空、结果消失，回到最近列表
    - 行为：起始页所在的栏取得焦点（⌘T 新标签、切到这一栏）时，键盘焦点落进搜索框（`EditorPaneContent.focusableView`，照 Xcode 的 `shouldFocusSearchField`；目视）
-   - 行为：点页面空白处让搜索框失去焦点（目视）
+   - 行为：点页面空白处让搜索框失去焦点，焦点留在这一栏、这一栏成为焦点栏（目视）
+   - 行为：没有结果时 ↑ / ↓ 照常移动输入框里的光标（目视）
    - 行为：搜索框照 Xcode 的度量：高 47、连续圆角 24、没聚焦时的底色、聚焦且窗口为 key 时去底色加 3pt 强调色光环（不透明度 0.6，一半在框外）、20pt medium、放大镜框在 x = 16、文字从 62 起（目视）
    - 行为：侧栏 Open Quickly 的排序不变（既有测试照旧通过）
 5. **文档** —— `RuntimeViewerUsingAppKit/AGENTS.md`、索引、本提案的决策日志
@@ -414,3 +418,6 @@ public struct OpenQuicklyCatalog: Sendable {
 | 2026-11-21 | 第 3 步审查后调整 | 审查者指出：macOS 27 上单击行只选中、不让列表取得焦点，回车落到搜索框——列表照 `StatefulOutlineView` 加只调 `super` 的 `mouseDown` 覆写；取得焦点时选第一行改为只在键盘取焦点时做，免得点击时先闪第一行；Show Less 收掉选中行后补选第一行；一栏的起始页被所有空标签复用，Show All 与选中会跨标签残留——页面每次出现时复位；`formOnScreen(of:)` 改用 `EditorArea.tabID(showing:)` 的查找顺序；输入名与提案同步（`recentItemOpened`、`ItemOpening`）。 |
 | 2026-11-21 | 与 Xcode 有意不同的两处 | 路径行只占一行（Xcode 最多两行）：行高按 Xcode 截图固定为 38，两行会溢出；页面不整页滚动，搜索框与标题固定、只有列表滚动：最多 10 行，窗口不矮时看不出区别。 |
 | 2026-11-21 | 第 3 步第二轮审查后调整 | 两个空标签之间切换时栏里的内容场景不变、`viewWillAppear` 不触发，复位改为同时跟随这一栏的当前标签；列表重排后选中原先留在行号上、回车可能打开别的对象，改为按对象恢复选中（三路订阅的先后顺序写在注释里）；`formOnScreen(of:)` 改为只按身份找标签，以别的语言显示的标签也算。 |
+| 2026-11-21 | 第 4 步审查后调整 | 审查者指出：读目录时删到不足 3 个字符，`flatMapLatest` 换上空流、丢掉进行中的搜索，页面会一直停在读取中——改为短文本根本不进入搜索流，让上一次查询照常完成（也正是 Xcode 的做法）；点空白处原先把焦点交给窗口，这一栏不会成为焦点栏——改为交给页面自己；没有结果时方向键原先被吞——只在有结果时接管；页面释放时取消还在读的目录；一条否定断言可能被跳过——改为比较搜索前后的已索引镜像集合；补了「搜索中删字」与「切换 Engine 结束搜索」两条测试。另一条「匹配区分大小写」查明不成立：FuzzySearch 把模式与名字都转成小写，本来就不分大小写，与 Xcode 一致。 |
+| 2026-11-21 | 第一次搜索的代价不封顶，记为已知 | 第一次满 3 个字符时会读这个 Engine 所有已索引镜像的对象列表（同时 8 个），这次搜索结束才释放。后台索引默认关闭，一般会话里已索引的只有用户打开过的镜像；开了 Always Index 或索引了大半个 shared cache 时第一次会慢、占用变大。根治要 Engine 端按名字找对象的命令，列入后续项。 |
+| 2026-11-21 | 放大镜用 SF Symbols | Xcode 用自带的 23 × 23 模板图（`IDESearchWindowMagnifyingGlass`），不随 App 分发；这里用系统的 `magnifyingglass`，21pt 大约等大，放在同样的 32 × 32 框里。 |

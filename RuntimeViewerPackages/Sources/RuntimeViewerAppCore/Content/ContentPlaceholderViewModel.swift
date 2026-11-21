@@ -48,8 +48,38 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
         }
     }
 
+    /// What shows under the Open Quickly field.
+    public enum Search: Equatable {
+        /// Nothing searched: the recent objects show.
+        case inactive
+        /// The engine's images and indexed objects are being read for the first search.
+        case loading
+        /// What matched, best first, and the row Return opens: the first, until the arrow keys move
+        /// it; `nil` when nothing matched.
+        case results([ContentStartPageItemCellViewModel], selectedIndex: Int?)
+    }
+
     /// How many recent objects show until Show All: Xcode's initial editor's `defaultRowCount`.
-    public static let defaultRecentRowCount = 8
+    public nonisolated static let defaultRecentRowCount = 8
+
+    /// How many characters the Open Quickly field needs before it searches: Xcode's initial editor
+    /// writes a query through only from three on (`queryView(_:controlTextDidChange:)`), and leaves
+    /// the previous one standing below that.
+    public nonisolated static let minimumSearchTextLength = 3
+
+    /// How many matches the field lists.
+    public nonisolated static let maximumSearchResultCount = 100
+
+    @RxObserved public private(set) var search: Search = .inactive
+
+    /// What the engine's images and indexed objects were read into for the search under way; gone
+    /// once the search ends, so nothing of it stays in memory between searches.
+    private var catalogTask: Task<OpenQuicklyCatalog, Never>?
+
+    /// Ends the search under way: the field's text goes, and so does the catalog.
+    private let searchResetRelay = PublishRelay<Void>()
+
+    private let clearSearchFieldRelay = PublishRelay<Void>()
 
     /// The recent objects the start page shows, most recent first: the first
     /// `defaultRecentRowCount` until Show All.
@@ -106,10 +136,12 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
             .disposed(by: rx.disposeBag)
     }
 
-    /// Starts the page over as a new one: Show All off, and — the view does it — nothing selected.
+    /// Starts the page over as a new one: Show All off, no search, and — the view does it — nothing
+    /// selected.
     private func startOver() {
         isShowingAllRecentItems = false
         updateShownRecentItems()
+        endSearch()
         startedOverRelay.accept(())
     }
 
@@ -152,6 +184,123 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
             showAllButton = button
         }
     }
+
+    // MARK: - Search
+
+    /// What one search step comes to, before any row is made: rows are made on the main thread.
+    private enum SearchStep {
+        case inactive
+        case loading
+        case matched([OpenQuicklyCatalog.Entry])
+    }
+
+    /// Searches as the field's text changes: from `minimumSearchTextLength` characters on, against
+    /// the catalog the first such text reads; an empty field — or the end of the search — clears
+    /// it, and a newer text cancels the search of the one before. Shorter text never reaches the
+    /// search, so the previous query goes on and its result stands, as in Xcode, whose field does
+    /// not write shorter text through: dropping a search still reading the catalog would leave the
+    /// page loading for good.
+    private func followSearchText(_ searchText: Signal<String>) {
+        let minimumSearchTextLength = Self.minimumSearchTextLength
+        Observable.merge(
+            searchText.asObservable(),
+            searchResetRelay.asObservable().map { "" }
+        )
+        .filter { text in text.isEmpty || text.count >= minimumSearchTextLength }
+        .flatMapLatest { [weak self] text -> Observable<SearchStep> in
+            guard let self else { return .empty() }
+            if text.isEmpty {
+                dropCatalog()
+                return .just(.inactive)
+            }
+            let catalogTask = catalog()
+            return Observable<SearchStep>.async {
+                let catalog = await catalogTask.value
+                return .matched(await Self.matches(in: catalog, for: text))
+            }
+            .withLoadingPlaceholder(
+                .loading,
+                appearsAfter: LoadingPlaceholderTiming.appearsAfter,
+                staysAtLeast: LoadingPlaceholderTiming.staysAtLeast
+            )
+        }
+        .observeOnMainScheduler()
+        .subscribeOnNext { [weak self] step in
+            guard let self else { return }
+            apply(step)
+        }
+        .disposed(by: rx.disposeBag)
+    }
+
+    private func apply(_ step: SearchStep) {
+        switch step {
+        case .inactive:
+            search = .inactive
+        case .loading:
+            search = .loading
+        case .matched(let entries):
+            let engine = documentState.runtimeEngine
+            let engineName = engine.source.description
+            let rows = entries.map { entry in
+                ContentStartPageItemCellViewModel(item: entry.item, engineName: engineName, engineID: engine.engineID)
+            }
+            search = .results(rows, selectedIndex: rows.isEmpty ? nil : 0)
+        }
+    }
+
+    /// The catalog of the search under way, read on first use: the leaves of the engine's image
+    /// tree, which only the main actor reads, and the objects of its indexed images.
+    private func catalog() -> Task<OpenQuicklyCatalog, Never> {
+        if let catalogTask { return catalogTask }
+        let engine = documentState.runtimeEngine
+        let imagePaths = engine.imageNodes.flatMap(\.leafImagePaths)
+        let catalogTask = Task.detached {
+            await OpenQuicklyCatalog.load(imagePaths: imagePaths, from: engine)
+        }
+        self.catalogTask = catalogTask
+        return catalogTask
+    }
+
+    private func dropCatalog() {
+        catalogTask?.cancel()
+        catalogTask = nil
+    }
+
+    /// A page that goes away mid-search stops reading the engine's objects for it.
+    deinit {
+        catalogTask?.cancel()
+    }
+
+    /// Matching runs off the main thread: a catalog of every indexed image can hold hundreds of
+    /// thousands of names.
+    private nonisolated static func matches(in catalog: OpenQuicklyCatalog, for text: String) async -> [OpenQuicklyCatalog.Entry] {
+        guard !Task.isCancelled else { return [] }
+        return catalog.matches(for: text, limit: maximumSearchResultCount)
+    }
+
+    /// Moves the row Return opens by `offset`, staying within the results.
+    private func moveSearchSelection(by offset: Int) {
+        guard case .results(let rows, let selectedIndex?) = search else { return }
+        let movedIndex = min(max(selectedIndex + offset, 0), rows.count - 1)
+        guard movedIndex != selectedIndex else { return }
+        search = .results(rows, selectedIndex: movedIndex)
+    }
+
+    /// Opens the selected result, if there is one, and ends the search.
+    private func commitSearch(in destination: SelectionRoute.Destination) {
+        guard case .results(let rows, let selectedIndex?) = search else { return }
+        let item = rows[selectedIndex].item
+        endSearch()
+        open(item, in: destination)
+    }
+
+    /// Ends the search: no results, no catalog, and the field emptied.
+    private func endSearch() {
+        searchResetRelay.accept(())
+        clearSearchFieldRelay.accept(())
+    }
+
+    // MARK: - Opening
 
     /// Opens `item` from this page: the page's pane takes the focus first, so the focused tab, a
     /// new tab and the next pane are all reckoned from here, whichever pane had it before.
@@ -196,6 +345,21 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
         /// A recent object opened, and where.
         @Init(default: Signal<ItemOpening>.empty())
         public let recentItemOpened: Signal<ItemOpening>
+        /// The Open Quickly field's text, at every change.
+        @Init(default: Signal<String>.empty())
+        public let searchText: Signal<String>
+        /// The up (−1) and down (+1) arrow keys in the field: the row Return opens moves.
+        @Init(default: Signal<Int>.empty())
+        public let searchSelectionMoved: Signal<Int>
+        /// Return in the field, with where the modifier keys send the selected result.
+        @Init(default: Signal<SelectionRoute.Destination>.empty())
+        public let searchCommitted: Signal<SelectionRoute.Destination>
+        /// A click on a result.
+        @Init(default: Signal<ItemOpening>.empty())
+        public let searchResultOpened: Signal<ItemOpening>
+        /// Escape in the field.
+        @Init(default: Signal<Void>.empty())
+        public let searchCancelled: Signal<Void>
     }
 
     public struct Output {
@@ -204,6 +368,9 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
         public let showAllButton: Driver<ShowAllButton>
         /// The page started over: the view selects nothing.
         public let startedOver: Signal<Void>
+        public let search: Driver<Search>
+        /// The field's text has to go: the search ended.
+        public let clearSearchField: Signal<Void>
     }
 
     public func transform(_ input: Input) -> Output {
@@ -212,6 +379,46 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
             startOver()
         }
         .disposed(by: rx.disposeBag)
+
+        followSearchText(input.searchText)
+
+        input.searchSelectionMoved.emitOnNext { [weak self] offset in
+            guard let self else { return }
+            moveSearchSelection(by: offset)
+        }
+        .disposed(by: rx.disposeBag)
+
+        input.searchCommitted.emitOnNext { [weak self] destination in
+            guard let self else { return }
+            commitSearch(in: destination)
+        }
+        .disposed(by: rx.disposeBag)
+
+        input.searchResultOpened.emitOnNext { [weak self] opening in
+            guard let self else { return }
+            endSearch()
+            open(opening.item.item, in: opening.destination)
+        }
+        .disposed(by: rx.disposeBag)
+
+        input.searchCancelled.emitOnNext { [weak self] in
+            guard let self else { return }
+            endSearch()
+        }
+        .disposed(by: rx.disposeBag)
+
+        // A window moved to another engine searches that engine's images: the search under way
+        // ends.
+        documentState.$runtimeEngineSession.asObservable()
+            .map(\.engine)
+            .distinctUntilChanged { $0 === $1 }
+            .skip(1)
+            .observeOnMainScheduler()
+            .subscribeOnNext { [weak self] _ in
+                guard let self else { return }
+                endSearch()
+            }
+            .disposed(by: rx.disposeBag)
 
         input.showAllClicked.emitOnNext { [weak self] in
             guard let self else { return }
@@ -230,7 +437,9 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
             placeholder: $placeholder.asDriver(),
             recentItems: $recentItems.asDriver(),
             showAllButton: $showAllButton.asDriver(),
-            startedOver: startedOverRelay.asSignal()
+            startedOver: startedOverRelay.asSignal(),
+            search: $search.asDriver(),
+            clearSearchField: clearSearchFieldRelay.asSignal()
         )
     }
 

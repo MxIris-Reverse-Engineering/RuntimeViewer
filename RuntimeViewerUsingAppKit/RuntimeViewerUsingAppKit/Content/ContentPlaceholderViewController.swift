@@ -12,9 +12,21 @@ final class ContentPlaceholderViewController: BaseViewController<ContentPlacehol
 
     private let recentItemOpenedRelay = PublishRelay<ContentPlaceholderViewModel.ItemOpening>()
 
+    /// The Open Quickly field's text and commands, which reach the controller as the text field's
+    /// delegate: no control accessor reports an arrow key or Escape in a field.
+    private let searchTextRelay = PublishRelay<String>()
+
+    private let searchSelectionMovedRelay = PublishRelay<Int>()
+
+    private let searchCommittedRelay = PublishRelay<SelectionRoute.Destination>()
+
+    private let searchCancelledRelay = PublishRelay<Void>()
+
+    private let searchResultOpenedRelay = PublishRelay<ContentPlaceholderViewModel.ItemOpening>()
+
     // MARK: - Start Page
 
-    private let startPageView = NSView()
+    private let startPageView = StartPageView()
 
     private let searchField = OpenQuicklyField().then {
         $0.placeholderString = "Open Quickly"
@@ -32,6 +44,20 @@ final class ContentPlaceholderViewController: BaseViewController<ContentPlacehol
     }
 
     private let (recentItemsScrollView, recentItemsTableView): (ScrollView, RecentItemsTableView) = RecentItemsTableView.scrollableTableView()
+
+    // MARK: - Search Results
+
+    /// The results of the Open Quickly field, floating over the recent objects just under the
+    /// field, on glass as Xcode's are.
+    private let searchResultsPlatterView = FloatingPlatterView(cornerRadius: OpenQuicklyFieldMetrics.cornerRadius)
+
+    private let (searchResultsScrollView, searchResultsTableView): (ScrollView, SearchResultsTableView) = SearchResultsTableView.scrollableTableView()
+
+    private var searchResultsHeightConstraint: Constraint?
+
+    /// What the search shows now; the results show only while the field is typed in in the key
+    /// window, as Xcode's do.
+    private var search: ContentPlaceholderViewModel.Search = .inactive
 
     /// The recent objects the list shows, as last applied: what each row stands for, which the
     /// table itself forgets — it keeps a selection by row, and a list reordered by another window
@@ -73,7 +99,9 @@ final class ContentPlaceholderViewController: BaseViewController<ContentPlacehol
             recentItemsTitleLabel
             showAllButton
             recentItemsScrollView
+            searchResultsPlatterView
         }
+        searchResultsPlatterView.contentView = searchResultsScrollView
 
         startPageView.snp.makeConstraints { make in
             make.edges.equalToSuperview()
@@ -130,6 +158,40 @@ final class ContentPlaceholderViewController: BaseViewController<ContentPlacehol
             guard let self else { return }
             openRecentItem(atRow: row, modifierFlags: modifierFlags)
         }
+
+        searchResultsPlatterView.snp.makeConstraints { make in
+            make.top.equalTo(searchField.snp.bottom).offset(Metrics.searchResultsTopSpacing)
+            make.leading.trailing.equalTo(searchField)
+            searchResultsHeightConstraint = make.height.equalTo(0).constraint
+        }
+        searchResultsPlatterView.isHidden = true
+
+        searchResultsScrollView.do {
+            $0.drawsBackground = false
+            $0.hasVerticalScroller = true
+            $0.autohidesScrollers = true
+            $0.automaticallyAdjustsContentInsets = false
+            $0.contentInsets = NSEdgeInsets(top: Metrics.searchResultsVerticalPadding, left: 0, bottom: Metrics.searchResultsVerticalPadding, right: 0)
+        }
+
+        searchResultsTableView.do {
+            $0.headerView = nil
+            $0.backgroundColor = .clear
+            $0.style = .plain
+            $0.rowHeight = Metrics.searchResultRowHeight
+            $0.intercellSpacing = .zero
+            $0.gridStyleMask = []
+            $0.allowsEmptySelection = true
+            $0.allowsMultipleSelection = false
+            // The field keeps the focus while the arrow keys move through the results.
+            $0.refusesFirstResponder = true
+        }
+
+        searchField.textField.delegate = self
+        searchField.isLitDidChange = { [weak self] _ in
+            guard let self else { return }
+            updateSearchResultsVisibility()
+        }
     }
 
     // MARK: - Bindings
@@ -145,10 +207,25 @@ final class ContentPlaceholderViewController: BaseViewController<ContentPlacehol
             }
             .disposed(by: rx.disposeBag)
 
+        searchResultsTableView.rx.itemClicked()
+            .asSignal()
+            .emitOnNext { [weak self] index in
+                guard let self else { return }
+                openSearchResult(atRow: index.row, modifierFlags: NSApp.currentEvent?.modifierFlags ?? [])
+            }
+            .disposed(by: rx.disposeBag)
+
+        searchResultsTableView.rx.setDelegate(self).disposed(by: rx.disposeBag)
+
         let input = ContentPlaceholderViewModel.Input(
             pageWillAppear: rx.viewWillAppear.asSignal(),
             showAllClicked: showAllButton.rx.click.asSignal(),
-            recentItemOpened: recentItemOpenedRelay.asSignal()
+            recentItemOpened: recentItemOpenedRelay.asSignal(),
+            searchText: searchTextRelay.asSignal(),
+            searchSelectionMoved: searchSelectionMovedRelay.asSignal(),
+            searchCommitted: searchCommittedRelay.asSignal(),
+            searchResultOpened: searchResultOpenedRelay.asSignal(),
+            searchCancelled: searchCancelledRelay.asSignal()
         )
         let output = viewModel.transform(input)
 
@@ -214,6 +291,44 @@ final class ContentPlaceholderViewController: BaseViewController<ContentPlacehol
         }
         .disposed(by: rx.disposeBag)
 
+        output.search
+            .map { search -> [ContentStartPageItemCellViewModel] in
+                guard case .results(let rows, _) = search else { return [] }
+                return rows
+            }
+            .distinctUntilChanged()
+            .drive(searchResultsTableView.rx.items) { (tableView: NSTableView, _: NSTableColumn?, _: Int, cellViewModel: ContentStartPageItemCellViewModel) -> NSView? in
+                let cellView = tableView.box.makeView(ofClass: ItemCellView.self)
+                cellView.configure(with: cellViewModel)
+                cellView.showsSeparator = false
+                cellView.contentHorizontalInset = Metrics.searchResultHorizontalInset
+                return cellView
+            }
+            .disposed(by: rx.disposeBag)
+
+        // After the rows above: the selected index addresses the rows just applied.
+        output.search.driveOnNext { [weak self] search in
+            guard let self else { return }
+            self.search = search
+            searchField.isSearching = search == .loading
+            if case .results(let rows, let selectedIndex) = search {
+                if let selectedIndex, rows.indices.contains(selectedIndex) {
+                    searchResultsTableView.selectRowIndexes(IndexSet(integer: selectedIndex), byExtendingSelection: false)
+                    searchResultsTableView.scrollRowToVisible(selectedIndex)
+                } else {
+                    searchResultsTableView.deselectAll(nil)
+                }
+            }
+            updateSearchResultsVisibility()
+        }
+        .disposed(by: rx.disposeBag)
+
+        output.clearSearchField.emitOnNext { [weak self] in
+            guard let self else { return }
+            searchField.textField.stringValue = ""
+        }
+        .disposed(by: rx.disposeBag)
+
         output.showAllButton.driveOnNext { [weak self] button in
             guard let self else { return }
             showAllButton.isHidden = button.title == nil
@@ -237,6 +352,38 @@ final class ContentPlaceholderViewController: BaseViewController<ContentPlacehol
               let item: ContentStartPageItemCellViewModel = try? recentItemsTableView.rx.model(at: row)
         else { return }
         recentItemOpenedRelay.accept(.init(item: item, destination: SelectionRoute.Destination(listClickModifierFlags: modifierFlags)))
+    }
+
+    /// Opens the search result in `row` where the modifier keys say, as a list click does.
+    private func openSearchResult(atRow row: Int, modifierFlags: NSEvent.ModifierFlags) {
+        guard (0 ..< searchResultsTableView.numberOfRows).contains(row),
+              let item: ContentStartPageItemCellViewModel = try? searchResultsTableView.rx.model(at: row)
+        else { return }
+        searchResultOpenedRelay.accept(.init(item: item, destination: SelectionRoute.Destination(listClickModifierFlags: modifierFlags)))
+    }
+
+    /// Shows the results under the field while there are any and the field is typed in in the key
+    /// window, at the height of their rows: seven and a half at most, then the list scrolls.
+    private func updateSearchResultsVisibility() {
+        guard case .results(let rows, _) = search, !rows.isEmpty, searchField.isLit else {
+            searchResultsPlatterView.isHidden = true
+            searchResultsHeightConstraint?.update(offset: 0)
+            return
+        }
+        let rowsHeight = min(CGFloat(rows.count) * Metrics.searchResultRowHeight, Metrics.maximumSearchResultsRowsHeight)
+        let height = rowsHeight + 2 * Metrics.searchResultsVerticalPadding
+        let wasHidden = searchResultsPlatterView.isHidden
+        searchResultsPlatterView.isHidden = false
+        guard let heightConstraint = searchResultsHeightConstraint?.layoutConstraints.first else { return }
+        if wasHidden {
+            heightConstraint.constant = height
+        } else if heightConstraint.constant != height {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = Metrics.searchResultsResizeDuration
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                heightConstraint.animator().constant = height
+            }
+        }
     }
 
     /// Takes the keyboard focus away from `containerView` when a view inside it — the field's field
@@ -267,7 +414,6 @@ extension ContentPlaceholderViewController {
         static let showAllFontSize: CGFloat = 11
         /// SwiftUI's `List` row around a 32-point icon beside two lines of text, as Xcode draws it.
         static let rowHeight: CGFloat = 38
-        static let rowVerticalInset: CGFloat = 3
         static let rowTrailingInset: CGFloat = 4
         static let iconToTextSpacing: CGFloat = 4
         static let titleFontSize: CGFloat = 13
@@ -275,6 +421,13 @@ extension ContentPlaceholderViewController {
         static let pathIconSide: CGFloat = 12
         static let pathIconFrameHeight: CGFloat = 14
         static let pathIconToTextSpacing: CGFloat = 2
+        static let searchResultsTopSpacing: CGFloat = 5
+        static let searchResultRowHeight: CGFloat = 56
+        /// Seven and a half rows.
+        static let maximumSearchResultsRowsHeight: CGFloat = 420
+        static let searchResultsVerticalPadding: CGFloat = 10
+        static let searchResultHorizontalInset: CGFloat = 12
+        static let searchResultsResizeDuration: TimeInterval = 0.25
     }
 }
 
@@ -333,13 +486,16 @@ extension ContentPlaceholderViewController {
 
 extension ContentPlaceholderViewController {
     /// The large rounded query field at the top of the start page: Xcode 27.2's initial editor shows
-    /// Open Quickly's query field there (`IDESearchWindowQueryView` in IDEKit's `IDEInitialEditor`),
-    /// a magnifying glass followed by the text, in a capsule whose ring lights up with the accent
-    /// colour while the field is being typed in, in a key window.
+    /// Open Quickly's query field there (`OpenQuicklyQueryUI` and `IDESearchWindowQueryView` in
+    /// IDEKit; the proposal lists the numbers). A 47-point capsule with continuous corners, a
+    /// magnifying glass in a 32-point box 16 points in, the text from 62 points in, 20-point medium.
+    /// While the field is typed in in the key window the capsule's fill goes and a 3-point ring in the
+    /// accent colour takes its place, half of it outside the capsule; otherwise the faint fill shows
+    /// and no ring.
     ///
     /// The view only draws the field. The controller reads and clears `textField`, and takes its
     /// commands — the arrow keys, Return, Escape — as the text field's delegate.
-    private final class OpenQuicklyField: LayerBackedView {
+    private final class OpenQuicklyField: NSView {
         /// The text typed into the field.
         var textField: NSTextField { focusReportingTextField }
 
@@ -348,35 +504,75 @@ extension ContentPlaceholderViewController {
             didSet { updatePlaceholder() }
         }
 
-        private let focusReportingTextField = FocusReportingTextField()
+        /// Whether the catalog of the first search is being read: a small spinner at the trailing
+        /// end says so.
+        var isSearching = false {
+            didSet {
+                guard isSearching != oldValue else { return }
+                if isSearching {
+                    searchingIndicator.startAnimation(nil)
+                } else {
+                    searchingIndicator.stopAnimation(nil)
+                }
+            }
+        }
+
+        /// Whether the field is typed in in the key window: the ring shows, and so may the results.
+        private(set) var isLit = false {
+            didSet {
+                guard isLit != oldValue else { return }
+                updateAppearance()
+                isLitDidChange?(isLit)
+            }
+        }
+
+        var isLitDidChange: ((Bool) -> Void)?
+
+        private let capsuleView = CapsuleView()
+
+        private let ringView = CapsuleView()
 
         private let magnifyingGlassView = ImageView()
 
+        private let focusReportingTextField = FocusReportingTextField()
+
+        private let searchingIndicator = NSProgressIndicator().then {
+            $0.style = .spinning
+            $0.controlSize = .small
+            $0.isDisplayedWhenStopped = false
+        }
+
         /// Whether the field is being typed in.
         private var isEditing = false {
-            didSet {
-                guard isEditing != oldValue else { return }
-                updateRing()
-            }
+            didSet { updateIsLit() }
         }
 
         /// Follows whether the field's window is key; replaced when the field moves to another
         /// window, and gone with the field.
         private var windowKeyObservation: WindowKeyObservation?
 
-        override func setup() {
-            super.setup()
+        override init(frame frameRect: NSRect) {
+            super.init(frame: frameRect)
 
-            cornerRadius = OpenQuicklyFieldMetrics.height / 2
-            borderWidth = OpenQuicklyFieldMetrics.ringWidth
-            borderPositions = .all
-            backgroundColor = .clear
-            updateRing()
+            capsuleView.do {
+                $0.cornerRadius = OpenQuicklyFieldMetrics.cornerRadius
+                $0.backgroundColor = OpenQuicklyFieldMetrics.fillColor
+            }
+
+            ringView.do {
+                $0.cornerRadius = OpenQuicklyFieldMetrics.cornerRadius + OpenQuicklyFieldMetrics.ringWidth / 2
+                $0.borderWidth = OpenQuicklyFieldMetrics.ringWidth
+                $0.borderPositions = .all
+                $0.borderColor = NSColor.controlAccentColor.withAlphaComponent(OpenQuicklyFieldMetrics.ringOpacity)
+                $0.isHidden = true
+            }
 
             magnifyingGlassView.do {
                 $0.image = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: nil)
                 $0.symbolConfiguration = .init(pointSize: OpenQuicklyFieldMetrics.magnifyingGlassPointSize, weight: .regular)
                 $0.contentTintColor = .secondaryLabelColor
+                $0.imageAlignment = .alignCenter
+                $0.imageScaling = .scaleNone
                 $0.setAccessibilityElement(false)
             }
 
@@ -386,17 +582,35 @@ extension ContentPlaceholderViewController {
             }
 
             hierarchy {
+                capsuleView
+                ringView
                 magnifyingGlassView
                 focusReportingTextField
+                searchingIndicator
+            }
+
+            capsuleView.snp.makeConstraints { make in
+                make.edges.equalToSuperview()
+            }
+
+            // Centred on the capsule's edge, as Xcode strokes it: half the ring lies outside.
+            ringView.snp.makeConstraints { make in
+                make.edges.equalToSuperview().inset(-OpenQuicklyFieldMetrics.ringWidth / 2)
             }
 
             magnifyingGlassView.snp.makeConstraints { make in
-                make.leading.equalToSuperview().inset(OpenQuicklyFieldMetrics.magnifyingGlassLeadingInset)
+                make.leading.equalToSuperview().inset(OpenQuicklyFieldMetrics.magnifyingGlassBoxLeadingInset)
                 make.centerY.equalToSuperview()
+                make.size.equalTo(OpenQuicklyFieldMetrics.magnifyingGlassBoxSide)
             }
 
             focusReportingTextField.snp.makeConstraints { make in
-                make.leading.equalTo(magnifyingGlassView.snp.trailing).offset(OpenQuicklyFieldMetrics.textLeadingSpacing)
+                make.leading.equalToSuperview().inset(OpenQuicklyFieldMetrics.textLeadingInset)
+                make.trailing.equalTo(searchingIndicator.snp.leading).offset(-OpenQuicklyFieldMetrics.searchingIndicatorSpacing)
+                make.centerY.equalToSuperview()
+            }
+
+            searchingIndicator.snp.makeConstraints { make in
                 make.trailing.equalToSuperview().inset(OpenQuicklyFieldMetrics.textTrailingInset)
                 make.centerY.equalToSuperview()
             }
@@ -406,7 +620,11 @@ extension ContentPlaceholderViewController {
             }
 
             updatePlaceholder()
+            updateAppearance()
         }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
         /// A click anywhere on the capsule types into the field; a click while it is being typed in
         /// leaves the text and the insertion point alone.
@@ -420,27 +638,42 @@ extension ContentPlaceholderViewController {
             windowKeyObservation = window.map { window in
                 WindowKeyObservation(window: window) { [weak self] in
                     guard let self else { return }
-                    updateRing()
+                    updateIsLit()
                 }
             }
-            updateRing()
+            updateIsLit()
         }
 
-        /// The ring is the accent colour while the field is typed in in the key window, and a faint
-        /// line otherwise.
-        private func updateRing() {
-            let isRingLit = isEditing && window?.isKeyWindow == true
-            borderColor = isRingLit ? NSColor.controlAccentColor.withAlphaComponent(OpenQuicklyFieldMetrics.litRingOpacity) : .quaternaryLabelColor
+        private func updateIsLit() {
+            isLit = isEditing && window?.isKeyWindow == true
+        }
+
+        private func updateAppearance() {
+            capsuleView.backgroundColor = isLit ? .clear : OpenQuicklyFieldMetrics.fillColor
+            ringView.isHidden = !isLit
         }
 
         private func updatePlaceholder() {
             focusReportingTextField.placeholderAttributedString = NSAttributedString(
                 string: placeholderString,
                 attributes: [
-                    .font: NSFont.systemFont(ofSize: OpenQuicklyFieldMetrics.fontSize, weight: .regular),
+                    .font: OpenQuicklyFieldMetrics.font,
                     .foregroundColor: NSColor.placeholderTextColor,
                 ]
             )
+        }
+    }
+
+    /// A rounded layer with continuous corners: the field's capsule and its ring.
+    private final class CapsuleView: LayerBackedView {
+        override func setup() {
+            super.setup()
+            layer?.cornerCurve = .continuous
+        }
+
+        /// Takes no clicks: they go to the field.
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            nil
         }
     }
 
@@ -469,14 +702,23 @@ extension ContentPlaceholderViewController {
 
     /// The query field's measurements, after Xcode 27.2's initial editor.
     fileprivate enum OpenQuicklyFieldMetrics {
-        static let height: CGFloat = 46
+        static let height: CGFloat = 47
+        static let cornerRadius: CGFloat = 24
         static let ringWidth: CGFloat = 3
-        static let litRingOpacity: CGFloat = 0.45
-        static let fontSize: CGFloat = 20
-        static let magnifyingGlassPointSize: CGFloat = 19
-        static let magnifyingGlassLeadingInset: CGFloat = 20
-        static let textLeadingSpacing: CGFloat = 20
+        static let ringOpacity: CGFloat = 0.6
+        /// `WelcomeListCellBackground` in IDEKit's asset catalog.
+        static let fillColor = NSColor(
+            light: NSColor(srgbRed: 0.373, green: 0.373, blue: 0.373, alpha: 0.12),
+            dark: NSColor(srgbRed: 1, green: 1, blue: 1, alpha: 0.04)
+        )
+        static let font = NSFont.systemFont(ofSize: 20, weight: .medium)
+        static let magnifyingGlassBoxLeadingInset: CGFloat = 16
+        static let magnifyingGlassBoxSide: CGFloat = 32
+        /// Draws SF Symbols' magnifying glass about as large as Xcode's 23-point glyph.
+        static let magnifyingGlassPointSize: CGFloat = 21
+        static let textLeadingInset: CGFloat = 62
         static let textTrailingInset: CGFloat = 20
+        static let searchingIndicatorSpacing: CGFloat = 8
     }
 
     /// A borderless text field that says when typing in it starts and ends: the field editor takes
@@ -497,7 +739,7 @@ extension ContentPlaceholderViewController {
             lineBreakMode = .byTruncatingTail
             cell?.isScrollable = true
             cell?.wraps = false
-            font = .systemFont(ofSize: OpenQuicklyFieldMetrics.fontSize, weight: .regular)
+            font = OpenQuicklyFieldMetrics.font
             textColor = .labelColor
             setContentHuggingPriority(.defaultLow, for: .horizontal)
             setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -515,6 +757,88 @@ extension ContentPlaceholderViewController {
             super.textDidEndEditing(notification)
             focusDidChange?(false)
         }
+    }
+}
+
+// MARK: - Start Page View
+
+extension ContentPlaceholderViewController {
+    /// The start page's own view: a click on it, outside the field and the list, takes the focus
+    /// from the field, as a click inside Xcode's initial editor does — onto the page itself, so the
+    /// focus stays in this pane and the pane becomes the focused one.
+    private final class StartPageView: NSView {
+        override var acceptsFirstResponder: Bool { true }
+
+        override func mouseDown(with event: NSEvent) {
+            window?.makeFirstResponder(self)
+        }
+    }
+}
+
+// MARK: - Search Results Table
+
+extension ContentPlaceholderViewController {
+    /// The Open Quickly field's results. It never takes the focus — the field keeps it while the
+    /// arrow keys move the selection — so its rows draw their selection as a focused list's would.
+    fileprivate final class SearchResultsTableView: SingleColumnTableView {}
+
+    /// A results row that draws its selection in the accent colour although its list never has
+    /// the focus.
+    private final class EmphasizedTableRowView: NSTableRowView {
+        override var isEmphasized: Bool {
+            get { true }
+            set {}
+        }
+    }
+}
+
+extension ContentPlaceholderViewController: NSTableViewDelegate {
+    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+        guard tableView === searchResultsTableView else { return nil }
+        return EmphasizedTableRowView()
+    }
+}
+
+// MARK: - Open Quickly Field Delegate
+
+extension ContentPlaceholderViewController: NSTextFieldDelegate {
+    func controlTextDidChange(_ notification: Notification) {
+        searchTextRelay.accept(searchField.textField.stringValue)
+    }
+
+    /// The keys Xcode's field takes: the arrows move through the results while there are any (and
+    /// move the insertion point otherwise), Return opens the selected one (⌥↩ too, which goes to
+    /// the next pane here as ⌥ always does), Escape clears the field.
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        let hasResults: Bool
+        if case .results(let rows, _) = search {
+            hasResults = !rows.isEmpty
+        } else {
+            hasResults = false
+        }
+        switch commandSelector {
+        case #selector(NSResponder.moveUp(_:)) where hasResults:
+            searchSelectionMovedRelay.accept(-1)
+        case #selector(NSResponder.moveDown(_:)) where hasResults:
+            searchSelectionMovedRelay.accept(1)
+        case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)):
+            searchCommittedRelay.accept(SelectionRoute.Destination(listClickModifierFlags: NSApp.currentEvent?.modifierFlags ?? []))
+        case #selector(NSResponder.cancelOperation(_:)):
+            searchCancelledRelay.accept(())
+        default:
+            return false
+        }
+        return true
+    }
+}
+
+// MARK: - Editor Pane Content
+
+extension ContentPlaceholderViewController: EditorPaneContent {
+    /// The Open Quickly field, as Xcode's initial editor takes the focus into its field; nothing
+    /// while a file is being read.
+    var focusableView: NSView? {
+        startPageView.isHidden ? nil : searchField.textField
     }
 }
 
@@ -546,6 +870,25 @@ extension ContentPlaceholderViewController {
 
         private let separatorView = HorizontalSeparatorView()
 
+        /// Whether a hairline runs under the row's text: the recent objects have one, the search
+        /// results none.
+        var showsSeparator = true {
+            didSet { separatorView.isHidden = !showsSeparator }
+        }
+
+        /// How far the icon and the hairline keep from the row's ends.
+        var contentHorizontalInset: CGFloat = 0 {
+            didSet {
+                guard contentHorizontalInset != oldValue else { return }
+                iconLeadingConstraint?.update(inset: contentHorizontalInset)
+                separatorTrailingConstraint?.update(inset: contentHorizontalInset)
+            }
+        }
+
+        private var iconLeadingConstraint: Constraint?
+
+        private var separatorTrailingConstraint: Constraint?
+
         override func setup() {
             super.setup()
 
@@ -565,9 +908,13 @@ extension ContentPlaceholderViewController {
                 separatorView
             }
 
+            // The icon's top lines up with the text's, as in Xcode's row, and the two together sit
+            // in the middle of the row, whatever its height.
             iconView.snp.makeConstraints { make in
-                make.leading.equalToSuperview()
-                make.top.equalToSuperview().inset(Metrics.rowVerticalInset)
+                iconLeadingConstraint = make.leading.equalToSuperview().inset(contentHorizontalInset).constraint
+                make.top.equalTo(textStackView)
+                make.centerY.equalToSuperview().priority(.low)
+                make.top.greaterThanOrEqualToSuperview()
                 make.size.equalTo(ContentStartPageItemCellViewModel.iconSize)
             }
 
@@ -579,12 +926,11 @@ extension ContentPlaceholderViewController {
             textStackView.snp.makeConstraints { make in
                 make.leading.equalTo(iconView.snp.trailing).offset(Metrics.iconToTextSpacing)
                 make.trailing.lessThanOrEqualToSuperview().inset(Metrics.rowTrailingInset)
-                make.top.equalToSuperview().inset(Metrics.rowVerticalInset)
             }
 
             separatorView.snp.makeConstraints { make in
                 make.leading.equalTo(textStackView)
-                make.trailing.equalToSuperview()
+                separatorTrailingConstraint = make.trailing.equalToSuperview().inset(contentHorizontalInset).constraint
                 make.bottom.equalToSuperview()
             }
         }
