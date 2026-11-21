@@ -93,7 +93,7 @@ let uikitPlatforms: [Platform] = [.iOS, .tvOS, .visionOS]
 
 var sharedSwiftSettings: [SwiftSetting] = []
 
-let uiFoundationTraits: Set<PackageDescription.Package.Dependency.Trait> = ["AppleInternal", "IDEIcons", "QuickActionBar", "NSAttributedStringBuilder", "Settings", "TabBar", "SystemHUD", "AppKitPlus"]
+let uiFoundationTraits: Set<PackageDescription.Package.Dependency.Trait> = ["AppleInternal", "IDEIcons", "QuickActionBar", "NSAttributedStringBuilder", "Settings", "TabBar", "SystemHUD", "AppKitPlus", "WelcomePanel"]
 
 let package = Package(
     name: "RuntimeViewerPackages",
@@ -176,7 +176,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/UIFoundation",
-                from: "0.49.0",
+                from: "0.50.0",
                 traits: uiFoundationTraits,
             ),
         ),

@@ -233,8 +233,10 @@ and through `queued-build`. What `check` compares, the Tuist workarounds behind 
 manifests, and the known differences from the native build: `Documentations/Guides/TuistDevelopment.md`.
 Background: `Documentations/Evolutions/0053-tuist-coexistence.md`.
 
-**Dependency floors**: UIFoundation is declared `from: "0.49.0"` with its `Settings` trait on (which
-exposes `UIFoundationSettings` and `UIFoundationSettingsUI`). `0.49.0` is the first whose settings pages
+**Dependency floors**: UIFoundation is declared `from: "0.50.0"` with its `Settings` trait on (which
+exposes `UIFoundationSettings` and `UIFoundationSettingsUI`) and its `WelcomePanel` trait on (the welcome
+window's `WelcomePanelController`). `0.50.0` is the first whose welcome window takes the text of its empty
+list (`Configuration.projectListPlaceholderText`), which says No Recent Files here. `0.49.0` was the first whose settings pages
 and `SettingsViewController` build on iOS, for the iOS settings screen; `0.48.0` the first whose settings store
 builds off macOS and loads synchronously, as the iOS app's launch needs. `0.47.0` was the first release with
 `ScrollPocketView` and `NSView.box.titlebarBackdropGroupName` (`AppleInternal` trait), the stand-alone
