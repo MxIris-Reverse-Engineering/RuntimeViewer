@@ -62,6 +62,41 @@ struct SemanticRetypingTests {
         let typeNameToken = try #require(tokens.first { $0.columns.contains(typeNameColumn) })
         #expect(typeNameToken.type == .identifier(SourceModelIdentifierKind.class(.project)))
     }
+
+    /// A C++ class's pseudo-header goes to `setSource` as `"cpp"`. Until the bridge named a
+    /// language for that identifier, the data source had no language service, so no adjuster
+    /// was installed and nothing on the page was coloured — not even its keywords.
+    @Test
+    func aCPlusPlusInterfaceIsParsedAndRetyped() throws {
+        let source = """
+        class Derived : public Base {
+            virtual Base *make();
+        };
+        """
+        let harness = try SourceEditorTestHarness()
+        let text = source as NSString
+        let memberLineRange = text.lineRange(for: text.range(of: "virtual"))
+        let typeNameRange = text.range(of: "Base", range: memberLineRange)
+        let keywordRange = text.range(of: "virtual")
+
+        harness.setSource(
+            source,
+            languageIdentifier: "cpp",
+            semanticRanges: [typeNameRange],
+            semanticNodeTypeNames: [Self.typeReferenceNodeTypeName]
+        )
+        harness.layout()
+
+        let tokens = harness.syntaxTokens(onLine: 1)
+
+        let keywordColumn = keywordRange.location - memberLineRange.location
+        let keywordToken = try #require(tokens.first { $0.columns.contains(keywordColumn) })
+        #expect(keywordToken.type == .keyword(nil))
+
+        let typeNameColumn = typeNameRange.location - memberLineRange.location
+        let typeNameToken = try #require(tokens.first { $0.columns.contains(typeNameColumn) })
+        #expect(typeNameToken.type == .identifier(SourceModelIdentifierKind.class(.project)))
+    }
 }
 
 #endif

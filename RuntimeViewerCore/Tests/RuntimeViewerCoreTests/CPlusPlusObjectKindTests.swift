@@ -4,12 +4,16 @@ import RuntimeViewerCore
 
 @Suite("C++ object kinds")
 struct CPlusPlusObjectKindTests {
-    @Test("C++ kinds sort after every Swift kind, classes before namespaces")
-    func cPlusPlusKindsSortAfterSwiftKinds() {
-        let lastSwiftKind = RuntimeObjectKind.allCases.filter(\.isSwift).max()
-        #expect(lastSwiftKind.map { $0 < .cPlusPlus(.class) } == true)
+    @Test("C++ kinds sort after the C kinds and before the Objective-C ones, classes before namespaces")
+    func cPlusPlusKindsSortBetweenCAndObjectiveCKinds() throws {
+        let cKinds = RuntimeObjectKind.C.allCases.map(RuntimeObjectKind.c)
+        let objectiveCKinds = RuntimeObjectKind.ObjectiveC.allCases.map(RuntimeObjectKind.objc)
+        let lastCKind = try #require(cKinds.max())
+        let firstObjectiveCKind = try #require(objectiveCKinds.min())
+        #expect(lastCKind < .cPlusPlus(.class))
+        #expect(RuntimeObjectKind.cPlusPlus(.namespace) < firstObjectiveCKind)
         #expect(RuntimeObjectKind.cPlusPlus(.class) < .cPlusPlus(.namespace))
-        #expect(RuntimeObjectKind.allCases.suffix(2) == [.cPlusPlus(.class), .cPlusPlus(.namespace)])
+        #expect(Array(RuntimeObjectKind.allCases[cKinds.count ..< cKinds.count + 2]) == [.cPlusPlus(.class), .cPlusPlus(.namespace)])
     }
 
     @Test("a C++ kind comes back from JSON as itself")

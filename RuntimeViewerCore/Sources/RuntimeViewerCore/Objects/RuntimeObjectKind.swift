@@ -63,6 +63,10 @@ public enum RuntimeObjectKind: Codable, Hashable, Identifiable, Comparable, Case
 
     public var id: Self { self }
 
+    /// The order of the sidebar's kind sections, the jump bar's groups and the
+    /// image page's counts: C, then C++, Objective-C and Swift. Private and used
+    /// by `<` alone — never encoded (`Codable` is synthesized from the case
+    /// names), so renumbering it breaks no peer and no stored value.
     private var level: Int {
         switch self {
         case .c(let c):
@@ -72,21 +76,28 @@ public enum RuntimeObjectKind: Codable, Hashable, Identifiable, Comparable, Case
             case .union:
                 1
             }
+        case .cPlusPlus(let cPlusPlus):
+            switch cPlusPlus {
+            case .class:
+                2
+            case .namespace:
+                3
+            }
         case .objc(let objectiveC):
             switch objectiveC {
             case .type(let kind):
                 switch kind {
                 case .class:
-                    2
+                    4
                 case .protocol:
-                    3
+                    5
                 }
             case .category(let kind):
                 switch kind {
                 case .class:
-                    4
+                    6
                 case .protocol:
-                    5
+                    7
                 }
             }
         case .swift(let swift):
@@ -94,49 +105,42 @@ public enum RuntimeObjectKind: Codable, Hashable, Identifiable, Comparable, Case
             case .type(let kind):
                 switch kind {
                 case .enum:
-                    6
-                case .struct:
-                    7
-                case .class:
                     8
-                case .protocol:
+                case .struct:
                     9
-                case .typeAlias:
+                case .class:
                     10
+                case .protocol:
+                    11
+                case .typeAlias:
+                    12
                 }
             case .extension(let kind):
                 switch kind {
                 case .enum:
-                    11
-                case .struct:
-                    12
-                case .class:
                     13
-                case .protocol:
+                case .struct:
                     14
-                case .typeAlias:
+                case .class:
                     15
+                case .protocol:
+                    16
+                case .typeAlias:
+                    17
                 }
             case .conformance(let kind):
                 switch kind {
                 case .enum:
-                    16
-                case .struct:
-                    17
-                case .class:
                     18
-                case .protocol:
+                case .struct:
                     19
-                case .typeAlias:
+                case .class:
                     20
+                case .protocol:
+                    21
+                case .typeAlias:
+                    22
                 }
-            }
-        case .cPlusPlus(let cPlusPlus):
-            switch cPlusPlus {
-            case .class:
-                21
-            case .namespace:
-                22
             }
         }
     }
@@ -145,12 +149,13 @@ public enum RuntimeObjectKind: Codable, Hashable, Identifiable, Comparable, Case
         leftKind.level < rightKind.level
     }
 
+    /// In `level` order.
     public static let allCases: [RuntimeObjectKind] = {
         var cases: [RuntimeObjectKind] = []
         cases.append(contentsOf: C.allCases.map { RuntimeObjectKind.c($0) })
+        cases.append(contentsOf: CPlusPlus.allCases.map { RuntimeObjectKind.cPlusPlus($0) })
         cases.append(contentsOf: ObjectiveC.allCases.map { RuntimeObjectKind.objc($0) })
         cases.append(contentsOf: Swift.allCases.map { RuntimeObjectKind.swift($0) })
-        cases.append(contentsOf: CPlusPlus.allCases.map { RuntimeObjectKind.cPlusPlus($0) })
         return cases
     }()
 

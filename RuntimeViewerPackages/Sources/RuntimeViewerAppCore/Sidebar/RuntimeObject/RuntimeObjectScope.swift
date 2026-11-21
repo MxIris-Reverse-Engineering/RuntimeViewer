@@ -89,14 +89,14 @@ public struct RuntimeObjectScope: Hashable, Sendable {
     }
 
     /// Top-level coarse buckets that match the disclosure groups in the
-    /// scope popover (C / Objective-C / Swift / C++). `RuntimeObjectKind` itself
-    /// has no such grouping, so the popover and the matcher both go through
-    /// this enum to stay in sync.
+    /// scope popover (C / C++ / Objective-C / Swift, the order the sidebar's
+    /// kind sections follow). `RuntimeObjectKind` itself has no such grouping,
+    /// so the popover and the matcher both go through this enum to stay in sync.
     public enum KindGroup: Hashable, CaseIterable, Sendable {
         case c
+        case cPlusPlus
         case objectiveC
         case swift
-        case cPlusPlus
 
         public var title: String {
             switch self {

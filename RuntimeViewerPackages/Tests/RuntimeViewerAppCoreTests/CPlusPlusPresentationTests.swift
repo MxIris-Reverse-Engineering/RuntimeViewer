@@ -11,9 +11,9 @@ import RuntimeViewerAppTestingSupport
 @Suite("C++ objects in the application layer")
 @MainActor
 struct CPlusPlusPresentationTests {
-    @Test("the Filter Scope has a C++ group holding classes and namespaces")
+    @Test("the Filter Scope has a C++ group, between C and Objective-C, holding classes and namespaces")
     func filterScopeHasCPlusPlusGroup() {
-        #expect(RuntimeObjectScope.KindGroup.allCases.last == .cPlusPlus)
+        #expect(RuntimeObjectScope.KindGroup.allCases == [.c, .cPlusPlus, .objectiveC, .swift])
         #expect(RuntimeObjectScope.KindGroup.cPlusPlus.title == "C++")
         #expect(RuntimeObjectScope.KindGroup.cPlusPlus.kinds == [.cPlusPlus(.class), .cPlusPlus(.namespace)])
         #expect(RuntimeObjectScope.KindGroup.of(.cPlusPlus(.namespace)) == .cPlusPlus)

@@ -58,10 +58,9 @@ final class SidebarRuntimeObjectScopeViewController: BaseViewController<SidebarR
 
         let kindStack = VStackView(distribution: .fill, alignment: .fill, spacing: 6) {
             kindHeaderLabel
-            groupRows[.c]!
-            groupRows[.objectiveC]!
-            groupRows[.swift]!
-            groupRows[.cPlusPlus]!
+            for group in RuntimeObjectScope.KindGroup.allCases {
+                groupRows[group]!
+            }
         }
 
         let headerRow = HStackView(distribution: .fill, alignment: .fill, spacing: 8) {
