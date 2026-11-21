@@ -7,7 +7,7 @@
 - **所属愿景**: 无
 - **关联提案**: [0069 文件模式](0069-file-mode.md)（最近列表里的文件都是它打开的）、[0077 文件模式打开文件夹](0077-file-folders.md)；UIFoundation 的 [0011 WelcomePanel](https://github.com/Mx-Iris/UIFoundation/blob/main/Documentations/Evolutions/0011-welcome-panel.md) 与 [0012 Xcode 26 样式实测复刻](https://github.com/Mx-Iris/UIFoundation/blob/main/Documentations/Evolutions/0012-xcode26-faithful-style.md)
 - **实现分支 / PR**: RuntimeViewer `feature/welcome-window`（从 `next` 切）；UIFoundation `feature/welcome-panel-placeholder-text`（从 `main` 切，合回 `main` 后发 0.50.0）
-- **配套文档**: 待定 —— 落地时判断
+- **配套文档**: 无 —— 决策与约束写在 `RuntimeViewerUsingAppKit/AGENTS.md` 的 `WelcomeController` 与 `DocumentController` 两条里
 - **网页版**: 同目录同名的 `.html`
 
 ## 摘要
@@ -543,14 +543,15 @@ iOS、visionOS 不受影响（设置模型里多一个字段，iOS 的设置页�
    - 行为：`heldLaunchRequestDoesNothingOnceADocumentWindowIsUp`
    - 行为：`heldLaunchRequestFollowsTheLoadedSetting`
    - 行为：`reopenFollowsTheSetting`
-5. ✅（代码与构建；目视验收待用户）**App 接线** —— `SettingsLifecycleController`、`WelcomeController`、`AppDelegate`、`WindowLifecycleController`、
-   `MainMenuController`
-   - 行为（App 构建通过；以下由用户在 App 里目视验收）：
+5. ✅ **App 接线** —— `SettingsLifecycleController`、`WelcomeController`、`AppDelegate`、`WindowLifecycleController`、
+   `MainMenuController`、`DocumentController`
+   - 行为（App 构建通过；以下由用户在 App 里目视验收，看过后改了光晕颜色与新窗口的出现方式）：
      - 启动弹欢迎窗口；关掉开关后重启，开的是 My Mac 窗口。
      - 双击最近文件打开它，欢迎窗口随之关闭；列表为空时显示 No Recent Files。
      - New Window on My Mac、Open File… 两个动作；打开任何文档窗口后欢迎窗口关闭。
      - 关掉所有窗口后点 Dock 弹欢迎窗口；⇧⌘1 随时打开。
      - 开着「Quit After Closing Last Window」时，从欢迎窗口打开文件不会让 App 退出。
+     - 点 New Window on My Mac 或 File › New，新窗口在原地出现，不从鼠标处飞出。
 6. ✅（取号与 Implemented 留给收尾）**文档** —— `RuntimeViewerUsingAppKit/AGENTS.md`、两份索引；落地时取号、状态改 Implemented
 
 **收尾时必须判断两件事**（判断结果写进决策日志，不允许沉默跳过）：
@@ -576,3 +577,4 @@ iOS、visionOS 不受影响（设置模型里多一个字段，iOS 的设置页�
 | 2026-11-21 | 图标光晕改成黑色 | 用户看过后觉得蓝色光晕很怪：那是 Xcode 图标的颜色，衬在 RuntimeViewer 的深色图标后面不搭。经 `appIconImageShadow` 换成同样大小与偏移的黑色阴影，不改 UIFoundation。 |
 | 2026-11-21 | 图标光晕改成白色 | 用户看过黑色版：深色背景上看不出阴影。改成透明度 0.2 的白色，按亮度折算与 Xcode 的蓝色光晕相当。 |
 | 2026-11-21 | 新窗口照 Xcode 原地出现 | 用户看过后觉得新窗口从右下角飞到屏幕中间很怪，并指出 Xcode 不这样。逆向 AppKit 与 Xcode 27.2 查明：`newDocument(_:)` 在鼠标抬起时让新文档窗口从指针处飞出，Xcode 不走这条路。用户选择欢迎窗口与 File › New 都照 Xcode：先以 display:false 建文档再自己显示窗口。启动与 Dock 点击退回的 My Mac 窗口也走同一个方法；标签栏「+」不改。详见详细设计「新窗口不从指针飞出」。 |
+| 2026-11-21 | 用户看过，收尾；编号与 Implemented 留到 `next` 推送的那次 | 用户看过改后的光晕与新窗口，确认收尾。网页版按最终提案重新生成。本地 `next` 上还有空编辑栏起始页与导出 C++ 对象两个功能合进来、等用户看效果，`next` 这次不推，照长类型拆行那次的做法，编号与 `Implemented` 留到 `next` 推送的那次（长类型拆行先进 `next`，号排在它后面）。两个仓库的功能 worktree 与本地分支已删；RuntimeViewer 的远端功能分支保留，是推送前这些提交在远端的唯一一份。文档判断不变：不另写使用指南或实现说明，`RuntimeViewerUsingAppKit/AGENTS.md` 的两条已覆盖；没有新术语。 |

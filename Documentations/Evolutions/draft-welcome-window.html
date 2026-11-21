@@ -173,7 +173,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <nav class="toc" aria-label="目录">
   <ol>
     <li><a href="#summary">摘要</a></li>
-    <li><a href="#decide">要你定</a></li>
+    <li><a href="#decide">现状</a></li>
     <li><a href="#architecture">架构图</a></li>
     <li><a href="#map">改动地图</a></li>
     <li><a href="#design">详细设计</a></li>
@@ -194,12 +194,14 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 </section>
 
 <section id="decide">
-  <h2>要你定</h2>
-  <div class="callout">
-    <p class="callout-title">两个方向问题已定（启动时取代 My Mac 窗口、先改上游），只剩批准</p>
-    <ol>
-      <li>按这份草案开工吗？下面「我自己定的」几条（只放两个动作、<code>.xcode26</code> 样式、不配 ViewModel、UIFoundation 一侧不另写提案）都可以推翻。</li>
-    </ol>
+  <h2>现状</h2>
+  <div class="callout callout-note">
+    <p class="callout-title">已实现，用户看过，没有要定的事</p>
+    <ul>
+      <li>UIFoundation 0.50.0 已发；RuntimeViewer 的实现已合进本地 <code>next</code>。</li>
+      <li>用户看过后改了两处：图标后的光晕改成白色；新窗口照 Xcode 原地出现，不再从鼠标处飞出。</li>
+      <li>编号与 Implemented 留到 <code>next</code> 推送的那次：本地 <code>next</code> 上还有别的功能等用户看效果，这次不推。</li>
+    </ul>
   </div>
 </section>
 
@@ -228,11 +230,11 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
     <rect class="group" x="370" y="10" width="620" height="460" rx="10"/>
     <text class="group-label" x="382" y="30">RuntimeViewerUsingAppKit/App</text>
     <rect class="box-changed" x="390" y="50" width="260" height="44" rx="6"/><text x="400" y="68">AppDelegate</text><text class="caption" x="400" y="85">untitled request, start(), menu action</text>
-    <rect class="box-changed" x="710" y="50" width="260" height="44" rx="6"/><text x="720" y="68">MainMenuController</text><text class="caption" x="720" y="85">Window ▸ Welcome to RuntimeViewer ⇧⌘1</text>
+    <rect class="box-changed" x="710" y="50" width="260" height="60" rx="6"/><text x="720" y="68">MainMenuController</text><text class="caption" x="720" y="85">Window ▸ Welcome to RuntimeViewer ⇧⌘1</text><text class="caption" x="720" y="100">File ▸ New → no pointer animation</text>
     <rect class="box-added" x="390" y="180" width="260" height="60" rx="6"/><text x="400" y="200">WelcomeController</text><text class="caption" x="400" y="217">owns the panel; launch and reopen</text><text class="caption" x="400" y="232">decisions; closes on doc window</text>
     <rect class="box-changed" x="710" y="188" width="260" height="44" rx="6"/><text x="720" y="206">WindowLifecycleController</text><text class="caption" x="720" y="223">reopen → WelcomeController</text>
     <rect class="box-changed" x="710" y="320" width="260" height="44" rx="6"/><text x="720" y="338">SettingsLifecycleController</text><text class="caption" x="720" y="355">+ isLoaded, + waitUntilLoaded()</text>
-    <rect class="box-kept" x="390" y="320" width="260" height="44" rx="6"/><text x="400" y="338">DocumentController</text><text class="caption" x="400" y="355">opens a recent file via FileController</text>
+    <rect class="box-changed" x="390" y="320" width="260" height="60" rx="6"/><text x="400" y="338">DocumentController</text><text class="caption" x="400" y="355">opens a recent file via FileController</text><text class="caption" x="400" y="370">+ newDocumentWithoutPointerAnimation(_:)</text>
 
     <path class="arrow" d="M 520 94 L 520 178"/>
     <path class="arrow" d="M 710 72 L 652 72"/>
@@ -244,7 +246,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
     <path class="arrow arrow-weak" d="M 390 220 L 287 331"/>
   </svg>
   </div>
-  <p class="figure-caption">实线：调用或持有；虚线：读设置。<code>WelcomeController</code> 持有 UIFoundation 的面板，决策交给 AppCore 的 <code>WelcomeWindowPolicy</code>。</p>
+  <p class="figure-caption">实线：调用或持有；虚线：读设置。<code>WelcomeController</code> 持有 UIFoundation 的面板，决策交给 AppCore 的 <code>WelcomeWindowPolicy</code>。New Window on My Mac、File › New 与启动、Dock 退回的 My Mac 窗口都经 <code>DocumentController.swift</code> 里的 <code>newDocumentWithoutPointerAnimation(_:)</code> 开新窗口。</p>
 
   <div class="figure">
   <svg viewBox="0 0 1000 250" role="img" aria-label="Launch flow">
@@ -297,8 +299,9 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
       <tr><td><code>App/WelcomeController.swift</code> · <code>WelcomeController</code></td><td><span class="tag tag-added">新增</span></td><td>持有面板、data source / delegate、启动与 Dock 决策、关窗观察</td><td>生命周期职责独立成控制器</td><td class="numeric">5</td></tr>
       <tr><td><code>App/AppDelegate.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>applicationShouldOpenUntitledFile</code>、<code>start()</code>、<code>showWelcomeWindow(_:)</code></td><td>一行转发</td><td class="numeric">5</td></tr>
       <tr><td><code>App/WindowLifecycleController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>最后一支改调 <code>showInsteadOfUntitledDocument()</code></td><td>Dock 点击也弹欢迎窗口</td><td class="numeric">5</td></tr>
-      <tr><td><code>App/MainMenuController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>Window 菜单 Bring All to Front 之前插 Welcome to RuntimeViewer（⇧⌘1）与分隔线</td><td>随时能叫出来</td><td class="numeric">5</td></tr>
-      <tr><td><code>RuntimeViewerUsingAppKit/AGENTS.md</code></td><td><span class="tag tag-changed">修改</span></td><td>控制器清单加 <code>WelcomeController</code> 与关窗时机</td><td>规则留档</td><td class="numeric">6</td></tr>
+      <tr><td><code>App/MainMenuController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>Window 菜单 Bring All to Front 之前插 Welcome to RuntimeViewer（⇧⌘1）与分隔线；File › New 的 action 改为 <code>newDocumentWithoutPointerAnimation(_:)</code></td><td>随时能叫出来；新窗口不从指针飞出</td><td class="numeric">5</td></tr>
+      <tr><td><code>App/DocumentController.swift</code> · <code>NSDocumentController</code> 扩展、<code>DocumentController</code></td><td><span class="tag tag-changed">修改</span></td><td>加 <code>@objc newDocumentWithoutPointerAnimation(_:)</code>（<code>openUntitledDocumentAndDisplay(false)</code>、<code>makeWindowControllers()</code>、<code>showWindows()</code>，出错 <code>presentError</code>）；<code>validateUserInterfaceItem(_:)</code> 对它恒为 <code>true</code></td><td>新窗口照 Xcode 原地出现</td><td class="numeric">5</td></tr>
+      <tr><td><code>RuntimeViewerUsingAppKit/AGENTS.md</code></td><td><span class="tag tag-changed">修改</span></td><td>控制器清单加 <code>WelcomeController</code> 与关窗时机；<code>DocumentController</code> 一条写明新窗口只走 <code>newDocumentWithoutPointerAnimation(_:)</code></td><td>规则留档</td><td class="numeric">6</td></tr>
       <tr><td>两份索引</td><td><span class="tag tag-changed">修改</span></td><td>登记本提案；落地时改编号与状态</td><td>索引</td><td class="numeric">6</td></tr>
     </tbody>
   </table>
@@ -350,13 +353,39 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
     <summary><code>WelcomeController</code>（App target）与接线</summary>
     <div class="details-body">
       <ul>
-        <li>懒创建 <code>WelcomePanelController</code>（<code>.xcode26</code>）：标题取 <code>CFBundleDisplayName</code>（Debug 版的 <code>CFBundleName</code> 是 <code>RuntimeViewer-Debug-arm64e</code>），空列表文字 No Recent Files；动作 New Window on My Mac（<code>newDocument</code>，SF Symbol <code>plus.square</code>，即 Xcode 的 Create New Project… 那个）与 Open File…（<code>openDocument</code>，SF Symbol <code>folder</code>）。</li>
+        <li>懒创建 <code>WelcomePanelController</code>（<code>.xcode26</code>）：标题取 <code>CFBundleDisplayName</code>（Debug 版的 <code>CFBundleName</code> 是 <code>RuntimeViewer-Debug-arm64e</code>），空列表文字 No Recent Files；动作 New Window on My Mac（<code>newDocumentWithoutPointerAnimation(_:)</code>，SF Symbol <code>plus.square</code>，即 Xcode 的 Create New Project… 那个）与 Open File…（<code>openDocument</code>，SF Symbol <code>folder</code>）。</li>
+        <li>图标后的光晕：<code>.xcode26</code> 默认给 Xcode 的蓝色光晕（只在深色外观下画），衬在 RuntimeViewer 的深色图标后面是一团不搭的蓝雾。改传 <code>appIconImageShadow</code>：大小与偏移照旧（模糊 50、偏移 (0, 2)），颜色换成透明度 0.2 的白色，亮度与 Xcode 的蓝色光晕相当；黑色压在深色背景上看不出来。UIFoundation 不用改。</li>
         <li>data source 用 <code>recentDocumentURLs</code>；双击（先排除 <code>-1</code>）调 <code>openDocument(withContentsOf:display:)</code>，交给 <code>DocumentController</code> 与 <code>FileController</code>，出错时由后者报。</li>
         <li><code>shouldOpenUntitledDocument()</code> 回答 <code>applicationShouldOpenUntitledFile(_:)</code>；没读完设置时记下请求、回 <code>false</code>。<code>start()</code> 注册主窗口观察，再等 <code>waitUntilLoaded()</code> 处理记下的请求。</li>
         <li>文档窗口（<code>windowController?.document != nil</code>）成为主窗口时关面板。不在 <code>addDocument</code> 里关：那时文档窗口还没上屏，开着「Quit After Closing Last Window」会让 App 退出。</li>
         <li><code>SettingsLifecycleController</code> 存下 load 的 <code>Task</code>，补 <code>isLoaded</code> 与 <code>waitUntilLoaded()</code>。</li>
         <li><code>AppDelegate</code> 三处一行转发；<code>WindowLifecycleController</code> 最后一支改调 <code>showInsteadOfUntitledDocument()</code>；「有没有文档窗口」的表达式两处共用一个小扩展。</li>
-        <li>Window 菜单在 Bring All to Front 之前插 Welcome to RuntimeViewer（⇧⌘1，同 Xcode 的 Welcome to Xcode）与分隔线。</li>
+        <li>Window 菜单在 Bring All to Front 之前插 Welcome to RuntimeViewer（⇧⌘1，同 Xcode 的 Welcome to Xcode）与分隔线。File 菜单的 New 保留标题、⌘N 与标识，只把 action 换成 <code>newDocumentWithoutPointerAnimation(_:)</code>。</li>
+      </ul>
+    </div>
+  </details>
+  <details>
+    <summary>新窗口不从指针飞出</summary>
+    <div class="details-body">
+<pre><code><span class="token-keyword">extension</span> <span class="token-type">NSDocumentController</span> {
+    <span class="token-macro">@objc</span> <span class="token-keyword">func</span> newDocumentWithoutPointerAnimation(<span class="token-keyword">_</span> sender: <span class="token-type">Any</span>?) {
+        <span class="token-keyword">do</span> {
+            <span class="token-keyword">let</span> document = <span class="token-keyword">try</span> openUntitledDocumentAndDisplay(<span class="token-keyword">false</span>)
+            document.makeWindowControllers()
+            document.showWindows()
+        } <span class="token-keyword">catch</span> {
+            presentError(error)
+        }
+    }
+}</code></pre>
+      <p>New Window on My Mac、File › New，以及启动和 Dock 点击时退回的「开一个 My Mac 窗口」，都调它而不调 <code>newDocument(_:)</code>。逆向查到的原因（macOS 27.2 的 AppKit；Xcode 27.2 27B52 的 IDEKit）：</p>
+      <ul>
+        <li><code>newDocument(_:)</code> 只调 <code>openUntitledDocumentAndDisplay(true)</code>，后者用 <code>+[_NSWindowTransformAnimation beginNewDocumentWindowCreation]</code> / <code>endNewDocumentWindowCreation</code> 包住 <code>makeWindowControllers</code> 与 <code>showWindows</code>；<code>begin</code> 在当前事件是鼠标抬起时记下 <code>NSEvent.mouseLocation</code>。</li>
+        <li>未命名文档的窗口上屏时得到 <code>ScaleUpAndIn</code> 动画；记下了鼠标位置时，起点就是它、锚点是窗口左上角：窗口左上角从指针处出发再滑回原位。欢迎窗口的按钮在屏幕中间，大窗口看起来像从右下角飞进来；点菜单 File › New 时从菜单栏飞下来。⌘N、启动、Dock 点击没有鼠标抬起，不飞。</li>
+        <li><code>animationBehavior</code> 的 <code>.default</code> 与 <code>.documentWindow</code> 对未命名文档窗口算出同一种动画，改它没用；<code>.none</code> 能关掉，但关窗动画也一起没了。</li>
+        <li>Xcode 从不走这条路：<code>IDEDocumentController</code> 把 <code>openUntitledDocumentAndDisplay:error:</code> 覆写成返回 nil、禁用 <code>newDocument:</code>，每个新建入口都先以 display:NO 建文档，再自己 <code>showWindow:</code>，新窗口只在原地从 0.98 倍轻轻放大。这里照做。</li>
+        <li>标签栏的「+」不改：<code>openUntitledDocumentAndDisplay(_:)</code> 在里面清掉「新窗口要成为 tab」的标志，在它外面显示窗口就成不了 tab；成为 tab 的窗口本来就不放动画。</li>
+        <li>AppKit 对它不认识的 action 怎么验证没有文档，<code>DocumentController.validateUserInterfaceItem(_:)</code> 对这个 action 直接返回 <code>true</code>。</li>
       </ul>
     </div>
   </details>
@@ -414,7 +443,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <section id="impact">
   <h2>影响</h2>
   <ul>
-    <li><strong>用户可见</strong>：启动与没窗口时点 Dock 弹欢迎窗口；要原来的窗口点 New Window on My Mac、按 ⌘N 或关掉开关。Window 菜单新增 ⇧⌘1。恢复窗口或经 Finder 打开文件时不出现欢迎窗口。</li>
+    <li><strong>用户可见</strong>：启动与没窗口时点 Dock 弹欢迎窗口；要原来的窗口点 New Window on My Mac、按 ⌘N 或关掉开关。Window 菜单新增 ⇧⌘1。点 New Window on My Mac 或 File › New 新开的窗口在原地轻轻放大出现，不再从鼠标处飞出，与 Xcode 一致。恢复窗口或经 Finder 打开文件时不出现欢迎窗口。</li>
     <li><strong>可发现性</strong>：默认开，一启动就能看到。</li>
     <li><strong>兼容</strong>：新设置键缺省为 <code>true</code>，不需要迁移；最近文档仍是系统的 Open Recent。</li>
     <li><strong>平台</strong>：只涉及 macOS，下限不变（15）；iOS 只多一个不显示的设置字段。</li>
@@ -429,15 +458,15 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
     <li><strong>打开 trait、抬下限</strong>——包与 App 都能编，<code>./TuistScript.sh check</code> 通过。</li>
     <li><strong>设置开关</strong>——<code>showsWelcomeWindowAtLaunchDefaultsToTrue</code>、<code>legacyPayloadWithoutTheKeyShowsTheWelcomeWindow</code>。</li>
     <li><strong>决策</strong>——<code>untitledRequestBeforeSettingsLoadWaits</code>、<code>untitledRequestShowsWelcomeWindowWhenEnabled</code>、<code>untitledRequestOpensUntitledDocumentWhenDisabled</code>、<code>heldLaunchRequestDoesNothingOnceADocumentWindowIsUp</code>、<code>heldLaunchRequestFollowsTheLoadedSetting</code>、<code>reopenFollowsTheSetting</code>。</li>
-    <li><strong>App 接线</strong>——App 构建通过；启动、开关、双击最近文件、两个动作、Dock、⇧⌘1、「Quit After Closing Last Window」开着时不退出，由用户目视验收。</li>
-    <li><strong>文档</strong>——App 层 <code>AGENTS.md</code>、两份索引；落地取号、状态改 Implemented。</li>
+    <li><strong>App 接线</strong>——App 构建通过；启动、开关、双击最近文件、两个动作、Dock、⇧⌘1、「Quit After Closing Last Window」开着时不退出、新窗口原地出现，由用户目视验收（看过后改了光晕与新窗口的出现方式）。</li>
+    <li><strong>文档</strong>——App 层 <code>AGENTS.md</code>、两份索引；取号与 Implemented 留到 <code>next</code> 推送的那次。</li>
   </ol>
 </section>
 
 <section id="log">
   <h2>决策日志</h2>
   <details>
-    <summary>10 条，最近一条：实现完成，待用户看过后收尾</summary>
+    <summary>14 条，最近一条：用户看过，收尾；编号与 Implemented 留到 next 推送的那次</summary>
     <div class="details-body">
       <div class="table-wrap">
       <table>
@@ -453,6 +482,10 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
           <tr><td class="numeric">2026-11-21</td><td><code>Tuist.swift</code> 缺 <code>SwiftSectionTestingMacros</code> 不在本分支修</td><td>check 报的这一项来自 next 上已有的 MachOSwiftSection pin，与本提案无关；trait 比对通过。</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>设置测试合并为一条往返测试加一句旧文件断言</td><td>覆盖的行为不变。</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>实现完成，待用户看过后收尾</td><td>包级测试与 Tuist 的 App 构建通过；目视验收交给用户；不另写指南或实现说明，没有新术语。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>图标光晕改成黑色</td><td>用户看过后觉得蓝色光晕很怪：那是 Xcode 图标的颜色，衬在 RuntimeViewer 的深色图标后面不搭。经 <code>appIconImageShadow</code> 换成同样大小与偏移的黑色阴影，不改 UIFoundation。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>图标光晕改成白色</td><td>深色背景上看不出黑色阴影。改成透明度 0.2 的白色，按亮度折算与 Xcode 的蓝色光晕相当。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>新窗口照 Xcode 原地出现</td><td>用户觉得新窗口从右下角飞到屏幕中间很怪。逆向查明 <code>newDocument(_:)</code> 在鼠标抬起时让新窗口从指针处飞出，Xcode 不走这条路。欢迎窗口、File › New 与启动、Dock 退回的 My Mac 窗口都先以 display:false 建文档再自己显示窗口；标签栏「+」不改。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>用户看过，收尾；编号与 Implemented 留到 <code>next</code> 推送的那次</td><td>网页版按最终提案重新生成。本地 <code>next</code> 上还有两个功能等用户看效果，这次不推；照长类型拆行那次的做法，号排在它后面。两个仓库的功能 worktree 与本地分支已删，RuntimeViewer 的远端功能分支保留。不另写指南或实现说明，没有新术语。</td></tr>
         </tbody>
       </table>
       </div>
