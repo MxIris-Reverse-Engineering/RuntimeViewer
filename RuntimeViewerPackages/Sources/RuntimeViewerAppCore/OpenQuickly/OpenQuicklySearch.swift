@@ -15,6 +15,9 @@ final class OpenQuicklySearch {
 
     private var catalogTask: Task<OpenQuicklyCatalog, Never>?
 
+    /// How many catalog reads this search has started; tests count reads with it.
+    private(set) var catalogReadCount = 0
+
     init(documentState: DocumentState) {
         self.documentState = documentState
     }
@@ -22,10 +25,10 @@ final class OpenQuicklySearch {
     /// The best `limit` entries matching `text`, best first; the catalog is read first when this
     /// search has none yet. Matching runs off the main thread: a catalog of every indexed image can
     /// hold hundreds of thousands of names. A caller already cancelled — its search was dropped,
-    /// possibly by an `end()` that has just let the catalog go — gets nothing and reads nothing.
+    /// possibly by an `end()` that has just let the catalog go — gets nothing and reads nothing, and
+    /// so does one while the engine lists no image yet.
     func matches(for text: String, limit: Int) async -> [OpenQuicklyCatalog.Entry] {
-        guard !Task.isCancelled else { return [] }
-        let catalogTask = catalog()
+        guard !Task.isCancelled, let catalogTask = catalog() else { return [] }
         let catalog = await catalogTask.value
         return await Self.matches(in: catalog, for: text, limit: limit)
     }
@@ -37,19 +40,20 @@ final class OpenQuicklySearch {
     }
 
     /// The catalog of this search, read on first use: the leaves of the engine's image tree, which
-    /// only the main actor reads, and the objects of its indexed images. A catalog read while the
-    /// engine lists no image yet — a file still being read, an engine still connecting — is not
-    /// kept, so the next match reads again rather than searching nothing for the rest of the search.
-    private func catalog() -> Task<OpenQuicklyCatalog, Never> {
+    /// only the main actor reads, and the objects of its indexed images. While the engine lists no
+    /// image yet — a file still being read, an engine still connecting — there is nothing to read:
+    /// no catalog is made, and the next match looks again rather than searching an empty catalog
+    /// for the rest of the search.
+    private func catalog() -> Task<OpenQuicklyCatalog, Never>? {
         if let catalogTask { return catalogTask }
         let engine = documentState.runtimeEngine
         let imagePaths = engine.imageNodes.flatMap(\.leafImagePaths)
+        guard !imagePaths.isEmpty else { return nil }
+        catalogReadCount += 1
         let catalogTask = Task.detached {
             await OpenQuicklyCatalog.load(imagePaths: imagePaths, from: engine)
         }
-        if !imagePaths.isEmpty {
-            self.catalogTask = catalogTask
-        }
+        self.catalogTask = catalogTask
         return catalogTask
     }
 

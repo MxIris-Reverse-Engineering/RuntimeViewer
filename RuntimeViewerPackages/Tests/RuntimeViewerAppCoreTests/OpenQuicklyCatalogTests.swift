@@ -106,7 +106,7 @@ struct OpenQuicklyCatalogLoadingTests {
 struct OpenQuicklySearchTests {
     @Test("a search begun before the engine lists any image reads the catalog again once it does")
     func searchBeforeTheImageTreeReadsAgainLater() async throws {
-        let engine = RuntimeEngine(source: .local, engineID: "OpenQuicklySearchTests.beforeImageTree")
+        let engine = TestRuntimeEngine.makeUnconnected(engineID: "OpenQuicklySearchTests.beforeImageTree")
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         let search = OpenQuicklySearch(documentState: environment.documentState)
         #expect(engine.imageNodes.isEmpty)
@@ -120,5 +120,34 @@ struct OpenQuicklySearchTests {
             if case .image(let path) = entry.item { return path.hasSuffix("libobjc.A.dylib") }
             return false
         })
+    }
+
+    @Test("keystrokes before the engine lists any image read nothing")
+    func keystrokesBeforeTheImageTreeReadNothing() async throws {
+        let engine = TestRuntimeEngine.makeUnconnected(engineID: "OpenQuicklySearchTests.keystrokesBeforeImageTree")
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        let search = OpenQuicklySearch(documentState: environment.documentState)
+
+        for text in ["l", "li", "lib", "libo", "libob"] {
+            #expect(await search.matches(for: text, limit: 10).isEmpty)
+        }
+
+        #expect(search.catalogReadCount == 0)
+    }
+
+    @Test("a caller already cancelled reads no catalog")
+    func cancelledCallerReadsNoCatalog() async throws {
+        let engine = try await TestRuntimeEngine.makeConnectedWithItsFirstReloadOver(engineID: "OpenQuicklySearchTests.cancelledCaller")
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        let search = OpenQuicklySearch(documentState: environment.documentState)
+        #expect(!engine.imageNodes.isEmpty)
+
+        // The task cannot start before the test suspends, so it starts cancelled — as the search a
+        // dropped term left behind does when it runs only after the search was ended.
+        let cancelledMatch = Task { await search.matches(for: "NSObject", limit: 10) }
+        cancelledMatch.cancel()
+
+        #expect(await cancelledMatch.value.isEmpty)
+        #expect(search.catalogReadCount == 0)
     }
 }
