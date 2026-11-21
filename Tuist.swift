@@ -63,6 +63,8 @@ let sourceDependencyTargetNames = [
     "CPlusPlusDemangling",
     "CPlusPlusSymbols",
     "CPlusPlusSymbolsFixture",
+    "MachOFixtureSupport",
+    "MachOTestingSupport",
     // MachOObjCSection
     "MachOObjCSection",
     "MachOObjCSectionC",
