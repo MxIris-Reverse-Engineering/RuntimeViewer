@@ -2,14 +2,16 @@ import Foundation
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
-/// What the content pane shows while it has no object: the hint to select
-/// one — or, while the file service is still reading the window's file,
-/// that it is. A window opens on a file the moment the user opens it, and a
-/// dyld shared cache keeps the service busy for a while; without this the
-/// window would sit empty with no sign that anything is happening.
+/// What the content pane shows while it has no object: the start page — Xcode's
+/// initial editor, an Open Quickly field and the engine's recent objects
+/// (proposal `editor-start-page`) — or, while the file service is still
+/// reading the window's file, that it is. A window opens on a file the moment
+/// the user opens it, and a dyld shared cache keeps the service busy for a
+/// while; without this the window would sit empty with no sign that anything
+/// is happening.
 public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
     public enum Placeholder: Equatable {
-        /// Nothing is selected.
+        /// Nothing is selected: the start page.
         case noSelection
         /// The window's file is being read, named as the runtime source
         /// picker names it.
@@ -18,7 +20,18 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
 
     @RxObserved public private(set) var placeholder: Placeholder = .noSelection
 
-    public override init(documentState: DocumentState, router: any Router<ContentRoute>) {
+    /// The recent objects the start page lists, most recent first.
+    @RxObserved public private(set) var recentItems: [ContentStartPageItemCellViewModel] = []
+
+    /// The editor pane the page is in; the focused pane when `nil`. What the page opens, it opens
+    /// from here: the pane takes the focus first.
+    private let editorPaneID: EditorPane.ID?
+
+    /// - Parameters:
+    ///   - editorPaneID: the editor pane showing the page; the focused pane when `nil`, which is
+    ///     what a test that has a single pane passes.
+    public init(documentState: DocumentState, router: any Router<ContentRoute>, editorPaneID: EditorPane.ID? = nil) {
+        self.editorPaneID = editorPaneID
         super.init(documentState: documentState, router: router)
         documentState.$runtimeEngineSession.asObservable()
             .map(\.engine)
@@ -37,10 +50,14 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
 
     public struct Output {
         public let placeholder: Driver<Placeholder>
+        public let recentItems: Driver<[ContentStartPageItemCellViewModel]>
     }
 
     public func transform(_ input: Input) -> Output {
-        Output(placeholder: $placeholder.asDriver())
+        Output(
+            placeholder: $placeholder.asDriver(),
+            recentItems: $recentItems.asDriver()
+        )
     }
 
     /// `.readingFile` while `engine` reads a file and has not connected to
