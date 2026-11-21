@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Draft - 长类型拆行：生成选项里加「Break Long Types」</title>
+<style>
+/* Evolution proposal page, shared style (style A, "Apple documentation").
+   Copy this whole <style> block verbatim. Page-specific rules, if any, go only
+   in the marked block at the end. Must render in WebKit (Safari, Xcode preview,
+   Quick Look): no JavaScript, no external resources. */
+:root {
+  --background: #ffffff; --foreground: #1d1d1f; --secondary: #6e6e73; --separator: #d2d2d7;
+  --panel: #f5f5f7; --code-background: #f2f2f4; --accent: #0071e3;
+  --added: #1f8a4c; --added-fill: #e3f5ea;
+  --changed: #b26a00; --changed-fill: #fdf0db;
+  --removed: #c62828; --removed-fill: #fbe4e4;
+  --moved: #0066cc; --moved-fill: #e5f0fc;
+  --kept: #6e6e73; --kept-fill: #ececef;
+  --token-keyword: #ad3da4; --token-type: #3900a0; --token-string: #c41a16; --token-number: #1c00cf;
+  --token-comment: #707f8c; --token-macro: #643820;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #1c1c1e; --foreground: #f2f2f7; --secondary: #a1a1a6; --separator: #3a3a3c;
+    --panel: #2c2c2e; --code-background: #2a2a2d; --accent: #4ea1ff;
+    --added: #4cd281; --added-fill: #183826;
+    --changed: #ffb340; --changed-fill: #3d2c10;
+    --removed: #ff6b6b; --removed-fill: #3d1a1a;
+    --moved: #5aa9ff; --moved-fill: #142b45;
+    --kept: #b0b0b5; --kept-fill: #333336;
+    --token-keyword: #fc5fa3; --token-type: #d0a8ff; --token-string: #fc6a5d; --token-number: #d0bf69;
+    --token-comment: #7f8c98; --token-macro: #fd8f3f;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--background); color: var(--foreground);
+  font: 15px/1.65 -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased; }
+.page { max-width: 1080px; margin: 0 auto; padding: 28px 24px 72px; }
+.svg-definitions { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+/* Header */
+.eyebrow { margin: 0 0 6px; font-size: 13px; color: var(--secondary); }
+.crumb + .crumb::before { content: " / "; }
+h1 { font-size: 28px; line-height: 1.3; letter-spacing: -0.01em; margin: 0 0 12px; }
+h1 code { font-size: 0.8em; }
+.proposal-number { color: var(--secondary); margin-right: 4px; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 20px; margin: 0; font-size: 13px; color: var(--secondary); }
+.meta div { display: flex; gap: 6px; align-items: baseline; }
+.meta dd { margin: 0; color: var(--foreground); }
+.meta dd code { font-size: 12px; }
+.status { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--kept); background: var(--kept-fill); }
+.status-accepted { color: var(--moved); background: var(--moved-fill); }
+.status-in-progress { color: var(--changed); background: var(--changed-fill); }
+.status-implemented { color: var(--added); background: var(--added-fill); }
+.status-rejected, .status-withdrawn { color: var(--removed); background: var(--removed-fill); }
+
+/* Table of contents */
+.toc { margin: 22px 0 8px; padding: 8px 10px; background: var(--panel); border-radius: 12px; }
+.toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 2px 4px; }
+.toc li { margin: 0; }
+.toc a { display: inline-block; padding: 3px 11px; border-radius: 999px; color: var(--accent); text-decoration: none; font-size: 14px; }
+.toc a:hover { background: var(--background); }
+
+/* Text */
+section { scroll-margin-top: 16px; }
+h2 { font-size: 21px; margin: 40px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--separator); }
+h3 { font-size: 16px; margin: 22px 0 8px; }
+h4 { font-size: 15px; margin: 18px 0 6px; }
+p { margin: 10px 0; }
+a { color: var(--accent); }
+ul, ol { padding-left: 22px; }
+li { margin: 4px 0; }
+blockquote { margin: 12px 0; padding: 2px 14px; border-left: 3px solid var(--separator); color: var(--secondary); }
+hr { border: none; border-top: 1px solid var(--separator); margin: 24px 0; }
+
+/* Code */
+code { font: 0.86em/1.4 ui-monospace, "SF Mono", Menlo, monospace; background: var(--code-background); padding: 1px 5px; border-radius: 5px; }
+pre { background: var(--code-background); border-radius: 10px; padding: 14px 16px; overflow-x: auto; -webkit-overflow-scrolling: touch; font: 12.5px/1.6 ui-monospace, "SF Mono", Menlo, monospace; }
+pre code { font: inherit; background: none; padding: 0; border-radius: 0; }
+.token-keyword { color: var(--token-keyword); font-weight: 600; }
+.token-type { color: var(--token-type); }
+.token-string { color: var(--token-string); }
+.token-number { color: var(--token-number); }
+.token-comment { color: var(--token-comment); }
+.token-macro { color: var(--token-macro); }
+
+/* Callouts */
+.callout { background: var(--panel); border-left: 4px solid var(--accent); border-radius: 10px; padding: 12px 16px; margin: 14px 0; }
+.callout-note { border-left-color: var(--secondary); }
+.callout-warning { border-left-color: var(--changed); }
+.callout-title { margin: 0 0 6px; font-weight: 600; }
+.callout > :last-child { margin-bottom: 0; }
+.callout ol, .callout ul { margin: 6px 0 0; }
+
+/* Diagrams */
+.legend { list-style: none; padding: 0; margin: 8px 0 12px; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--secondary); }
+.legend li { margin: 0; }
+.swatch { display: inline-block; width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid; vertical-align: -2px; margin-right: 6px; }
+.swatch-added { background: var(--added-fill); border-color: var(--added); }
+.swatch-changed { background: var(--changed-fill); border-color: var(--changed); }
+.swatch-removed { background: var(--removed-fill); border-color: var(--removed); border-style: dashed; }
+.swatch-moved { background: var(--moved-fill); border-color: var(--moved); }
+.swatch-kept { background: var(--kept-fill); border-color: var(--kept); }
+.figure { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--separator); border-radius: 12px; padding: 12px; margin: 12px 0; }
+.figure svg { display: block; width: 100%; min-width: 760px; height: auto; }
+.figure-narrow svg { min-width: 0; max-width: 640px; margin: 0 auto; }
+.figure-caption { font-size: 13px; color: var(--secondary); margin-top: 8px; }
+svg text { font: 12px ui-monospace, "SF Mono", Menlo, monospace; fill: var(--foreground); }
+svg .group-label { font-size: 13px; font-weight: 700; }
+svg .caption { font-size: 10.5px; fill: var(--secondary); }
+svg .strike { text-decoration: line-through; }
+svg .group { fill: none; stroke: var(--separator); stroke-width: 1.5; stroke-dasharray: 5 4; }
+svg .box-added { fill: var(--added-fill); stroke: var(--added); stroke-width: 1.5; }
+svg .box-changed { fill: var(--changed-fill); stroke: var(--changed); stroke-width: 1.5; }
+svg .box-removed { fill: var(--removed-fill); stroke: var(--removed); stroke-width: 1.5; stroke-dasharray: 4 3; }
+svg .box-moved { fill: var(--moved-fill); stroke: var(--moved); stroke-width: 1.5; }
+svg .box-kept { fill: var(--kept-fill); stroke: var(--kept); stroke-width: 1.2; }
+svg .arrow { fill: none; stroke: var(--secondary); stroke-width: 1.4; marker-end: url(#arrowhead); }
+svg .arrow-weak { stroke-dasharray: 4 3; }
+svg .arrow-removed { stroke: var(--removed); stroke-dasharray: 4 3; }
+svg .arrowhead { fill: var(--secondary); }
+
+/* Tables */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 10px 0; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { border: 1px solid var(--separator); padding: 7px 9px; text-align: left; vertical-align: top; }
+th { background: var(--panel); font-weight: 600; }
+.numeric { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tag { display: inline-block; white-space: nowrap; padding: 0 7px; border-radius: 5px; font-size: 12px; font-weight: 600; color: var(--kept); background: var(--kept-fill); }
+.tag-added { color: var(--added); background: var(--added-fill); }
+.tag-changed { color: var(--changed); background: var(--changed-fill); }
+.tag-removed { color: var(--removed); background: var(--removed-fill); }
+.tag-moved { color: var(--moved); background: var(--moved-fill); }
+
+/* Collapsible sections */
+details { border: 1px solid var(--separator); border-radius: 12px; margin: 12px 0; overflow: hidden; }
+summary { cursor: pointer; list-style: none; padding: 11px 16px; font-weight: 600; background: var(--panel); }
+summary::-webkit-details-marker { display: none; }
+summary::before { content: "›"; display: inline-block; width: 1em; color: var(--secondary); -webkit-transition: -webkit-transform 0.15s; transition: transform 0.15s; }
+details[open] > summary::before { -webkit-transform: rotate(90deg); transform: rotate(90deg); }
+details[open] > summary { border-bottom: 1px solid var(--separator); }
+.details-body { padding: 4px 16px 12px; }
+
+@media (max-width: 640px) {
+  .page { padding: 20px 16px 56px; }
+  h1 { font-size: 23px; }
+}
+
+/* ===== Page-specific styles (only for elements the shared style lacks, e.g. UI mockups) ===== */
+</style>
+<body>
+<svg class="svg-definitions" aria-hidden="true" focusable="false">
+  <defs><marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>
+</svg>
+<div class="page">
+
+<header class="doc-header">
+  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">Draft</span></p>
+  <h1><span class="proposal-number">Draft</span> 长类型拆行：生成选项里加「Break Long Types」</h1>
+  <dl class="meta">
+    <div><dt>状态</dt><dd><span class="status status-accepted">Accepted</span></dd></div>
+    <div><dt>最后更新</dt><dd>2026-11-21</dd></div>
+    <div><dt>项目类型</dt><dd>App</dd></div>
+    <div><dt>原文</dt><dd><code>draft-multiline-type-formatting.md</code></dd></div>
+  </dl>
+</header>
+
+<nav class="toc" aria-label="目录">
+  <ol>
+    <li><a href="#summary">摘要</a></li>
+    <li><a href="#decide">要你定</a></li>
+    <li><a href="#proposal">方案</a></li>
+    <li><a href="#architecture">架构图</a></li>
+    <li><a href="#map">改动地图</a></li>
+    <li><a href="#design">详细设计</a></li>
+    <li><a href="#research">调研</a></li>
+    <li><a href="#alternatives">替代方案</a></li>
+    <li><a href="#impact">影响</a></li>
+    <li><a href="#steps">落地步骤</a></li>
+    <li><a href="#log">决策日志</a></li>
+  </ol>
+</nav>
+
+<main class="content">
+
+<section id="summary">
+  <h2>摘要</h2>
+  <p>工具栏「生成选项」面板的 Swift 一栏加一个勾选框「Break Long Types」，默认关闭。打开后，Swift interface 里一行放不下的类型按括号结构拆成多行——SwiftUI 视图的 <code>typealias Body = SwiftUI.ModifiedContent&lt;…&gt;</code> 不再是一行几千个字符，而是一层一层缩进展开。格式化由 MachOSwiftSection 新增的 <code>MultilineTypeFormatting</code> 完成，在引擎生成 interface 时对每个定义的打印各做一次；语法着色、跳转链接、注释标签与宏展开照旧。查找同时改为能跨被拆开的行定位结果。行宽固定为 100 列（不计缩进），数值存进选项、暂不给界面。</p>
+</section>
+
+<section id="decide">
+  <h2>要你定</h2>
+  <div class="callout">
+    <p class="callout-title">批准后开工</p>
+    <ol>
+      <li>批准这份提案、按落地步骤开始实现？</li>
+    </ol>
+  </div>
+  <div class="callout callout-note">
+    <p class="callout-title">没问你、自己定的（可推翻）</p>
+    <ul>
+      <li>字段名 <code>breaksLongTypes</code> / <code>maximumLineWidth</code>，勾选框文字「Break Long Types」，放在「Expand Macros」下面。</li>
+      <li>MCP 与 CLI 的预设保持关闭；语料不格式化。</li>
+      <li>只切换拆行时不重建打印器，只清 interface 缓存。</li>
+    </ul>
+  </div>
+  <div class="callout callout-warning">
+    <p class="callout-title">落地前提</p>
+    <p>RuntimeViewer 依赖 MachOSwiftSection 远端的 <code>next</code>；要先把那边正式收尾、推上 <code>next</code>，再抬本仓库的 pin。开发期间用本地依赖构建。</p>
+  </div>
+</section>
+
+<section id="proposal">
+  <h2>方案</h2>
+  <ol>
+    <li><strong>选项。</strong><code>SwiftGenerationOptions</code> 加 <code>breaksLongTypes</code>（默认关）与 <code>maximumLineWidth</code>（默认 100），再加计算属性 <code>multilineTypeFormatting</code>。<code>.mcp</code> 预设明确保持关闭。</li>
+    <li><strong>引擎。</strong><code>RuntimeSwiftSection</code> 存下当前的格式化设置，与打印配置一起比较，变了就清两份 interface 缓存；<code>interface(for:)</code> 对每个定义的打印各格式化一次再拼接，宏展开的每一块同样格式化；<code>importedInterface(for:)</code> 在拆 region 之前格式化。</li>
+    <li><strong>界面。</strong>生成选项面板加勾选框；导出元数据写明这个选项。</li>
+    <li><strong>查找。</strong>整行对不上时，把语料行与正文里连续几行都去掉空白后比较，相同就把这几行当作那条语料行，按去空白后的字符序号把命中映射回正文。</li>
+  </ol>
+  <h3>非目标</h3>
+  <ul>
+    <li>行宽不给界面（数值先存着）。</li>
+    <li>语料、MCP、命令行不格式化；CLI 与 agent 插件行为不变。</li>
+    <li>不改 ObjC 头文件的显示。</li>
+    <li>不补导出元数据里此前就漏掉的两个选项（记为后续项）。</li>
+  </ul>
+</section>
+
+<section id="architecture">
+  <h2>架构图</h2>
+  <ul class="legend">
+    <li><i class="swatch swatch-changed"></i>修改</li>
+    <li><i class="swatch swatch-kept"></i>不变</li>
+  </ul>
+  <div class="figure">
+  <svg viewBox="0 0 1000 300" role="img" aria-label="Where the option flows">
+    <rect class="group" x="10" y="10" width="300" height="140" rx="10"/>
+    <text class="group-label" x="22" y="30">App (RuntimeViewerUsingAppKit / AppCore)</text>
+    <rect class="box-changed" x="25" y="42" width="270" height="34" rx="6"/><text x="35" y="64">GenerationOptionsViewController</text>
+    <rect class="box-kept" x="25" y="88" width="270" height="44" rx="6"/><text x="35" y="106">RuntimeInterfaceCache</text><text class="caption" x="35" y="123">key: object + options</text>
+
+    <rect class="group" x="350" y="10" width="300" height="270" rx="10"/>
+    <text class="group-label" x="362" y="30">RuntimeViewerCore (engine)</text>
+    <rect class="box-changed" x="365" y="42" width="270" height="44" rx="6"/><text x="375" y="60">SwiftGenerationOptions</text><text class="caption" x="375" y="77">+ breaksLongTypes, maximumLineWidth</text>
+    <rect class="box-kept" x="365" y="98" width="270" height="34" rx="6"/><text x="375" y="120">InterfaceCommand (Codable, XPC)</text>
+    <rect class="box-changed" x="365" y="144" width="270" height="44" rx="6"/><text x="375" y="162">RuntimeSwiftSection</text><text class="caption" x="375" y="179">format each print before join</text>
+    <rect class="box-changed" x="365" y="200" width="270" height="34" rx="6"/><text x="375" y="222">RuntimeInterfaceExportMetadata</text>
+
+    <rect class="group" x="690" y="10" width="300" height="90" rx="10"/>
+    <text class="group-label" x="702" y="30">MachOSwiftSection (next)</text>
+    <rect class="box-kept" x="705" y="42" width="270" height="44" rx="6"/><text x="715" y="60">MultilineTypeFormatting</text><text class="caption" x="715" y="77">format(_:)</text>
+
+    <rect class="group" x="690" y="140" width="300" height="90" rx="10"/>
+    <text class="group-label" x="702" y="160">AppCore / Content</text>
+    <rect class="box-changed" x="705" y="172" width="270" height="44" rx="6"/><text x="715" y="190">ContentHighlightRequest</text><text class="caption" x="715" y="207">+ cross-line match</text>
+
+    <path class="arrow" d="M 160 76 L 160 88"/>
+    <path class="arrow" d="M 295 110 L 365 115"/>
+    <path class="arrow" d="M 500 132 L 500 144"/>
+    <path class="arrow" d="M 635 166 L 670 166 L 670 64 L 705 64"/>
+    <path class="arrow arrow-weak" d="M 635 180 L 705 190"/>
+  </svg>
+  </div>
+  <p class="figure-caption">选项随请求进入引擎，<code>RuntimeSwiftSection</code> 在拆 region 之前调用 <code>format(_:)</code>；查找的定位在 App 侧跨行比对。</p>
+</section>
+
+<section id="map">
+  <h2>改动地图</h2>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>文件 / 类型</th><th>动作</th><th>改什么</th><th>步骤</th></tr></thead>
+    <tbody>
+      <tr><td><code>Interfaces/SwiftGenerationOptions.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>两个字段与计算属性 <code>multilineTypeFormatting</code></td><td class="numeric">1</td></tr>
+      <tr><td><code>Interfaces/RuntimeObjectInterface+GenerationOptions.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>.mcp</code> 明确关闭</td><td class="numeric">1</td></tr>
+      <tr><td><code>Tests/RuntimeViewerCoreTests/GenerationOptionsTests.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>默认、旧数据解码、派生、预设</td><td class="numeric">1</td></tr>
+      <tr><td><code>Sections/Swift/RuntimeSwiftSection.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>存格式化设置、比较并清缓存、逐个定义格式化、宏展开块与 Generated Interface 格式化</td><td class="numeric">2</td></tr>
+      <tr><td><code>Tests/RuntimeViewerCoreTests/</code> 引擎测试</td><td><span class="tag tag-added">新增</span></td><td>拆开、关闭不变、切换后缓存失效、宏展开归属、打印器不重建</td><td class="numeric">2</td></tr>
+      <tr><td><code>Generation Options/GenerationOptionsViewController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>勾选框「Break Long Types」</td><td class="numeric">3</td></tr>
+      <tr><td><code>Export/RuntimeInterfaceExportMetadata.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>元数据加一行</td><td class="numeric">3</td></tr>
+      <tr><td><code>Content/ContentHighlightRequest.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>跨行比对与命中映射</td><td class="numeric">4</td></tr>
+      <tr><td><code>Tests/RuntimeViewerAppCoreTests/ContentHighlightRequestTests.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>跨行定位用例</td><td class="numeric">4</td></tr>
+      <tr><td>各 <code>Package.resolved</code></td><td><span class="tag tag-changed">修改</span></td><td>MachOSwiftSection 推 <code>next</code> 后抬 pin</td><td class="numeric">5</td></tr>
+      <tr><td>两份文档索引</td><td><span class="tag tag-changed">修改</span></td><td>登记本提案</td><td class="numeric">1、6</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section id="design">
+  <h2>详细设计</h2>
+  <details open>
+    <summary>选项</summary>
+    <div class="details-body">
+<pre><code><span class="token-keyword">@Default</span>(<span class="token-keyword">false</span>)
+<span class="token-keyword">public var</span> breaksLongTypes: <span class="token-type">Bool</span>
+
+<span class="token-keyword">@Default</span>(<span class="token-number">100</span>)
+<span class="token-keyword">public var</span> maximumLineWidth: <span class="token-type">Int</span>
+
+<span class="token-keyword">public var</span> multilineTypeFormatting: <span class="token-type">MultilineTypeFormatting</span>? {
+    <span class="token-keyword">guard</span> breaksLongTypes <span class="token-keyword">else</span> { <span class="token-keyword">return nil</span> }
+    <span class="token-keyword">return</span> <span class="token-type">MultilineTypeFormatting</span>(maximumLineWidth: max(<span class="token-number">1</span>, maximumLineWidth))
+}</code></pre>
+    </div>
+  </details>
+  <details>
+    <summary>引擎</summary>
+    <div class="details-body">
+      <ul>
+        <li>格式化设置与打印配置一起比较；只切换拆行时只清 interface 缓存，不调用 <code>printer.updateConfiguration</code>，保住文件引擎的静态布局计算器。</li>
+        <li>逐个定义格式化再拼接，<code>typeUTF8Range</code> 直接取格式化后的第一个定义；拼接只插空行，结果与整份格式化相同。</li>
+        <li>格式化总在拆 region 之前，注释标签与宏归属读到的是格式化后的偏移。</li>
+      </ul>
+    </div>
+  </details>
+  <details>
+    <summary>查找的跨行定位</summary>
+    <div class="details-body">
+      <ol>
+        <li>照旧找整行相同的行，取离语料行号最近的。</li>
+        <li>找不到时，语料行去掉全部空白；正文里去空白后是它前缀的行向下逐行拼接，恰好相等即为一组候选，取起始行最近的一组。</li>
+        <li>命中位置换算成去空白后的第几个字符，在候选几行里数到同一个字符得到范围；跨了插入的换行时范围包含中间的换行与缩进。</li>
+      </ol>
+      <p>关着拆行时第一步总能找到整行，行为逐字不变。</p>
+    </div>
+  </details>
+</section>
+
+<section id="research">
+  <h2>调研</h2>
+  <details>
+    <summary>关键事实</summary>
+    <div class="details-body">
+      <ul>
+        <li>选项随 <code>InterfaceCommand</code>（Codable）传到 XPC 与远端引擎，新字段必须带默认值；旧对端忽略未知键。</li>
+        <li><code>MultilineTypeFormatting</code> 不在打印配置里，引擎现有的缓存清除只看打印配置，要另存、另比、另清。</li>
+        <li>查找按「整行相同」定位；语料总用 <code>.mcp</code> 选项一次印好存盘。</li>
+        <li>成员定位、行号标尺、导出都能接受多出来的行；导出开着时同样拆开。</li>
+        <li>MachOSwiftSection 保证格式化只加换行与缩进、region 不变、嵌套定义取出后与单独打印一致。</li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<section id="alternatives">
+  <h2>替代方案</h2>
+  <details>
+    <summary>四条被否的路径</summary>
+    <div class="details-body">
+      <ul>
+        <li><strong>App 侧拿到文字后再拆：</strong>要重算注释标签与宏展开的全部偏移。</li>
+        <li><strong>放进打印配置：</strong>MachOSwiftSection 有意不这样做。</li>
+        <li><strong>语料也格式化：</strong>语料对所有选项共用、按行搜索。</li>
+        <li><strong>查找接受退化 / 行宽给界面：</strong>用户选了跨行定位、只加勾选框。</li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<section id="impact">
+  <h2>影响</h2>
+  <ul>
+    <li><strong>用户可见：</strong>面板多一个默认不勾的勾选框；勾上后放不下的类型拆成多行，导出同样拆开，查找仍定位到那一段。</li>
+    <li><strong>兼容：</strong>旧偏好解码为关闭；旧版远端引擎忽略新键、返回不拆的文字。</li>
+    <li><strong>平台与发布：</strong>不变；落地依赖 MachOSwiftSection 的 <code>next</code> 先推送、本仓库抬 pin。</li>
+  </ul>
+</section>
+
+<section id="steps">
+  <h2>落地步骤</h2>
+  <ol>
+    <li><strong>选项字段与预设</strong> —— 默认关闭、旧数据解码为关闭、派生格式化、MCP 关闭</li>
+    <li><strong>引擎格式化与缓存失效</strong> —— 拆开、关闭不变、切换后重生成、宏展开归属、打印器不重建</li>
+    <li><strong>面板与导出元数据</strong> —— 勾选框（人工核对）、元数据一行</li>
+    <li><strong>查找跨行定位</strong> —— 拆开的语料行、命中映射、取最近、整行优先</li>
+    <li><strong>抬依赖 pin</strong>（MachOSwiftSection 推送之后）</li>
+    <li><strong>文档</strong> —— 索引与状态一致</li>
+  </ol>
+</section>
+
+<section id="log">
+  <h2>决策日志</h2>
+  <details>
+    <summary>2 条，最近一条：只加勾选框，查找跨行定位</summary>
+    <div class="details-body">
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>日期</th><th>变更</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td class="numeric">2026-11-21</td><td>Created as Draft</td><td>MachOSwiftSection 新增了按括号拆长类型的格式化，RuntimeViewer 要把它接到界面上。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>只加勾选框，查找跨行定位</td><td>面板里只加一个勾选框，行宽固定 100 列、数值存进选项；查找改为能跨被拆开的行定位。</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+  </details>
+</section>
+
+</main>
+</div>
+</body>
+</html>
