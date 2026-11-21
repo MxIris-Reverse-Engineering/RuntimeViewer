@@ -202,7 +202,7 @@ private func formatted(_ print: SemanticString) -> SemanticString {
    - 行为：`optionsSavedBeforeBreakLongTypesExistedDecodeWithItOff`
    - 行为：`breakLongTypesDerivesTheFormattingWithTheStoredWidth`
    - 行为：`theMCPOptionsLeaveLongTypesOnOneLine`
-2. **引擎格式化与缓存失效** —— 改动地图第 4、5 行
+2. **引擎格式化与缓存失效**（已完成） —— 改动地图第 4、5 行
    - 行为：`interfaceBreaksLongTypesWhenAsked`
    - 行为：`interfaceWithBreakLongTypesOffIsUnchanged`
    - 行为：`togglingBreakLongTypesRegeneratesTheCachedInterface`
