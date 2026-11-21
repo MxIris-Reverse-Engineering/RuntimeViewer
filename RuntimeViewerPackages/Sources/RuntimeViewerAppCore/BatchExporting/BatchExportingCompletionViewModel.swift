@@ -11,7 +11,8 @@ public final class BatchExportingCompletionViewModel: ViewModel<ExportingRoute> 
         public let headerSubtitle: String
         public let interfacesValue: String
         public let imagesValue: String
-        public let objcSwiftValue: String
+        /// The Objective-C, Swift and C++ interface counts, in that order.
+        public let languageCountsValue: String
         public let durationValue: String
 
         public static let empty = Summary(
@@ -20,7 +21,7 @@ public final class BatchExportingCompletionViewModel: ViewModel<ExportingRoute> 
             headerSubtitle: "",
             interfacesValue: "—",
             imagesValue: "—",
-            objcSwiftValue: "—",
+            languageCountsValue: "—",
             durationValue: "—"
         )
     }
@@ -128,7 +129,9 @@ public final class BatchExportingCompletionViewModel: ViewModel<ExportingRoute> 
             imagesValue = "\(totalImages)"
         }
 
-        let objcSwiftValue = "\(formatInteger(result.totalObjcCount)) · \(formatInteger(result.totalSwiftCount))"
+        let languageCountsValue = [result.totalObjcCount, result.totalSwiftCount, result.totalCPlusPlusCount]
+            .map(formatInteger)
+            .joined(separator: " · ")
         let durationValue = String(format: "%.1f s", result.totalDuration)
 
         return Summary(
@@ -137,7 +140,7 @@ public final class BatchExportingCompletionViewModel: ViewModel<ExportingRoute> 
             headerSubtitle: headerSubtitle,
             interfacesValue: interfacesValue,
             imagesValue: imagesValue,
-            objcSwiftValue: objcSwiftValue,
+            languageCountsValue: languageCountsValue,
             durationValue: durationValue
         )
     }

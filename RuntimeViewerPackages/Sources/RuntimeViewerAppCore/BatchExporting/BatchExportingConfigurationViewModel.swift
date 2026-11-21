@@ -8,11 +8,13 @@ public final class BatchExportingConfigurationViewModel: ViewModel<ExportingRout
     public struct Input {
         public let objcFormatSelected: Signal<Int>
         public let swiftFormatSelected: Signal<Int>
+        public let cPlusPlusFormatSelected: Signal<Int>
         public let includeMetadataSelected: Signal<Bool>
 
-        public init(objcFormatSelected: Signal<Int>, swiftFormatSelected: Signal<Int>, includeMetadataSelected: Signal<Bool>) {
+        public init(objcFormatSelected: Signal<Int>, swiftFormatSelected: Signal<Int>, cPlusPlusFormatSelected: Signal<Int>, includeMetadataSelected: Signal<Bool>) {
             self.objcFormatSelected = objcFormatSelected
             self.swiftFormatSelected = swiftFormatSelected
+            self.cPlusPlusFormatSelected = cPlusPlusFormatSelected
             self.includeMetadataSelected = includeMetadataSelected
         }
     }
@@ -21,6 +23,7 @@ public final class BatchExportingConfigurationViewModel: ViewModel<ExportingRout
         public let summary: Driver<String>
         public let objcFormat: Driver<ExportFormat>
         public let swiftFormat: Driver<ExportFormat>
+        public let cPlusPlusFormat: Driver<ExportFormat>
         public let includeMetadata: Driver<Bool>
     }
 
@@ -32,6 +35,9 @@ public final class BatchExportingConfigurationViewModel: ViewModel<ExportingRout
     @UserDefault(key: ExportingDefaultsKey.swiftFormat, defaultValue: .singleFile)
     private var storedSwiftFormat: ExportFormat
 
+    @UserDefault(key: ExportingDefaultsKey.cPlusPlusFormat, defaultValue: .directory)
+    private var storedCPlusPlusFormat: ExportFormat
+
     @UserDefault(key: ExportingDefaultsKey.includeMetadata, defaultValue: true)
     private var storedIncludeMetadata: Bool
 
@@ -40,6 +46,7 @@ public final class BatchExportingConfigurationViewModel: ViewModel<ExportingRout
         super.init(documentState: documentState, router: router)
         exportingState.objcFormat = storedObjcFormat
         exportingState.swiftFormat = storedSwiftFormat
+        exportingState.cPlusPlusFormat = storedCPlusPlusFormat
         exportingState.includeMetadata = storedIncludeMetadata
     }
 
@@ -60,6 +67,14 @@ public final class BatchExportingConfigurationViewModel: ViewModel<ExportingRout
         }
         .disposed(by: rx.disposeBag)
 
+        input.cPlusPlusFormatSelected.emitOnNext { [weak self] index in
+            guard let self else { return }
+            let format = ExportFormat(rawValue: index) ?? .directory
+            storedCPlusPlusFormat = format
+            exportingState.cPlusPlusFormat = format
+        }
+        .disposed(by: rx.disposeBag)
+
         input.includeMetadataSelected.emitOnNext { [weak self] includeMetadata in
             guard let self else { return }
             storedIncludeMetadata = includeMetadata
@@ -77,6 +92,7 @@ public final class BatchExportingConfigurationViewModel: ViewModel<ExportingRout
             summary: summary,
             objcFormat: exportingState.$objcFormat.asDriver(),
             swiftFormat: exportingState.$swiftFormat.asDriver(),
+            cPlusPlusFormat: exportingState.$cPlusPlusFormat.asDriver(),
             includeMetadata: exportingState.$includeMetadata.asDriver()
         )
     }

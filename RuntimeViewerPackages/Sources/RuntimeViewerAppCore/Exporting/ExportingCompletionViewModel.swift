@@ -32,7 +32,11 @@ public final class ExportingCompletionViewModel: ViewModel<ExportingRoute> {
             lines.append("\(result.failed) failed")
         }
         lines.append(String(format: "Duration: %.1fs", result.totalDuration))
-        lines.append("ObjC: \(result.objcCount) | Swift: \(result.swiftCount)")
+        var languageCounts = "ObjC: \(result.objcCount) | Swift: \(result.swiftCount)"
+        if result.cPlusPlusCount > 0 {
+            languageCounts += " | C++: \(result.cPlusPlusCount)"
+        }
+        lines.append(languageCounts)
         summaryText = lines.joined(separator: "\n")
     }
 

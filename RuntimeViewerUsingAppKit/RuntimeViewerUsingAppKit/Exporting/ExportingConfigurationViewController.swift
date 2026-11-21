@@ -16,6 +16,9 @@ final class ExportingConfigurationViewController: BaseViewController<ExportingCo
     private let swiftSingleFileRadio = RadioButton()
     private let swiftDirectoryRadio = RadioButton()
 
+    private let cPlusPlusSingleFileRadio = RadioButton()
+    private let cPlusPlusDirectoryRadio = RadioButton()
+
     private let includeMetadataCheckbox = CheckboxButton()
 
     private let objcTitleLabel = Label("Objective-C:").then {
@@ -46,6 +49,20 @@ final class ExportingConfigurationViewController: BaseViewController<ExportingCo
         $0.textColor = .tertiaryLabelColor
     }
 
+    private let cPlusPlusTitleLabel = Label("C++:").then {
+        $0.font = .systemFont(ofSize: 13, weight: .medium)
+    }
+
+    private let cPlusPlusSingleFileDescriptionLabel = Label("Combine all C++ interfaces into one .hpp file").then {
+        $0.font = .systemFont(ofSize: 11)
+        $0.textColor = .tertiaryLabelColor
+    }
+
+    private let cPlusPlusDirectoryDescriptionLabel = Label("Individual .hpp files in CPlusPlusHeaders/ subdirectory").then {
+        $0.font = .systemFont(ofSize: 11)
+        $0.textColor = .tertiaryLabelColor
+    }
+
     private let metadataDesc = Label("Write README.md with RuntimeViewer, module, date, license, and dump option details").then {
         $0.font = .systemFont(ofSize: 11)
         $0.textColor = .tertiaryLabelColor
@@ -55,6 +72,7 @@ final class ExportingConfigurationViewController: BaseViewController<ExportingCo
         summaryLabel
         objcStack
         swiftStack
+        cPlusPlusStack
         metadataStack
     }
 
@@ -79,6 +97,18 @@ final class ExportingConfigurationViewController: BaseViewController<ExportingCo
         VStackView(alignment: .leading, spacing: 4) {
             swiftDirectoryRadio
             swiftDirDesc
+        }
+    }
+
+    private lazy var cPlusPlusStack = VStackView(alignment: .leading, spacing: 12) {
+        cPlusPlusTitleLabel
+        VStackView(alignment: .leading, spacing: 4) {
+            cPlusPlusSingleFileRadio
+            cPlusPlusSingleFileDescriptionLabel
+        }
+        VStackView(alignment: .leading, spacing: 4) {
+            cPlusPlusDirectoryRadio
+            cPlusPlusDirectoryDescriptionLabel
         }
     }
 
@@ -115,6 +145,16 @@ final class ExportingConfigurationViewController: BaseViewController<ExportingCo
             $0.font = .systemFont(ofSize: 13)
         }
 
+        cPlusPlusSingleFileRadio.do {
+            $0.title = "Single File (.hpp)"
+            $0.font = .systemFont(ofSize: 13)
+        }
+
+        cPlusPlusDirectoryRadio.do {
+            $0.title = "Directory Structure"
+            $0.font = .systemFont(ofSize: 13)
+        }
+
         includeMetadataCheckbox.do {
             $0.title = "Include README metadata"
             $0.font = .systemFont(ofSize: 13)
@@ -143,6 +183,10 @@ final class ExportingConfigurationViewController: BaseViewController<ExportingCo
                 swiftSingleFileRadio.rx.click.asSignal().map { ExportFormat.singleFile.rawValue },
                 swiftDirectoryRadio.rx.click.asSignal().map { ExportFormat.directory.rawValue }
             ),
+            cPlusPlusFormatSelected: Signal.merge(
+                cPlusPlusSingleFileRadio.rx.click.asSignal().map { ExportFormat.singleFile.rawValue },
+                cPlusPlusDirectoryRadio.rx.click.asSignal().map { ExportFormat.directory.rawValue }
+            ),
             includeMetadataSelected: includeMetadataCheckbox.rx.state.asSignal().map { $0 == .on }
         )
 
@@ -152,6 +196,8 @@ final class ExportingConfigurationViewController: BaseViewController<ExportingCo
         output.objcFormat.map { $0 == .directory }.drive(objcDirectoryRadio.rx.isCheck).disposed(by: rx.disposeBag)
         output.swiftFormat.map { $0 == .singleFile }.drive(swiftSingleFileRadio.rx.isCheck).disposed(by: rx.disposeBag)
         output.swiftFormat.map { $0 == .directory }.drive(swiftDirectoryRadio.rx.isCheck).disposed(by: rx.disposeBag)
+        output.cPlusPlusFormat.map { $0 == .singleFile }.drive(cPlusPlusSingleFileRadio.rx.isCheck).disposed(by: rx.disposeBag)
+        output.cPlusPlusFormat.map { $0 == .directory }.drive(cPlusPlusDirectoryRadio.rx.isCheck).disposed(by: rx.disposeBag)
         output.includeMetadata.drive(includeMetadataCheckbox.rx.isCheck).disposed(by: rx.disposeBag)
 
         output.hasObjC.driveOnNext { [weak self] hasObjC in
@@ -166,12 +212,19 @@ final class ExportingConfigurationViewController: BaseViewController<ExportingCo
         }
         .disposed(by: rx.disposeBag)
 
-        Driver.combineLatest(output.objcCount, output.swiftCount, output.imageName)
-            .driveOnNext { [weak self] objcCount, swiftCount, imageName in
+        output.hasCPlusPlus.driveOnNext { [weak self] hasCPlusPlus in
+            guard let self else { return }
+            cPlusPlusStack.isHidden = !hasCPlusPlus
+        }
+        .disposed(by: rx.disposeBag)
+
+        Driver.combineLatest(output.objcCount, output.swiftCount, output.cPlusPlusCount, output.imageName)
+            .driveOnNext { [weak self] objcCount, swiftCount, cPlusPlusCount, imageName in
                 guard let self else { return }
                 var parts = ["Image: \(imageName)"]
                 if objcCount > 0 { parts.append("\(objcCount) ObjC") }
                 if swiftCount > 0 { parts.append("\(swiftCount) Swift") }
+                if cPlusPlusCount > 0 { parts.append("\(cPlusPlusCount) C++") }
                 summaryLabel.stringValue = parts.joined(separator: " · ")
             }
             .disposed(by: rx.disposeBag)

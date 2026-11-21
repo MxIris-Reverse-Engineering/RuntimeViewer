@@ -192,7 +192,7 @@
 | `DylibPathResolver.resolve(…)` 对祖先 `@loader_path` 的展开 | [0098](0098-isolated-framework-loading.md) 决策日志步骤 1 | 小 | 它按正在解析的镜像展开祖先的 `@loader_path` rpath，dyld 按携带它的镜像展开；诊断另写了记录尝试的方法，原方法没改 |
 | iPad 上的外观设备图 | [0101](0101-settings-screen-on-ios.md) 决策日志 | 小 | iOS 外观一节只带了从 iPhone 上导出的两张设备图，iPad 上也画成手机；要另导出 iPad 的图、按设备类型选 |
 | 在 iOS 18 上验 iOS 版 | [0102](0102-window-model-on-ios.md) 决策日志 | 小 | iOS 版至今只在 iOS 27 上验过；越狱版要设备开着开发者模式，手头的 iOS 18.7.2 虚拟机在设置里开不了，要带补丁重装一台再验 |
-| C++ 对象进 Find、导出、MCP 与 CLI | [0103](0103-cplusplus-objects.md)「非目标」 | 中 | 第一版只接浏览界面；Find 要改语料快照的成员种类表与成员定位器的按语言规则，导出、MCP、CLI 要在取对象时带上 `includesCPlusPlusObjects`，各自另写提案 |
+| C++ 对象进 Find、MCP 与 CLI | [0103](0103-cplusplus-objects.md)「非目标」、[draft-cplusplus-export](draft-cplusplus-export.md)「非目标」 | 中 | 第一版只接浏览界面，App 的导出由 draft-cplusplus-export 接上；Find 要改语料快照的成员种类表与成员定位器的按语言规则，MCP、CLI 要在取对象时带上 `includesCPlusPlusObjects`（CLI 的 `export` 只需给导出配置打开同名开关，并更新 agent 插件的 skill 与版本），各自另写提案 |
 | Tuist 检查缺 `SwiftSectionTestingMacros` | [0103](0103-cplusplus-objects.md) 决策日志 | 小 | `./TuistScript.sh check` 报 `Tuist.swift` 的 `sourceDependencyTargetNames` 缺 MachOSwiftSection 的这个 target，是抬 MachOSwiftSection pin 时带进来的，与 C++ 对象无关 |
 
 ## 与 `Plans/` 的关系

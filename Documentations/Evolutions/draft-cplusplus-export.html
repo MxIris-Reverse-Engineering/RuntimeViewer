@@ -471,7 +471,7 @@ for group in RuntimeInterfaceExportItem.Group.allCases {
 <section id="log">
   <h2>决策日志</h2>
   <details>
-    <summary>4 条，最近一条：第 1 步完成</summary>
+    <summary>7 条，最近一条：实现完成，待用户看过后收尾</summary>
     <div class="details-body">
       <div class="table-wrap">
       <table>
@@ -481,6 +481,9 @@ for group in RuntimeInterfaceExportItem.Group.allCases {
           <tr><td class="numeric">2026-11-21</td><td>Accepted</td><td>用户看过简报后批准，并确认目录格式平铺、CLI 的 <code>export</code> 这次不加 C++。</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>In Progress</td><td>从 <code>next</code> 切出 <code>feature/cplusplus-export</code>。</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>第 1 步完成</td><td>Core 照方案改完。新增的 10 条测试放在 C++ 对象测试套件的嵌套套件 <code>CPlusPlusSectionTests.Export</code> 里，和它共用串行执行：存 C++ 索引的 store 是整个进程共用的，那个套件里有一条测试会清空它。C++ 与导出相关的 77 条测试全部通过。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>第 2 步完成</td><td>App 层照方案改完，新增 4 条测试；App 层 22 条测试全部通过。没能编整个 App：<code>./TuistScript.sh install</code> 连 GitHub 两次被对端断开，依赖装不上，<code>check</code> 也没跑；改为对改过的三个 App 文件做 <code>swiftc -typecheck</code>，通过。没有增删 target。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>文档判断</td><td>不写使用指南或实现说明，没有新术语；术语表、<code>AGENTS.md</code> 与提案索引的暂缓项各改一句。<code>AGENTS.md</code> 本来就超过 64 KiB，是原有问题。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>实现完成，待用户看过后收尾</td><td>两步都已提交；在本地合进常驻检出的 <code>next</code>，不推送。界面没有目视，留给用户看。</td></tr>
         </tbody>
       </table>
       </div>
