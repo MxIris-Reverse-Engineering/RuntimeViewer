@@ -163,7 +163,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
   <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">Draft</span></p>
   <h1><span class="proposal-number">Draft</span> 导出 C++ 对象：单个与批量导出写出 C++ 头文件</h1>
   <dl class="meta">
-    <div><dt>状态</dt><dd><span class="status status-accepted">Accepted</span></dd></div>
+    <div><dt>状态</dt><dd><span class="status status-in-progress">In Progress</span></dd></div>
     <div><dt>最后更新</dt><dd>2026-11-21</dd></div>
     <div><dt>项目类型</dt><dd>App</dd></div>
     <div><dt>原文</dt><dd><code>draft-cplusplus-export.md</code></dd></div>
@@ -471,7 +471,7 @@ for group in RuntimeInterfaceExportItem.Group.allCases {
 <section id="log">
   <h2>决策日志</h2>
   <details>
-    <summary>2 条，最近一条：Accepted</summary>
+    <summary>4 条，最近一条：第 1 步完成</summary>
     <div class="details-body">
       <div class="table-wrap">
       <table>
@@ -479,6 +479,8 @@ for group in RuntimeInterfaceExportItem.Group.allCases {
         <tbody>
           <tr><td class="numeric">2026-11-21</td><td>Created as Draft</td><td>0103 落地后，用户要求导出也带上 C++，这是 0103 暂缓项里的一项。走轻量档：先查清现状写出方案，开工前请用户确认三件事。</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>Accepted</td><td>用户看过简报后批准，并确认目录格式平铺、CLI 的 <code>export</code> 这次不加 C++。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>In Progress</td><td>从 <code>next</code> 切出 <code>feature/cplusplus-export</code>。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>第 1 步完成</td><td>Core 照方案改完。新增的 10 条测试放在 C++ 对象测试套件的嵌套套件 <code>CPlusPlusSectionTests.Export</code> 里，和它共用串行执行：存 C++ 索引的 store 是整个进程共用的，那个套件里有一条测试会清空它。C++ 与导出相关的 77 条测试全部通过。</td></tr>
         </tbody>
       </table>
       </div>

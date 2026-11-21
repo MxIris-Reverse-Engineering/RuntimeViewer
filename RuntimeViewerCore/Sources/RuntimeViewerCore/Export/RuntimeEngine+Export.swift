@@ -20,7 +20,12 @@ extension RuntimeEngine {
         let startTime = CFAbsoluteTimeGetCurrent()
 
         reporter.send(.phaseStarted(.preparing))
-        let allObjects = try await objects(in: configuration.imagePath)
+        // A C++ interface names the classes and namespaces declared in it
+        // without printing them, so each of them is exported on its own.
+        let allObjects = try await objects(
+            in: configuration.imagePath,
+            includesCPlusPlusObjects: configuration.includesCPlusPlusObjects
+        ).flatMap(\.exportedObjects)
         reporter.send(.phaseCompleted(.preparing))
 
         reporter.send(.phaseStarted(.exporting))
@@ -29,6 +34,7 @@ extension RuntimeEngine {
         var failed = 0
         var objcCount = 0
         var swiftCount = 0
+        var cPlusPlusCount = 0
         let total = allObjects.count
 
         for (index, object) in allObjects.enumerated() {
@@ -52,7 +58,11 @@ extension RuntimeEngine {
                 )
                 results.append(item)
                 succeeded += 1
-                if item.isSwift { swiftCount += 1 } else { objcCount += 1 }
+                switch item.group {
+                case .objectiveC: objcCount += 1
+                case .swift: swiftCount += 1
+                case .cPlusPlus: cPlusPlusCount += 1
+                }
                 reporter.send(.objectCompleted(object, runtimeInterface.interfaceString))
             } catch {
                 failed += 1
@@ -66,47 +76,20 @@ extension RuntimeEngine {
         var writeFailed = 0
 
         do {
-            let objcItems = results.filter { !$0.isSwift }
-            let swiftItems = results.filter { $0.isSwift }
-
-            if !objcItems.isEmpty {
-                switch configuration.objcFormat {
-                case .singleFile:
-                    try RuntimeInterfaceExportWriter.writeSingleFile(
-                        items: objcItems,
-                        to: configuration.directory,
-                        imageName: configuration.imageName,
-                    )
-                case .directory:
-                    let writeResult = try RuntimeInterfaceExportWriter.writeDirectory(
-                        items: objcItems,
-                        to: configuration.directory,
-                    )
-                    for (failedItem, writeError) in writeResult.failedItems {
-                        reporter.send(.objectFailed(failedItem.object, writeError))
-                    }
-                    writeFailed += writeResult.failedItems.count
+            for group in RuntimeInterfaceExportItem.Group.allCases {
+                let items = results.filter { $0.group == group }
+                guard !items.isEmpty else { continue }
+                let writeResult = try RuntimeInterfaceExportWriter.write(
+                    items,
+                    as: group,
+                    format: configuration.format(for: group),
+                    to: configuration.directory,
+                    imageName: configuration.imageName,
+                )
+                for (failedItem, writeError) in writeResult.failedItems {
+                    reporter.send(.objectFailed(failedItem.object, writeError))
                 }
-            }
-
-            if !swiftItems.isEmpty {
-                switch configuration.swiftFormat {
-                case .singleFile:
-                    try RuntimeInterfaceExportWriter.writeSingleFile(
-                        items: swiftItems,
-                        to: configuration.directory,
-                        imageName: configuration.imageName,
-                    )
-                case .directory:
-                    let writeResult = try RuntimeInterfaceExportWriter.writeDirectory(
-                        items: swiftItems,
-                        to: configuration.directory,
-                    )
-                    for (failedItem, writeError) in writeResult.failedItems {
-                        reporter.send(.objectFailed(failedItem.object, writeError))
-                    }
-                    writeFailed += writeResult.failedItems.count
-                }
+                writeFailed += writeResult.failedItems.count
             }
 
             if configuration.includeMetadata {
@@ -121,6 +104,7 @@ extension RuntimeEngine {
                     module: module,
                     objcInterfaceCount: objcCount,
                     swiftInterfaceCount: swiftCount,
+                    cPlusPlusInterfaceCount: cPlusPlusCount,
                     succeeded: succeeded,
                     failed: failed + writeFailed,
                 )
@@ -139,6 +123,7 @@ extension RuntimeEngine {
             totalDuration: duration,
             objcCount: objcCount,
             swiftCount: swiftCount,
+            cPlusPlusCount: cPlusPlusCount,
         )
         reporter.send(.completed(result))
     }

@@ -8,9 +8,20 @@ extension RuntimeObject {
     /// routinely blow past this, so every export file name is clamped below.
     private static let maxFileNameByteLength = 255
 
+    /// The objects an export writes for this one: itself, and for a C++
+    /// class or namespace every class and namespace declared in it, depth
+    /// first, each after the one it is declared in. A C++ interface names
+    /// what is declared in it without printing it, so each of them is written
+    /// on its own; an Objective-C or Swift object is written alone, as it
+    /// always was (proposal `cplusplus-export`).
+    public var exportedObjects: [RuntimeObject] {
+        guard kind.isCPlusPlus else { return [self] }
+        return [self] + children.flatMap(\.exportedObjects)
+    }
+
     public var exportFileName: String {
         let invalidCharacters = CharacterSet(charactersIn: "/:<>\"\\|?*")
-        let sanitized = displayName
+        let sanitized = fileNameSource
             .components(separatedBy: invalidCharacters)
             .joined(separator: "_")
 
@@ -46,6 +57,18 @@ extension RuntimeObject {
         }
 
         return Self.clampFileName(base: base, suffix: suffix)
+    }
+
+    /// What a file name is made from. A C++ object is named by its qualified
+    /// name, since its display name is only the last component and the same
+    /// one is declared in many namespaces; the global namespace, whose name
+    /// is `::`, is `GlobalNamespace`.
+    private var fileNameSource: String {
+        guard kind.isCPlusPlus else { return displayName }
+        if name == CPlusPlusObjectTreeBuilder.globalNamespaceName {
+            return "GlobalNamespace"
+        }
+        return name
     }
 
     /// Joins `base + suffix`, clamping the result to `maxFileNameByteLength`.

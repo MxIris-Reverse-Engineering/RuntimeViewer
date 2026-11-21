@@ -1,6 +1,6 @@
 # Draft - 导出 C++ 对象：单个与批量导出写出 C++ 头文件
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-21
 - **最后更新**: 2026-11-21
@@ -265,7 +265,7 @@ for group in RuntimeInterfaceExportItem.Group.allCases {
 
 ## 落地步骤
 
-1. **Core 导出写出 C++** —— 改动地图里步骤为 1 的各行。行为：
+1. **[完成] Core 导出写出 C++** —— 改动地图里步骤为 1 的各行。行为：
    - `exportLeavesCPlusPlusOutUnlessAsked`：不带新参数的配置导出 libc++abi，没有 `CPlusPlusHeaders/`，`cPlusPlusCount == 0`（CLI 的现状）
    - `directoryExportWritesCPlusPlusHeaders`：libc++abi 的目录导出写出 `CPlusPlusHeaders/std__exception.hpp`、`std__bad_alloc.hpp` 与 `std.hpp`
    - `singleFileExportCombinesCPlusPlusIntoOneHeader`：单文件导出写出 `libc++abi.hpp`，里面有 `class std::bad_alloc`
@@ -291,3 +291,5 @@ for group in RuntimeInterfaceExportItem.Group.allCases {
 |---|---|---|
 | 2026-11-21 | Created as Draft | 0103 落地后，用户要求导出也带上 C++，这是 0103 暂缓项里的一项。走轻量档：先查清现状写出方案，开工前请用户确认三件事（照此开工、目录平铺还是分层、CLI 带不带）。 |
 | 2026-11-21 | Accepted | 用户看过简报后批准，并确认目录格式平铺、CLI 的 `export` 这次不加 C++。 |
+| 2026-11-21 | In Progress | 从 `next` 切出 `feature/cplusplus-export`。 |
+| 2026-11-21 | 第 1 步完成 | Core 照方案改完。新增的 10 条测试放在 C++ 对象测试套件的嵌套套件 `CPlusPlusSectionTests.Export` 里，和它共用串行执行：MachOKitExtensions 存 C++ 索引的 store 是整个进程共用的，那个套件里有一条测试会清空它。C++ 与导出相关的 77 条测试全部通过。 |

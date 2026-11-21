@@ -1,69 +1,43 @@
 import Foundation
 
 enum RuntimeInterfaceExportWriter {
-    static func writeSingleFile(
-        items: [RuntimeInterfaceExportItem],
-        to directory: URL,
-        imageName: String
-    ) throws {
-        let objcItems = items.filter { !$0.isSwift }
-        let swiftItems = items.filter { $0.isSwift }
-
-        if !objcItems.isEmpty {
-            let combined = objcItems.map(\.plainText).joined(separator: "\n\n")
-            let file = directory.appendingPathComponent("\(imageName).h")
-            try combined.write(to: file, atomically: true, encoding: .utf8)
-        }
-
-        if !swiftItems.isEmpty {
-            let combined = swiftItems.map(\.plainText).joined(separator: "\n\n")
-            let file = directory.appendingPathComponent("\(imageName).swiftinterface")
-            try combined.write(to: file, atomically: true, encoding: .utf8)
-        }
-    }
-
     struct WriteResult {
         var writtenCount: Int = 0
         var failedItems: [(item: RuntimeInterfaceExportItem, error: any Error)] = []
     }
 
-    static func writeDirectory(
-        items: [RuntimeInterfaceExportItem],
-        to directory: URL
+    /// Writes the interfaces of one group: all of them into
+    /// `<imageName>.<extension>` in the single-file format, each into a file
+    /// of its own under the group's directory in the directory format.
+    /// `items` are the group's, in the order they are written.
+    static func write(
+        _ items: [RuntimeInterfaceExportItem],
+        as group: RuntimeInterfaceExportItem.Group,
+        format: RuntimeInterfaceExportConfiguration.Format,
+        to directory: URL,
+        imageName: String
     ) throws -> WriteResult {
-        var result = WriteResult()
-        let objcItems = items.filter { !$0.isSwift }
-        let swiftItems = items.filter { $0.isSwift }
-
-        if !objcItems.isEmpty {
-            let objcDir = directory.appendingPathComponent("ObjCHeaders")
-            try FileManager.default.createDirectory(at: objcDir, withIntermediateDirectories: true)
-            for item in objcItems {
+        switch format {
+        case .singleFile:
+            let combined = items.map(\.plainText).joined(separator: "\n\n")
+            let file = directory.appendingPathComponent("\(imageName).\(group.singleFileExtension)")
+            try combined.write(to: file, atomically: true, encoding: .utf8)
+            return WriteResult(writtenCount: items.count)
+        case .directory:
+            var result = WriteResult()
+            let groupDirectory = directory.appendingPathComponent(group.directoryName)
+            try FileManager.default.createDirectory(at: groupDirectory, withIntermediateDirectories: true)
+            for item in items {
                 do {
-                    let file = objcDir.appendingPathComponent(item.suggestedFileName)
+                    let file = groupDirectory.appendingPathComponent(item.suggestedFileName)
                     try item.plainText.write(to: file, atomically: true, encoding: .utf8)
                     result.writtenCount += 1
                 } catch {
                     result.failedItems.append((item: item, error: error))
                 }
             }
+            return result
         }
-
-        if !swiftItems.isEmpty {
-            let swiftDir = directory.appendingPathComponent("SwiftInterfaces")
-            try FileManager.default.createDirectory(at: swiftDir, withIntermediateDirectories: true)
-            for item in swiftItems {
-                do {
-                    let file = swiftDir.appendingPathComponent(item.suggestedFileName)
-                    try item.plainText.write(to: file, atomically: true, encoding: .utf8)
-                    result.writtenCount += 1
-                } catch {
-                    result.failedItems.append((item: item, error: error))
-                }
-            }
-        }
-
-        return result
     }
 
     static func writeMetadata(
