@@ -14,6 +14,9 @@ final class BatchExportingConfigurationViewController: BaseViewController<BatchE
     private let swiftSingleFileRadio = RadioButton()
     private let swiftDirectoryRadio = RadioButton()
 
+    private let cPlusPlusSingleFileRadio = RadioButton()
+    private let cPlusPlusDirectoryRadio = RadioButton()
+
     private let includeMetadataCheckbox = CheckboxButton()
 
     private let objcTitleLabel = Label("Objective-C:").then {
@@ -44,6 +47,20 @@ final class BatchExportingConfigurationViewController: BaseViewController<BatchE
         $0.textColor = .tertiaryLabelColor
     }
 
+    private let cPlusPlusTitleLabel = Label("C++:").then {
+        $0.font = .systemFont(ofSize: 13, weight: .medium)
+    }
+
+    private let cPlusPlusSingleFileDescriptionLabel = Label("Combine all C++ interfaces into one .hpp file per image").then {
+        $0.font = .systemFont(ofSize: 11)
+        $0.textColor = .tertiaryLabelColor
+    }
+
+    private let cPlusPlusDirectoryDescriptionLabel = Label("Individual .hpp files in each image's CPlusPlusHeaders/ subdirectory").then {
+        $0.font = .systemFont(ofSize: 11)
+        $0.textColor = .tertiaryLabelColor
+    }
+
     private let metadataDesc = Label("Write README.md with RuntimeViewer, module, date, license, and dump option details").then {
         $0.font = .systemFont(ofSize: 11)
         $0.textColor = .tertiaryLabelColor
@@ -53,6 +70,7 @@ final class BatchExportingConfigurationViewController: BaseViewController<BatchE
         summaryLabel
         objcStack
         swiftStack
+        cPlusPlusStack
         metadataStack
     }
 
@@ -77,6 +95,18 @@ final class BatchExportingConfigurationViewController: BaseViewController<BatchE
         VStackView(alignment: .leading, spacing: 4) {
             swiftDirectoryRadio
             swiftDirDesc
+        }
+    }
+
+    private lazy var cPlusPlusStack = VStackView(alignment: .leading, spacing: 12) {
+        cPlusPlusTitleLabel
+        VStackView(alignment: .leading, spacing: 4) {
+            cPlusPlusSingleFileRadio
+            cPlusPlusSingleFileDescriptionLabel
+        }
+        VStackView(alignment: .leading, spacing: 4) {
+            cPlusPlusDirectoryRadio
+            cPlusPlusDirectoryDescriptionLabel
         }
     }
 
@@ -114,6 +144,16 @@ final class BatchExportingConfigurationViewController: BaseViewController<BatchE
             $0.font = .systemFont(ofSize: 13)
         }
 
+        cPlusPlusSingleFileRadio.do {
+            $0.title = "Single File (.hpp)"
+            $0.font = .systemFont(ofSize: 13)
+        }
+
+        cPlusPlusDirectoryRadio.do {
+            $0.title = "Directory Structure"
+            $0.font = .systemFont(ofSize: 13)
+        }
+
         includeMetadataCheckbox.do {
             $0.title = "Include README metadata"
             $0.font = .systemFont(ofSize: 13)
@@ -140,6 +180,10 @@ final class BatchExportingConfigurationViewController: BaseViewController<BatchE
                 swiftSingleFileRadio.rx.click.asSignal().map { ExportFormat.singleFile.rawValue },
                 swiftDirectoryRadio.rx.click.asSignal().map { ExportFormat.directory.rawValue }
             ),
+            cPlusPlusFormatSelected: Signal.merge(
+                cPlusPlusSingleFileRadio.rx.click.asSignal().map { ExportFormat.singleFile.rawValue },
+                cPlusPlusDirectoryRadio.rx.click.asSignal().map { ExportFormat.directory.rawValue }
+            ),
             includeMetadataSelected: includeMetadataCheckbox.rx.state.asSignal().map { $0 == .on }
         )
 
@@ -149,6 +193,8 @@ final class BatchExportingConfigurationViewController: BaseViewController<BatchE
         output.objcFormat.map { $0 == .directory }.drive(objcDirectoryRadio.rx.isCheck).disposed(by: rx.disposeBag)
         output.swiftFormat.map { $0 == .singleFile }.drive(swiftSingleFileRadio.rx.isCheck).disposed(by: rx.disposeBag)
         output.swiftFormat.map { $0 == .directory }.drive(swiftDirectoryRadio.rx.isCheck).disposed(by: rx.disposeBag)
+        output.cPlusPlusFormat.map { $0 == .singleFile }.drive(cPlusPlusSingleFileRadio.rx.isCheck).disposed(by: rx.disposeBag)
+        output.cPlusPlusFormat.map { $0 == .directory }.drive(cPlusPlusDirectoryRadio.rx.isCheck).disposed(by: rx.disposeBag)
         output.includeMetadata.drive(includeMetadataCheckbox.rx.isCheck).disposed(by: rx.disposeBag)
 
         output.summary.drive(summaryLabel.rx.stringValue).disposed(by: rx.disposeBag)

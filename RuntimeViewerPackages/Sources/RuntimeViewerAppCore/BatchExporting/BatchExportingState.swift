@@ -93,6 +93,11 @@ public struct BatchExportingPerImageOutcome: Sendable {
         return 0
     }
 
+    public var cPlusPlusCount: Int {
+        if case .success(let result) = outcome { return result.cPlusPlusCount }
+        return 0
+    }
+
     public var didSucceed: Bool {
         if case .success = outcome { return true }
         return false
@@ -107,6 +112,7 @@ public struct BatchExportingAggregatedResult: Sendable {
     public let totalDuration: TimeInterval
     public let totalObjcCount: Int
     public let totalSwiftCount: Int
+    public let totalCPlusPlusCount: Int
 
     public init(outcomes: [BatchExportingPerImageOutcome]) {
         var imagesSucceeded = 0
@@ -116,6 +122,7 @@ public struct BatchExportingAggregatedResult: Sendable {
         var totalDuration: TimeInterval = 0
         var totalObjcCount = 0
         var totalSwiftCount = 0
+        var totalCPlusPlusCount = 0
         for outcome in outcomes {
             if outcome.didSucceed {
                 imagesSucceeded += 1
@@ -127,6 +134,7 @@ public struct BatchExportingAggregatedResult: Sendable {
             totalDuration += outcome.totalDuration
             totalObjcCount += outcome.objcCount
             totalSwiftCount += outcome.swiftCount
+            totalCPlusPlusCount += outcome.cPlusPlusCount
         }
         self.imagesSucceeded = imagesSucceeded
         self.imagesFailed = imagesFailed
@@ -135,6 +143,7 @@ public struct BatchExportingAggregatedResult: Sendable {
         self.totalDuration = totalDuration
         self.totalObjcCount = totalObjcCount
         self.totalSwiftCount = totalSwiftCount
+        self.totalCPlusPlusCount = totalCPlusPlusCount
     }
 }
 
@@ -155,6 +164,9 @@ public final class BatchExportingState {
 
     @RxObserved
     public var swiftFormat: ExportFormat = .singleFile
+
+    @RxObserved
+    public var cPlusPlusFormat: ExportFormat = .directory
 
     @RxObserved
     public var includeMetadata: Bool = true

@@ -67,8 +67,10 @@ public final class ExportingProgressViewModel: ViewModel<ExportingRoute> {
             directory: directory,
             objcFormat: exportingState.objcFormat,
             swiftFormat: exportingState.swiftFormat,
+            cPlusPlusFormat: exportingState.cPlusPlusFormat,
             generationOptions: generationOptions,
-            includeMetadata: exportingState.includeMetadata
+            includeMetadata: exportingState.includeMetadata,
+            includesCPlusPlusObjects: true
         )
 
         let runtimeEngine = documentState.runtimeEngine

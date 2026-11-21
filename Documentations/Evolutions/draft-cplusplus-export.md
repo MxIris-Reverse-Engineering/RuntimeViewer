@@ -1,6 +1,6 @@
 # Draft - 导出 C++ 对象：单个与批量导出写出 C++ 头文件
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-21
 - **最后更新**: 2026-11-21
@@ -265,7 +265,7 @@ for group in RuntimeInterfaceExportItem.Group.allCases {
 
 ## 落地步骤
 
-1. **Core 导出写出 C++** —— 改动地图里步骤为 1 的各行。行为：
+1. **[完成] Core 导出写出 C++** —— 改动地图里步骤为 1 的各行。行为：
    - `exportLeavesCPlusPlusOutUnlessAsked`：不带新参数的配置导出 libc++abi，没有 `CPlusPlusHeaders/`，`cPlusPlusCount == 0`（CLI 的现状）
    - `directoryExportWritesCPlusPlusHeaders`：libc++abi 的目录导出写出 `CPlusPlusHeaders/std__exception.hpp`、`std__bad_alloc.hpp` 与 `std.hpp`
    - `singleFileExportCombinesCPlusPlusIntoOneHeader`：单文件导出写出 `libc++abi.hpp`，里面有 `class std::bad_alloc`
@@ -276,14 +276,14 @@ for group in RuntimeInterfaceExportItem.Group.allCases {
    - `globalNamespaceExportsAsGlobalNamespaceFile`
    - `resultCountsCPlusPlusInterfaces`
    - `readmeListsCPlusPlusOnlyWhenIncluded`
-2. **App 的两条导出路径与界面，加文档** —— 改动地图里步骤为 2 的各行。行为：
+2. **[完成] App 的两条导出路径与界面，加文档** —— 改动地图里步骤为 2 的各行。行为：
    - `completionSummaryListsCPlusPlusCount`
    - `completionSummaryOmitsCPlusPlusWhenThereIsNone`
    - `batchSummaryShowsThreeLanguageCounts`
    - `aggregatedResultAddsUpCPlusPlusCounts`
    - 整个 App 编过；`./TuistScript.sh check` 没有新的红（`SwiftSectionTestingMacros` 那条是既有红）
    - 配置页的计数与单选的显隐不写测试：要替身引擎才能测，计数用的是第 1 步测过的 `exportedObjects`；由用户在 App 里目视
-3. **文档判断**（随第 2 步提交）：使用指南与实现说明倾向都不写——导出没有使用指南，规则在提案与 `AGENTS.md` 里；没有新术语，「C++ 对象」那条改一句。
+3. **[完成] 文档判断**（随第 2 步提交）：使用指南与实现说明倾向都不写——导出没有使用指南，规则在提案与 `AGENTS.md` 里；没有新术语，「C++ 对象」那条改一句。
 
 ## 决策日志
 
@@ -291,3 +291,8 @@ for group in RuntimeInterfaceExportItem.Group.allCases {
 |---|---|---|
 | 2026-11-21 | Created as Draft | 0103 落地后，用户要求导出也带上 C++，这是 0103 暂缓项里的一项。走轻量档：先查清现状写出方案，开工前请用户确认三件事（照此开工、目录平铺还是分层、CLI 带不带）。 |
 | 2026-11-21 | Accepted | 用户看过简报后批准，并确认目录格式平铺、CLI 的 `export` 这次不加 C++。 |
+| 2026-11-21 | In Progress | 从 `next` 切出 `feature/cplusplus-export`。 |
+| 2026-11-21 | 第 1 步完成 | Core 照方案改完。新增的 10 条测试放在 C++ 对象测试套件的嵌套套件 `CPlusPlusSectionTests.Export` 里，和它共用串行执行：MachOKitExtensions 存 C++ 索引的 store 是整个进程共用的，那个套件里有一条测试会清空它。C++ 与导出相关的 77 条测试全部通过。 |
+| 2026-11-21 | 第 2 步完成 | App 层照方案改完，新增 4 条测试放在 `ExportingLanguageCountsTests`；连同原有的导出完成页测试、C++ 展示测试和两个边界检查，App 层 22 条测试全部通过。没能编整个 App：给新 worktree 做 `./TuistScript.sh install` 时，连 GitHub 的 HTTPS 两次被对端断开（HTTP/2 流被重置、TLS 读到意外的 EOF），依赖装不上，`./TuistScript.sh check` 因此也没跑。改为拿编好的包对改过的三个 App 文件做 `swiftc -typecheck`，通过。本次没有增删 target，Tuist 描述不用跟着改。 |
+| 2026-11-21 | 文档判断 | 不写使用指南或实现说明：导出没有使用指南，规则在本提案、`AGENTS.md` 与代码注释里。没有新术语；术语表的「C++ 对象」改成导出会写出它们，`AGENTS.md` 的 RuntimeViewerCore 一段改成 App 的两条导出路径也要 C++ 对象、CLI 不要，提案索引的暂缓项改为 Find、MCP 与 CLI。`AGENTS.md` 在 `next` 上已有 72,129 字节，超过它自己定的 64 KiB 上限，是原有问题；这次只多了 224 字节。 |
+| 2026-11-21 | 实现完成，待用户看过后收尾 | 两步都已提交；在本地合进常驻检出的 `next`，不推送。界面（配置页的 C++ 一组、摘要与完成页的计数）没有目视，留给用户看。 |

@@ -29,7 +29,7 @@ final class BatchExportingCompletionViewController: BaseViewController<BatchExpo
 
     private let interfacesCard = StatCardView(label: "Interfaces")
     private let imagesCard = StatCardView(label: "Images")
-    private let objcSwiftCard = StatCardView(label: "ObjC · Swift")
+    private let languageCountsCard = StatCardView(label: "ObjC · Swift · C++")
     private let durationCard = StatCardView(label: "Duration")
 
     private let (scrollView, tableView): (ScrollView, SingleColumnTableView) = SingleColumnTableView.scrollableTableView()
@@ -49,7 +49,7 @@ final class BatchExportingCompletionViewController: BaseViewController<BatchExpo
     private lazy var statsStack = HStackView(distribution: .fillEqually, spacing: 8) {
         interfacesCard
         imagesCard
-        objcSwiftCard
+        languageCountsCard
         durationCard
     }
 
@@ -131,7 +131,7 @@ final class BatchExportingCompletionViewController: BaseViewController<BatchExpo
         headerSubtitleLabel.isHidden = summary.headerSubtitle.isEmpty
         interfacesCard.setValue(summary.interfacesValue)
         imagesCard.setValue(summary.imagesValue)
-        objcSwiftCard.setValue(summary.objcSwiftValue)
+        languageCountsCard.setValue(summary.languageCountsValue)
         durationCard.setValue(summary.durationValue)
 
         if summary.hasFailures {

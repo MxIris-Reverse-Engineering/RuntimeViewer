@@ -81,6 +81,7 @@ public final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
         let runtimeEngine = documentState.runtimeEngine
         let objcFormat = exportingState.objcFormat
         let swiftFormat = exportingState.swiftFormat
+        let cPlusPlusFormat = exportingState.cPlusPlusFormat
         let includeMetadata = exportingState.includeMetadata
         let concurrency = max(2, min(8, ProcessInfo.processInfo.activeProcessorCount))
 
@@ -104,6 +105,7 @@ public final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
                             baseDirectory: directory,
                             objcFormat: objcFormat,
                             swiftFormat: swiftFormat,
+                            cPlusPlusFormat: cPlusPlusFormat,
                             includeMetadata: includeMetadata,
                             generationOptions: generationOptions,
                             runtimeEngine: runtimeEngine,
@@ -123,6 +125,7 @@ public final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
                                 baseDirectory: directory,
                                 objcFormat: objcFormat,
                                 swiftFormat: swiftFormat,
+                                cPlusPlusFormat: cPlusPlusFormat,
                                 includeMetadata: includeMetadata,
                                 generationOptions: generationOptions,
                                 runtimeEngine: runtimeEngine,
@@ -165,6 +168,7 @@ public final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
         baseDirectory: URL,
         objcFormat: ExportFormat,
         swiftFormat: ExportFormat,
+        cPlusPlusFormat: ExportFormat,
         includeMetadata: Bool,
         generationOptions: RuntimeObjectInterface.GenerationOptions,
         runtimeEngine: RuntimeEngine,
@@ -210,8 +214,10 @@ public final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
             directory: perImageDirectory,
             objcFormat: objcFormat,
             swiftFormat: swiftFormat,
+            cPlusPlusFormat: cPlusPlusFormat,
             generationOptions: generationOptions,
             includeMetadata: includeMetadata,
+            includesCPlusPlusObjects: true,
         )
 
         let reporter = RuntimeInterfaceExportReporter()

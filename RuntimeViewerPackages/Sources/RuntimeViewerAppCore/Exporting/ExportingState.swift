@@ -9,6 +9,7 @@ public typealias ExportFormat = RuntimeInterfaceExportConfiguration.Format
 public enum ExportingDefaultsKey {
     public static let objcFormat = "Exporting.objcFormat"
     public static let swiftFormat = "Exporting.swiftFormat"
+    public static let cPlusPlusFormat = "Exporting.cPlusPlusFormat"
     public static let includeMetadata = "Exporting.includeMetadata"
 }
 
@@ -32,6 +33,9 @@ public final class ExportingState {
 
     @RxObserved
     public var swiftFormat: ExportFormat = .singleFile
+
+    @RxObserved
+    public var cPlusPlusFormat: ExportFormat = .directory
 
     @RxObserved
     public var includeMetadata: Bool = true

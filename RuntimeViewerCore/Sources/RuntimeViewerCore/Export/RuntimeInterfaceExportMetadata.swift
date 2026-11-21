@@ -32,6 +32,10 @@ struct RuntimeInterfaceExportMetadata: Codable, Sendable {
         let swiftFormat: String
         let objcInterfaceCount: Int
         let swiftInterfaceCount: Int
+        /// The C++ format and interface count, `nil` when the export did not
+        /// ask for C++ objects.
+        var cPlusPlusFormat: String? = nil
+        var cPlusPlusInterfaceCount: Int? = nil
         let succeeded: Int
         let failed: Int
         let dumpOptions: DumpOptionsInfo
@@ -64,6 +68,7 @@ struct RuntimeInterfaceExportMetadata: Codable, Sendable {
         module: ModuleInfo? = nil,
         objcInterfaceCount: Int,
         swiftInterfaceCount: Int,
+        cPlusPlusInterfaceCount: Int = 0,
         succeeded: Int,
         failed: Int,
         generatedAt: Date = Date()
@@ -77,6 +82,8 @@ struct RuntimeInterfaceExportMetadata: Codable, Sendable {
                 swiftFormat: configuration.swiftFormat.displayName,
                 objcInterfaceCount: objcInterfaceCount,
                 swiftInterfaceCount: swiftInterfaceCount,
+                cPlusPlusFormat: configuration.includesCPlusPlusObjects ? configuration.cPlusPlusFormat.displayName : nil,
+                cPlusPlusInterfaceCount: configuration.includesCPlusPlusObjects ? cPlusPlusInterfaceCount : nil,
                 succeeded: succeeded,
                 failed: failed,
                 dumpOptions: .describe(configuration.generationOptions)
@@ -126,8 +133,14 @@ struct RuntimeInterfaceExportMetadata: Codable, Sendable {
             "- Generated at: \(Self.isoString(from: export.generatedAt))",
             "- ObjC format: \(export.objcFormat)",
             "- Swift format: \(export.swiftFormat)",
+        ]
+        appendOptional("- C++ format", export.cPlusPlusFormat, to: &lines)
+        lines += [
             "- ObjC interfaces: \(export.objcInterfaceCount)",
             "- Swift interfaces: \(export.swiftInterfaceCount)",
+        ]
+        appendOptional("- C++ interfaces", export.cPlusPlusInterfaceCount.map(String.init), to: &lines)
+        lines += [
             "- Succeeded: \(export.succeeded)",
             "- Failed: \(export.failed)"
         ]

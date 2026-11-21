@@ -329,10 +329,12 @@ The project uses three Swift Package Manager packages:
 - `RuntimeViewerCore` — Runtime inspection engine using MachOObjCSection (ObjC), MachOSwiftSection (Swift)
   and MachOKitExtensions' `CPlusPlusSymbols` (C++). **An image's C++ section is no part of indexing**: it
   is built the first time a request asks for C++ objects (`objects(in:includesCPlusPlusObjects:)`, which
-  only the sidebar's list, the jump bar and the image page pass `true` to), and Find, export, the word
-  cloud, MCP, the CLI and background indexing never see a C++ object. The flag is an optional field of
-  `objectsInImage`, never a command of its own, so a peer of an earlier build answers it with Objective-C
-  and Swift objects. Background: `Documentations/Evolutions/0103-cplusplus-objects.md`
+  only the sidebar's list, the jump bar, the image page and the app's two exports pass `true` to), and
+  Find, the word cloud, MCP, the CLI and background indexing never see a C++ object. The flag is an
+  optional field of `objectsInImage`, never a command of its own, so a peer of an earlier build answers it
+  with Objective-C and Swift objects. An export asks only when `RuntimeInterfaceExportConfiguration`'s
+  `includesCPlusPlusObjects` is on (off by default: the CLI's `export` writes no C++). Background:
+  `Documentations/Evolutions/0103-cplusplus-objects.md`, `Documentations/Evolutions/draft-cplusplus-export.md`
 - `RuntimeViewerCommunication` — XPC/TCP-based IPC layer for cross-process inspection
 - `RuntimeViewerInjection` — process injection as a RuntimeEngine command extension: the
   `RuntimeInjectionService` protocol, the wire types (`RuntimeProcess`,
