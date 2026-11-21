@@ -107,7 +107,7 @@ tag `0.49.0` 是同一个提交 `96343f3`，没有未发版的提交）
    还是等设置读完」写成可测的函数。
 5. **App**：新增生命周期控制器 `WelcomeController`（`App/` 目录）——
    - 持有 `WelcomePanelController`（`.xcode26`，懒创建），自己当它的 data source（用最近文档）与 delegate
-     （双击打开文件）；两个动作：New Window on My Mac（`newDocument`）、Open File…（`openDocument`）；
+     （双击打开文件）；两个动作：New Window on My Mac（`newDocumentWithoutPointerAnimation(_:)`，见详细设计「新窗口不从指针飞出」）、Open File…（`openDocument`）；
      标题用 `CFBundleDisplayName`，空列表文字 `No Recent Files`；图标后的光晕换成白色（样式默认的是 Xcode 图标的蓝色）。
    - `shouldOpenUntitledDocument()` 回答 `applicationShouldOpenUntitledFile(_:)`：设置已读完就按开关当场决定；
      没读完就记下「启动时有一个未命名文档的请求」并先回 `false`，等 `start()` 里读完设置后再决定弹欢迎窗口
@@ -151,7 +151,8 @@ tag `0.49.0` 是同一个提交 `96343f3`，没有未发版的提交）
 | `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/WelcomeController.swift` · `WelcomeController` | 新增 | 持有面板、data source / delegate、启动与 Dock 决策、关窗观察、`@DependencyEntry` | 生命周期职责独立成控制器 | 5 |
 | `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/AppDelegate.swift` | 修改 | `@Dependency(\.welcomeController)`；`applicationShouldOpenUntitledFile(_:)`；`didFinishLaunching` 里 `welcomeController.start()`；`@objc showWelcomeWindow(_:)` | 一行转发 | 5 |
 | `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/WindowLifecycleController.swift` | 修改 | 最后一支改调 `welcomeController.showInsteadOfUntitledDocument()`，doc comment 跟着改 | Dock 点击也弹欢迎窗口 | 5 |
-| `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/MainMenuController.swift` | 修改 | `MainMenu.window(customizing:)`，Bring All to Front 之前插 Welcome to RuntimeViewer（⇧⌘1）与分隔线 | 随时能叫出来 | 5 |
+| `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/MainMenuController.swift` | 修改 | `MainMenu.window(customizing:)`，Bring All to Front 之前插 Welcome to RuntimeViewer（⇧⌘1）与分隔线；File › New 的 action 改为 `newDocumentWithoutPointerAnimation(_:)` | 随时能叫出来；新窗口不从指针飞出 | 5 |
+| `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/DocumentController.swift` · `NSDocumentController` 扩展、`DocumentController` | 修改 | 加 `@objc newDocumentWithoutPointerAnimation(_:)`（`openUntitledDocumentAndDisplay(false)` + `makeWindowControllers()` + `showWindows()`，出错 `presentError`）；`validateUserInterfaceItem(_:)` 对它恒为 `true` | 新窗口照 Xcode 原地出现，不从指针飞出 | 5 |
 | `RuntimeViewerUsingAppKit/AGENTS.md` · *AppDelegate and the Lifecycle Controllers* | 修改 | 控制器清单加 `WelcomeController`，写明「关欢迎窗口要等文档窗口成为主窗口」 | 规则留档 | 6 |
 | `Documentations/Evolutions/README.md`、`Documentations/README.md` | 修改 | 登记本提案；落地时改编号与状态 | 索引 | 6 |
 
@@ -184,7 +185,8 @@ RuntimeViewerUsingAppKit/App/
 ~ AppDelegate                         applicationShouldOpenUntitledFile, start(), showWelcomeWindow(_:)
 ~ WindowLifecycleController           handleReopen: last branch -> WelcomeController
 ~ SettingsLifecycleController         + isLoaded, + waitUntilLoaded()
-~ MainMenuController                  Window ▸ Welcome to RuntimeViewer ⇧⌘1
+~ MainMenuController                  Window ▸ Welcome to RuntimeViewer ⇧⌘1; File ▸ New -> newDocumentWithoutPointerAnimation(_:)
+~ DocumentController.swift            + NSDocumentController.newDocumentWithoutPointerAnimation(_:)
 ```
 
 启动时的流程：
@@ -207,7 +209,7 @@ AppDelegate.applicationDidFinishLaunching(_:)
              guard hasPendingLaunchRequest
              WelcomeWindowPolicy.decisionAfterSettingsLoaded(showsWelcomeWindow:hasDocumentWindow:)
              ├─ .showWelcomeWindow    ──> showWindow()
-             ├─ .openUntitledDocument ──> openUntitledDocumentAndDisplay(true)
+             ├─ .openUntitledDocument ──> newDocumentWithoutPointerAnimation(nil)
              └─ nil                   ──> nothing (a document window is already up) }
 
 later: a document window becomes main ──> WelcomeController closes the panel
@@ -344,7 +346,7 @@ final class WelcomeController: NSObject {
         configuration.primaryAction = .init(
             image: SFSymbols(systemName: .plusSquare).nsImage,
             title: "New Window on My Mac",
-            action: { _ in MainActor.assumeIsolated { NSDocumentController.shared.newDocument(nil) } }
+            action: { _ in MainActor.assumeIsolated { NSDocumentController.shared.newDocumentWithoutPointerAnimation(nil) } }
         )
         configuration.secondaryAction = .init(
             image: SFSymbols(systemName: .folder).nsImage,
@@ -418,6 +420,42 @@ func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
 
 三处都是一行转发，符合 `RuntimeViewerUsingAppKit/AGENTS.md` 对 `AppDelegate` 的约束。
 
+### 新窗口不从指针飞出
+
+New Window on My Mac、File › New，以及启动和 Dock 点击时退回的「开一个 My Mac 窗口」，都调
+`NSDocumentController` 扩展里的 `newDocumentWithoutPointerAnimation(_:)`（`App/DocumentController.swift`），
+不调 `newDocument(_:)`：
+
+```swift
+@objc func newDocumentWithoutPointerAnimation(_ sender: Any?) {
+    do {
+        let document = try openUntitledDocumentAndDisplay(false)
+        document.makeWindowControllers()
+        document.showWindows()
+    } catch {
+        presentError(error)
+    }
+}
+```
+
+逆向查到的原因（macOS 27.2 AppKit，归档 cache UUID `b411828b…`；Xcode 27.2 27B52 的 IDEKit）：
+
+- `newDocument(_:)` 只调 `openUntitledDocumentAndDisplay(true)`，后者用 `+[_NSWindowTransformAnimation
+  beginNewDocumentWindowCreation]` / `endNewDocumentWindowCreation` 包住 `makeWindowControllers` 与
+  `showWindows`。`begin` 在当前事件是 LeftMouseUp 时记下 `NSEvent.mouseLocation`。
+- 未命名文档的窗口上屏时得到 `ScaleUpAndIn` 动画；记下了鼠标位置时，动画的起点就是它、锚点是窗口左上角：
+  窗口左上角从指针处出发再滑回原位。欢迎窗口的按钮在屏幕中间，大窗口从那里往右下垂着再弹回，看起来像
+  从右下角飞进来；点菜单 File › New 时则从菜单栏飞下来。⌘N、启动、Dock 点击没有鼠标抬起，不飞。
+- `animationBehavior` 的 `.default` 与 `.documentWindow` 对未命名文档窗口算出来是同一种动画，改它没用；
+  `.none` 能关掉，但关窗动画也一起没了。
+- Xcode 从不走这条路：`IDEDocumentController` 把 `openUntitledDocumentAndDisplay:error:` 覆写成返回 nil、
+  禁用 `newDocument:`，欢迎窗口与 File › New 的每个入口都先以 display:NO 建文档，再自己 `showWindow:`。
+  新窗口因此只在原地从 0.98 倍轻轻放大。这里照做。
+- 标签栏的「+」不改：`openUntitledDocumentAndDisplay(_:)` 在里面清掉「新窗口要成为 tab」的标志，在它外面
+  显示窗口就成不了 tab；而成为 tab 的窗口本来就不放动画。
+- AppKit 对它不认识的 action 怎么验证没有文档，`DocumentController.validateUserInterfaceItem(_:)` 对这个
+  action 直接返回 `true`。
+
 ### 菜单
 
 ```swift
@@ -436,6 +474,8 @@ MainMenu.window { builder in
 
 插在 Bring All to Front 之前、自带一条分隔线，菜单读作 Minimize、Zoom、—、Welcome to RuntimeViewer、—、
 Bring All to Front，与 Xcode 里 Welcome to Xcode 所在的那一组位置相同。
+
+File 菜单里 New 一项保留标题、⌘N 与标识，只换 action：`builder.item(for: .File.new)?.action = #selector(NSDocumentController.newDocumentWithoutPointerAnimation(_:))`。
 
 ## 替代方案考量
 
@@ -460,6 +500,7 @@ Bring All to Front，与 Xcode 里 Welcome to Xcode 所在的那一组位置相�
   New Window on My Mac、按 ⌘N，或在设置 › 通用里关掉「Show Welcome Window at Launch」回到原样。
 - 没有文档窗口时点 Dock 图标，同样弹欢迎窗口（开关关掉则照旧开 My Mac 窗口）。
 - Window 菜单新增 Welcome to RuntimeViewer（⇧⌘1）。
+- 点 New Window on My Mac 或 File › New 新开的窗口在原地轻轻放大出现，不再从鼠标处飞出，与 Xcode 一致。
 - 设置 › 通用 › Windows 新增一个开关，这一节的说明文字改写。
 - 从 Finder 或 Dock 拖文件打开、恢复窗口时，不出现欢迎窗口。
 
@@ -534,3 +575,4 @@ iOS、visionOS 不受影响（设置模型里多一个字段，iOS 的设置页�
 | 2026-11-21 | 实现完成，待用户看过后收尾 | 包级测试与 Tuist 的 App 构建通过；目视验收交给用户。文档判断：不另写使用指南或实现说明，决策与约束已写进 `RuntimeViewerUsingAppKit/AGENTS.md`（`WelcomeController` 一条）与本提案；没有新术语。 |
 | 2026-11-21 | 图标光晕改成黑色 | 用户看过后觉得蓝色光晕很怪：那是 Xcode 图标的颜色，衬在 RuntimeViewer 的深色图标后面不搭。经 `appIconImageShadow` 换成同样大小与偏移的黑色阴影，不改 UIFoundation。 |
 | 2026-11-21 | 图标光晕改成白色 | 用户看过黑色版：深色背景上看不出阴影。改成透明度 0.2 的白色，按亮度折算与 Xcode 的蓝色光晕相当。 |
+| 2026-11-21 | 新窗口照 Xcode 原地出现 | 用户看过后觉得新窗口从右下角飞到屏幕中间很怪，并指出 Xcode 不这样。逆向 AppKit 与 Xcode 27.2 查明：`newDocument(_:)` 在鼠标抬起时让新文档窗口从指针处飞出，Xcode 不走这条路。用户选择欢迎窗口与 File › New 都照 Xcode：先以 display:false 建文档再自己显示窗口。启动与 Dock 点击退回的 My Mac 窗口也走同一个方法；标签栏「+」不改。详见详细设计「新窗口不从指针飞出」。 |

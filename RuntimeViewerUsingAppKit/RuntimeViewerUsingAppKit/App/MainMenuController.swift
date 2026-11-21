@@ -85,6 +85,9 @@ final class MainMenuController {
 
     private func fileMenuItem() -> NSMenuItem {
         MainMenu.file { builder in
+            // Not `newDocument(_:)`, whose window flies out of the pointer
+            // when the item is clicked.
+            builder.item(for: .File.new)?.action = #selector(NSDocumentController.newDocumentWithoutPointerAnimation(_:))
             builder.insertItems(after: .File.open) {
                 openQuicklyItem()
             }
