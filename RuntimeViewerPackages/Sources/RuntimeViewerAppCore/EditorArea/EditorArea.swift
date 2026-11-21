@@ -147,6 +147,22 @@ public struct EditorArea: Hashable, Sendable {
         return nil
     }
 
+    /// `object` in the form a tab shows it now, in whatever language, looked for in the order
+    /// `tabID(showing:)` looks — the focused pane first, each pane's active tab before its others;
+    /// `nil` while no tab shows it. Open Quickly and the start page open an object in this form: theirs
+    /// can lack children a tab's has — specializations the sidebar spliced in — and opening it where
+    /// that tab shows the object would put the poorer form in its place.
+    func shownForm(of object: RuntimeObject) -> RuntimeObject? {
+        let otherPanes = orderedPanes.filter { $0.id != focusedPaneID }
+        for pane in [focusedPane] + otherPanes {
+            let otherTabs = pane.tabs.filter { $0.id != pane.activeTabID }
+            if let shownObject = ([pane.activeTab] + otherTabs).lazy.compactMap(\.object).first(where: { $0 == object }) {
+                return shownObject
+            }
+        }
+        return nil
+    }
+
     /// Brings `tabID`, which shows `entry`, forward instead of showing `entry` a second time: the
     /// tab becomes the active tab of its pane and that pane the focused one, as choosing the tab
     /// does, and an object entry takes on the form just reached (`NavigationHistory.takeOnForm(of:)`);

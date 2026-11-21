@@ -37,17 +37,6 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
         }
     }
 
-    /// A row opened — double-clicked, or Return on it — and where it goes.
-    public struct ItemOpening {
-        public let item: ContentStartPageItemCellViewModel
-        public let destination: SelectionRoute.Destination
-
-        public init(item: ContentStartPageItemCellViewModel, destination: SelectionRoute.Destination) {
-            self.item = item
-            self.destination = destination
-        }
-    }
-
     /// What shows under the Open Quickly field.
     public enum Search: Equatable {
         /// Nothing searched: the recent objects show.
@@ -72,9 +61,9 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
 
     @RxObserved public private(set) var search: Search = .inactive
 
-    /// What the engine's images and indexed objects were read into for the search under way; gone
-    /// once the search ends, so nothing of it stays in memory between searches.
-    private var catalogTask: Task<OpenQuicklyCatalog, Never>?
+    /// The search the field runs, shared in shape with File › Open Quickly…'s bar
+    /// (`OpenQuicklyViewModel`): the engine's images and indexed objects, read once per search.
+    private lazy var openQuicklySearch = OpenQuicklySearch(documentState: documentState)
 
     /// Ends the search under way: the field's text goes, and so does the catalog.
     private let searchResetRelay = PublishRelay<Void>()
@@ -229,13 +218,13 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
         .flatMapLatest { [weak self] text -> Observable<SearchStep> in
             guard let self else { return .empty() }
             if text.isEmpty {
-                dropCatalog()
+                openQuicklySearch.end()
                 return .just(.inactive)
             }
-            let catalogTask = catalog()
+            let openQuicklySearch = openQuicklySearch
+            let maximumSearchResultCount = Self.maximumSearchResultCount
             return Observable<SearchStep>.async {
-                let catalog = await catalogTask.value
-                return .matched(await Self.matches(in: catalog, for: text), searchText: text)
+                .matched(await openQuicklySearch.matches(for: text, limit: maximumSearchResultCount), searchText: text)
             }
             .withLoadingPlaceholder(
                 .loading,
@@ -272,36 +261,6 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
                 commitSearch(in: pendingSearchCommit.destination)
             }
         }
-    }
-
-    /// The catalog of the search under way, read on first use: the leaves of the engine's image
-    /// tree, which only the main actor reads, and the objects of its indexed images.
-    private func catalog() -> Task<OpenQuicklyCatalog, Never> {
-        if let catalogTask { return catalogTask }
-        let engine = documentState.runtimeEngine
-        let imagePaths = engine.imageNodes.flatMap(\.leafImagePaths)
-        let catalogTask = Task.detached {
-            await OpenQuicklyCatalog.load(imagePaths: imagePaths, from: engine)
-        }
-        self.catalogTask = catalogTask
-        return catalogTask
-    }
-
-    private func dropCatalog() {
-        catalogTask?.cancel()
-        catalogTask = nil
-    }
-
-    /// A page that goes away mid-search stops reading the engine's objects for it.
-    deinit {
-        catalogTask?.cancel()
-    }
-
-    /// Matching runs off the main thread: a catalog of every indexed image can hold hundreds of
-    /// thousands of names.
-    private nonisolated static func matches(in catalog: OpenQuicklyCatalog, for text: String) async -> [OpenQuicklyCatalog.Entry] {
-        guard !Task.isCancelled else { return [] }
-        return catalog.matches(for: text, limit: maximumSearchResultCount)
     }
 
     /// Moves the row Return opens by `offset`, staying within the results.
@@ -343,28 +302,12 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
         }
         switch item {
         case .object(let object):
-            selectionRouter.trigger(.open(formOnScreen(of: object), in: destination))
+            selectionRouter.trigger(.open(documentState.editorArea.shownForm(of: object) ?? object, in: destination))
         case .image(let path):
             selectionRouter.trigger(.openImage(path, in: destination))
         }
     }
 
-    /// `object` in the form a tab of the window shows it, in whatever language, when one does —
-    /// looked for in the order `EditorArea.tabID(showing:)` looks, the focused pane first and each
-    /// pane's active tab before its others: a recent object is kept without its children
-    /// (`RecentRuntimeObjects.listedForm(of:)`), and opening that form where a tab shows the object
-    /// with its specializations would put the bare form in its place.
-    private func formOnScreen(of object: RuntimeObject) -> RuntimeObject {
-        let editorArea = documentState.editorArea
-        let otherPanes = editorArea.orderedPanes.filter { $0.id != editorArea.focusedPaneID }
-        for pane in [editorArea.focusedPane] + otherPanes {
-            let otherTabs = pane.tabs.filter { $0.id != pane.activeTabID }
-            if let shownObject = ([pane.activeTab] + otherTabs).lazy.compactMap(\.object).first(where: { $0 == object }) {
-                return shownObject
-            }
-        }
-        return object
-    }
 
     @MemberwiseInit(.public)
     public struct Input {
@@ -375,8 +318,8 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
         @Init(default: Signal<Void>.empty())
         public let showAllClicked: Signal<Void>
         /// A recent object opened, and where.
-        @Init(default: Signal<ItemOpening>.empty())
-        public let recentItemOpened: Signal<ItemOpening>
+        @Init(default: Signal<ContentStartPageItemOpening>.empty())
+        public let recentItemOpened: Signal<ContentStartPageItemOpening>
         /// The Open Quickly field's text, at every change.
         @Init(default: Signal<String>.empty())
         public let searchText: Signal<String>
@@ -387,8 +330,8 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
         @Init(default: Signal<SelectionRoute.Destination>.empty())
         public let searchCommitted: Signal<SelectionRoute.Destination>
         /// A click on a result.
-        @Init(default: Signal<ItemOpening>.empty())
-        public let searchResultOpened: Signal<ItemOpening>
+        @Init(default: Signal<ContentStartPageItemOpening>.empty())
+        public let searchResultOpened: Signal<ContentStartPageItemOpening>
         /// Escape in the field.
         @Init(default: Signal<Void>.empty())
         public let searchCancelled: Signal<Void>

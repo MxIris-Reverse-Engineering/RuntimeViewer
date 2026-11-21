@@ -94,7 +94,7 @@ struct SidebarFilterFastPathTests {
                 object(name: "Root.Second", displayName: "Module.Root.Second", children: [grandchild]),
             ]
         )
-        return SidebarRuntimeObjectCellViewModel(runtimeObject: root, forOpenQuickly: false)
+        return SidebarRuntimeObjectCellViewModel(runtimeObject: root)
     }
 
     private func object(

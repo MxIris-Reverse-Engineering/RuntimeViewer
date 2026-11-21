@@ -8,50 +8,19 @@ import RuntimeViewerApplication
 final class SidebarRuntimeObjectListViewController: SidebarRuntimeObjectViewController<SidebarRuntimeObjectListViewModel> {
     override var supportsSections: Bool { true }
 
-    private let openQuicklyActionBar = QuickActionBar()
-
-    private let openQuicklyActivateRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
-
-    private let searchStringDidChangeForOpenQuickly = PublishRelay<String>()
-
-    private var currentSearchTask: QuickActionBar.SearchTask?
-
     private let addToBookmarkRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
 
     @Dependency(\.appDefaults)
     private var appDefaults
 
-    override func viewDidLoad() {
-        super.viewDidLoad()
-
-        openQuicklyActionBar.do {
-            $0.contentSource = self
-        }
-    }
-
     override func setupBindings(for viewModel: SidebarRuntimeObjectListViewModel) {
         super.setupBindings(for: viewModel)
 
         let input = SidebarRuntimeObjectListViewModel.Input(
-            runtimeObjectClickedForOpenQuickly: openQuicklyActivateRelay.asSignal(),
-            searchStringForOpenQuickly: searchStringDidChangeForOpenQuickly.asSignal(),
             addBookmark: addToBookmarkRelay.asSignal()
         )
 
         let output = viewModel.transform(input)
-
-        output.runtimeObjectsForOpenQuickly.driveOnNextMainActor { [weak self] viewModels in
-            guard let self else { return }
-            currentSearchTask?.complete(with: viewModels)
-            currentSearchTask = nil
-        }
-        .disposed(by: rx.disposeBag)
-
-        output.selectRuntimeObject.emitOnNextMainActor { [weak self] item in
-            guard let self else { return }
-            outlineView.selectRowBringingIntoView(outlineView.row(forItem: item))
-        }
-        .disposed(by: rx.disposeBag)
 
         output.selectCell.emitOnNextMainActor { [weak self] result in
             guard let self else { return }
@@ -108,23 +77,6 @@ final class SidebarRuntimeObjectListViewController: SidebarRuntimeObjectViewCont
         return nil
     }
 
-    @ArrayBuilder<Selector>
-    override func lateResponderSelectors() -> [Selector] {
-        #selector(openQuickly(_:))
-    }
-
-    @objc func openQuickly(_ sender: Any?) {
-        openQuicklyActionBar.cancel()
-        openQuicklyActionBar.present(
-            parentWindow: view.window,
-            placeholderText: "Open Quickly",
-            searchImage: nil,
-            initialSearchText: nil,
-            showKeyboardShortcuts: false,
-            canBecomeMainWindow: false
-        ) {}
-    }
-
     override func contextMenuItems(for cellViewModel: SidebarRuntimeObjectCellViewModel, clickedRow: Int) -> [ContextMenuItem] {
         super.contextMenuItems(for: cellViewModel, clickedRow: clickedRow) + [
             ContextMenuItem(title: "Add Item to Bookmark", image: SFSymbols(systemName: .bookmark).nsuiImage) { [weak self] in
@@ -144,8 +96,6 @@ final class SidebarRuntimeObjectListViewController: SidebarRuntimeObjectViewCont
     override func responds(to aSelector: Selector!) -> Bool {
         guard let aSelector else { return super.responds(to: aSelector) }
         switch aSelector {
-        case #selector(openQuickly(_:)):
-            return viewModel?.loadState == .loaded
         case #selector(copy(_:)):
             return canCopySelectedRowName
         default:
@@ -153,24 +103,3 @@ final class SidebarRuntimeObjectListViewController: SidebarRuntimeObjectViewCont
         }
     }
 }
-
-extension SidebarRuntimeObjectListViewController: QuickActionBarContentSource {
-    func quickActionBar(_ quickActionBar: QuickActionBar, viewForItem item: AnyHashable, searchTerm: String) -> NSView? {
-        guard let viewModel = item as? SidebarRuntimeObjectCellViewModel else { return nil }
-        let cellView: RuntimeObjectCellView<SidebarRuntimeObjectCellViewModel> = quickActionBar.dequeueView() ?? RuntimeObjectCellView(contentInsets: .init(top: 0, left: 8, bottom: 0, right: 8), minimumHeight: 40)
-        cellView.bind(to: viewModel)
-        return cellView
-    }
-
-    func quickActionBar(_ quickActionBar: QuickActionBar, itemsForSearchTermTask task: QuickActionBar.SearchTask) {
-        currentSearchTask = task
-        searchStringDidChangeForOpenQuickly.accept(task.searchTerm)
-    }
-
-    func quickActionBar(_ quickActionBar: QuickActionBar, didActivateItem item: AnyHashable) {
-        guard let viewModel = item as? SidebarRuntimeObjectCellViewModel else { return }
-        openQuicklyActivateRelay.accept(viewModel)
-    }
-}
-
-extension QuickActionBar: Then {}

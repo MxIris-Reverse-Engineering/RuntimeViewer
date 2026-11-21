@@ -1,8 +1,9 @@
 import Foundation
 
-/// The order Open Quickly lists fuzzy matches in, best first: the sidebar's Open Quickly over an
-/// image's objects and an empty editor pane's start page over the engine's images and indexed
-/// objects (proposal `editor-start-page`) both rank this way.
+/// The order Open Quickly lists fuzzy matches in, best first: File › Open Quickly…'s bar and an
+/// empty editor pane's start page over the engine's images and indexed objects (proposal
+/// `editor-start-page`). It began as the ranking of the sidebar's own Open Quickly, which searched
+/// one image's objects and is gone.
 ///
 /// `FuzzySearchable.fuzzyMatch` stops accumulating once the pattern is consumed —
 /// `hasPrefix(_:atIndex:)` compares against the empty suffix from then on and always fails — so
@@ -12,10 +13,10 @@ import Foundation
 /// whichever names come first: on AppKit, `vi` ties 875 names and drops `NSView` at position 502.
 ///
 /// The tie-breakers restore what a jump-to palette needs. A haystack may be a name followed by more
-/// text — the sidebar's is the object's `displayName` followed by every descendant's
-/// (`SidebarRuntimeObjectCellViewModel.haystack(for:)`) — so a match ending within the name's own
-/// length is a hit on the item itself rather than on one of its members. Then the earlier match,
-/// then the shorter name; the trailing name compare only makes the order deterministic.
+/// text, so a match ending within the name's own length is a hit on the item itself rather than on
+/// one of its members — the catalog's haystacks are names alone, for which this always holds. Then
+/// the earlier match, then the shorter name; the trailing name compare only makes the order
+/// deterministic.
 ///
 /// Two things to fix before a filter mode other than `.fuzzySearch` is ever ranked here:
 /// `ranges.last` assumes ascending ranges, which holds for `FuzzySearchResult.parts` but not for

@@ -349,7 +349,7 @@ cell-reuse code) for data already produced by an Rx pipeline.
    (UIFoundationToolbox) handles identifier registration, recycling and fresh instantiation. **Never**
    write `tableView.makeView(withIdentifier:owner:) as? NSTableCellView` casts with a hand-built fallback.
    Pass a custom builder when the cell needs non-default initialization:
-   `outlineView.box.makeView(ofClass: SidebarRuntimeObjectCellView.self) { .init(forOpenQuickly: false) }`.
+   `tableView.box.makeView(ofClass: FindResultCellView.self) { FindResultCellView(metrics: .inspector) }`.
 5. **Cell views** — a `fileprivate final class` nested inside a controller extension, inheriting
    `TableCellView` (UIFoundationAppKit) so `setup()` and the auto-set identifier come for free. Lay out in
    `setup()`; bind in `bind(to:)`, which starts with `rx.disposeBag = DisposeBag()` to drop the previous
@@ -418,7 +418,7 @@ cell-reuse code) for data already produced by an Rx pipeline.
   rebuilds, compare those by identity in `isContentEqual` too, so a row that got a new cell ViewModel is
   reloaded and its cell rebinds. `ReportOutlineBindingTests` pins all three on a real outline.
 
-<important if="a list can hold thousands of rows, or you are touching DifferentiableBox or Open Quickly's cell ViewModels">
+<important if="a list can hold thousands of rows, or you are touching DifferentiableBox">
 
 **Lazy cell ViewModels for large data sets.** When eager per-row cell ViewModel construction dominates
 main-thread time (N ≥ ~1k rows, popovers and pickers over global type or symbol indexes), drive
@@ -436,26 +436,20 @@ form iff **all three** hold; otherwise stay on the eager 1:1 pattern:
    multi-select checkmark, drag-preview metadata). If you need such state, build a local `struct`
    conforming to `Differentiable` directly — do NOT add mutable fields onto `DifferentiableBox`.
 
-Two different things get called "lazy" here, and the eligibility tree above governs only the first:
+The cell ViewModel is rebuilt inside the cell builder on *every* render, so nothing survives between
+renders. That is why the three conditions are absolute: a cell ViewModel with post-init `@RxObserved`
+mutation or an Rx subscription would silently lose it. The `SpecializationTypePicker` popover is the
+canonical case (10k+ candidates when a generic parameter has no constraint);
+`SpecializationTypePickerViewModel` and `SpecializationTypePickerViewController` show both halves.
 
-- **Stateless lazy (`DifferentiableBox`)** — the cell ViewModel is rebuilt inside the cell builder on
-  *every* render, so nothing survives between renders. That is why the three conditions are absolute: a
-  cell ViewModel with post-init `@RxObserved` mutation or an Rx subscription would silently lose it. The
-  `SpecializationTypePicker` popover is the canonical case (10k+ candidates when a generic parameter has
-  no constraint); `SpecializationTypePickerViewModel` and `SpecializationTypePickerViewController` show
-  both halves.
-- **Lazily materialized behind a warm cache** — the driver array still carries fully built cell
-  ViewModels, but each is constructed on first match and kept in a map for the rest of the session, so
-  subscription identity and post-init state survive. Open Quickly uses this to avoid building a cell
-  ViewModel per row of a 14k-object image; see `SidebarRuntimeObjectListViewModel.openQuicklyCellViewModel(at:)`.
-
-`SidebarRuntimeObjectCellViewModel` owns filter-aware attributed names, so it fails the eligibility tree
-and must never take the first form — but it is the type Open Quickly materializes in the second form,
-precisely because the cache means it is never *re*constructed. Inspector cell ViewModels
-(`InspectorSwiftSpecializationCellViewModel`, `InspectorRelationshipsCellViewModel`) stay eager on both
-counts: their row counts are low enough that neither form pays for itself. Reach for either form only
-once eager construction is measurably hurting — both trade a memo, and the invalidation it needs, for the
-allocation they save. `DifferentiableBox<Model>.differenceIdentifier == model`, so DifferenceKit treats
+A list that is large *and* fails the tree has a second way out: search a plain value index and build
+cell ViewModels only for the rows a query surfaces. File › Open Quickly… and the start page do this —
+`OpenQuicklyCatalog` holds names, and the bar and the page make a `ContentStartPageItemCellViewModel`
+per match they list, never per object. `SidebarRuntimeObjectCellViewModel` owns filter-aware attributed
+names, so it fails the tree and must never be built inside a cell builder. Inspector cell ViewModels
+(`InspectorSwiftSpecializationCellViewModel`, `InspectorRelationshipsCellViewModel`) stay eager: their
+row counts are low enough that neither way pays for itself. Reach for either only once eager
+construction is measurably hurting. `DifferentiableBox<Model>.differenceIdentifier == model`, so DifferenceKit treats
 two boxes as the same row iff their models are `==`: make `Model`'s equality a stable domain primary key,
 not presentation-only data, or the diff spuriously triggers updates. `DifferentiableBox` itself is fully
 `Hashable` even on UIKit / Catalyst; its `Differentiable` conformance is gated behind
@@ -472,8 +466,8 @@ not presentation-only data, or the diff spuriously triggers updates. `Differenti
 (RuntimeViewerUI) at the row's trailing edge; the title truncates before a tag does. What holds the tags
 there is the tag stack view's own hugging priority (`.box.hugging(h:)`, set above the text stack's default
 `.defaultLow`): a stack view has no intrinsic size, so `.box.contentHugging` does nothing for it, and with
-both stacks at the default Auto Layout widened either one. A tag that is not clickable takes no part in
-hit-testing, so the click goes to the row (Open Quickly's tags). A clickable tag reports through the
+both stacks at the default Auto Layout widened either one. A tag that is not clickable (`Local`) takes no part in
+hit-testing, so the click goes to the row. A clickable tag reports through the
 cell's `tagClicked`; the list's cell provider pairs it with the row it bound and hands that to the view
 model as data, and the popover about the row is anchored as *Routes carry no views* describes for rows.
 The tags are `Local`, then `Private`. `Private` shows for an object whose `privateDeclarations` is not

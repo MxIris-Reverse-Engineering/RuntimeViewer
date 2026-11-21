@@ -18,7 +18,7 @@ struct SidebarFilterRelayMaterializationTests {
     @Test("text and scope filtering over an object tree materialize no appearance relay")
     func objectTreeFilteringMaterializesNoRelay() throws {
         let cells = makeTreeRuntimeObjects(parentCount: 200, childrenPerParent: 3)
-            .map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0, forOpenQuickly: false) }
+            .map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0) }
         #expect(materializedRows(in: cells).isEmpty)
 
         let contexts = [
@@ -46,7 +46,7 @@ struct SidebarFilterRelayMaterializationTests {
     @Test("binding a cell view materializes only that row's relay")
     func bindingMaterializesOnlyTheBoundRow() {
         let cells = makeTreeRuntimeObjects(parentCount: 10, childrenPerParent: 2)
-            .map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0, forOpenQuickly: false) }
+            .map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0) }
 
         // `appearanceDriver` is what `RuntimeObjectCellView.bind(to:)` subscribes.
         _ = cells[3].appearanceDriver

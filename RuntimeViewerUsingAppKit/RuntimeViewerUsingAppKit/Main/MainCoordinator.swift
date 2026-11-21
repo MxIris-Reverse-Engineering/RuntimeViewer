@@ -21,6 +21,11 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
 
     private lazy var viewModel = MainViewModel(documentState: documentState, router: self)
 
+    /// File › Open Quickly…'s bar, bound once: it follows the document's engine by itself.
+    private lazy var openQuicklyViewModel = OpenQuicklyViewModel(documentState: documentState, router: self)
+
+    private var isOpenQuicklyBound = false
+
     private(set) lazy var lateResponderRegistry = LateResponderRegistry()
 
     /// Subscription to `documentState.routeSignal`. Renewed on every
@@ -71,6 +76,10 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             inspectorCoordinator = InspectorCoordinator(documentState: documentState)
             inspectorCoordinator.delegate = self
             rootWindowController.setupBindings(for: viewModel)
+            if !isOpenQuicklyBound {
+                rootWindowController.setupBindings(forOpenQuickly: openQuicklyViewModel)
+                isOpenQuicklyBound = true
+            }
 
             // Subscribe with the fresh sub-coordinators in place.
             documentState.routeSignal

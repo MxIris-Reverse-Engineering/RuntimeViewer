@@ -32,7 +32,7 @@ struct SidebarRuntimeObjectTextFilterTests {
         isCaseSensitive: Bool = false,
         scope: RuntimeObjectScope = .init()
     ) throws -> [String] {
-        let cells = Self.fixtureRuntimeObjects.map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0, forOpenQuickly: false) }
+        let cells = Self.fixtureRuntimeObjects.map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0) }
         let (context, nameMatcher) = SidebarRuntimeObjectFilterPipeline.passInputs(for: filter, filterMode: filterMode, isCaseSensitive: isCaseSensitive)
         let snapshotForest = SidebarRuntimeObjectFilterPipeline.snapshot(of: cells, scope: scope, includesHaystacks: !context.query.isEmpty)
         let forestVerdict = SidebarRuntimeObjectFilterPipeline.verdicts(for: snapshotForest, context: context, nameMatcher: nameMatcher)

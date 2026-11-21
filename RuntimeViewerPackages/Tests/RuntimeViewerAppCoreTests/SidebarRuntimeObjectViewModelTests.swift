@@ -26,7 +26,7 @@ struct SidebarRuntimeObjectViewModelTests {
                 Fixtures.runtimeObject(name: "SwiftB", kind: .swift(.type(.class))),
                 Fixtures.runtimeObject(name: "ObjCP", kind: .objc(.type(.protocol))),
             ]
-            .map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0, forOpenQuickly: false) }
+            .map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0) }
         }
 
         let sections = SidebarRuntimeObjectViewModel.makeSections(from: cells)
@@ -107,7 +107,7 @@ struct SidebarRuntimeObjectViewModelTests {
         let (viewModel, _) = try makeViewModel(imagePath: TestImages.foundation, counterpartRequested: counterpartRequestedRelay.asSignal(), in: environment)
         defer { withExtendedLifetime(viewModel) {} }
 
-        counterpartRequestedRelay.accept(environment.make { SidebarRuntimeObjectCellViewModel(runtimeObject: bridgedClass, forOpenQuickly: false) })
+        counterpartRequestedRelay.accept(environment.make { SidebarRuntimeObjectCellViewModel(runtimeObject: bridgedClass) })
 
         let selected = try await nextValue(from: environment.documentState.$selectedRuntimeObject) { $0 == expectedCounterpart }
         #expect(selected?.kind == .swift(.type(.class)))
@@ -128,7 +128,7 @@ struct SidebarRuntimeObjectViewModelTests {
         let reportedErrors = ReplaySubject<any Error>.create(bufferSize: 1)
         viewModel.errorRelay.bind(to: reportedErrors).disposed(by: disposeBag)
 
-        counterpartRequestedRelay.accept(environment.make { SidebarRuntimeObjectCellViewModel(runtimeObject: unmatchableClass, forOpenQuickly: false) })
+        counterpartRequestedRelay.accept(environment.make { SidebarRuntimeObjectCellViewModel(runtimeObject: unmatchableClass) })
 
         let reportedError = try await nextValue(from: reportedErrors)
         let notFound = try #require(reportedError as? SidebarRuntimeObjectViewModel.CounterpartNotFoundError)
@@ -148,7 +148,7 @@ struct SidebarRuntimeObjectViewModelTests {
             name: "SwiftUI.EnabledKey",
             privateDeclarations: [RuntimePrivateDeclaration(name: "EnabledKey", discriminator: "_09CE35833F3876FE3A3A46977D61FC64")]
         )
-        let cellViewModel = environment.make { SidebarRuntimeObjectCellViewModel(runtimeObject: privateType, forOpenQuickly: false) }
+        let cellViewModel = environment.make { SidebarRuntimeObjectCellViewModel(runtimeObject: privateType) }
 
         tagClickedRelay.accept(SidebarRuntimeObjectViewModel.TagClick(cellViewModel: cellViewModel, tagIdentifier: .privateDeclaration))
 

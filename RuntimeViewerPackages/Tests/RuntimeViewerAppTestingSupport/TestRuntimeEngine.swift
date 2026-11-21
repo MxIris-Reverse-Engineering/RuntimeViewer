@@ -48,13 +48,19 @@ package enum TestRuntimeEngine {
     /// installs them at its entry point: an engine connected before they are has no handler for
     /// them. Installing is idempotent.
     package static func makeConnected(engineID: String, loading imagePaths: [String] = []) async throws -> RuntimeEngine {
-        RuntimeCrossReferences.install()
-        let engine = RuntimeEngine(source: .local, engineID: engineID)
+        let engine = makeUnconnected(engineID: engineID)
         try await engine.connect()
         for imagePath in imagePaths {
             try await engine.loadImage(at: imagePath)
         }
         return engine
+    }
+
+    /// A private local engine that has not connected yet, for tests of what happens before it
+    /// does: it lists no image until the test calls `connect()`.
+    package static func makeUnconnected(engineID: String) -> RuntimeEngine {
+        RuntimeCrossReferences.install()
+        return RuntimeEngine(source: .local, engineID: engineID)
     }
 
     /// A private local engine, connected, whose first connection has finished reloading its data.

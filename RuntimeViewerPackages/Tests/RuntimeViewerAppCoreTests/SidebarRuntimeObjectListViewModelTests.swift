@@ -5,8 +5,8 @@ import Testing
 import RuntimeViewerAppTestingSupport
 
 /// The public contract of the object list against a real image. The filter
-/// pipeline's cost model, Open Quickly's lazy materialization and reload
-/// invalidation are pinned separately with seeded subclasses.
+/// pipeline's cost model and the outcomes of a reload are pinned separately
+/// with seeded subclasses.
 @Suite("SidebarRuntimeObjectListViewModel")
 @MainActor
 struct SidebarRuntimeObjectListViewModelTests {
@@ -14,8 +14,6 @@ struct SidebarRuntimeObjectListViewModelTests {
     private let runtimeObjectClickedRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
     private let runtimeObjectOpenedInNewTabRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
     private let searchStringRelay = BehaviorRelay<String>(value: "")
-    private let openQuicklyClickedRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
-    private let openQuicklySearchRelay = PublishRelay<String>()
     private let addBookmarkRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
 
     // MARK: - findCell (pure)
@@ -26,7 +24,7 @@ struct SidebarRuntimeObjectListViewModelTests {
         let leaf = Fixtures.runtimeObject(name: "Outer.Inner.Leaf")
         let inner = Fixtures.runtimeObject(name: "Outer.Inner", children: [leaf])
         let outer = Fixtures.runtimeObject(name: "Outer", children: [inner])
-        let outerCell = environment.make { SidebarRuntimeObjectCellViewModel(runtimeObject: outer, forOpenQuickly: false) }
+        let outerCell = environment.make { SidebarRuntimeObjectCellViewModel(runtimeObject: outer) }
 
         let lookup = try #require(SidebarRuntimeObjectListViewModel.findCell(for: leaf, in: [outerCell]))
         #expect(lookup.cell.runtimeObject == leaf)
@@ -106,21 +104,6 @@ struct SidebarRuntimeObjectListViewModelTests {
         #expect(resolved.ancestors.isEmpty)
     }
 
-    @Test("Open Quickly filters its own flat list with fuzzy matching")
-    func openQuicklyFiltersFlatList() async throws {
-        let harness = try await makeHarness()
-        defer { withExtendedLifetime(harness.viewModel) {} }
-        _ = try await harness.loadedRows()
-
-        openQuicklySearchRelay.accept("")
-        openQuicklySearchRelay.accept("NSObj")
-
-        let matches = try await nextValue(from: harness.listOutput.runtimeObjectsForOpenQuickly) { !$0.isEmpty }
-        #expect(matches.contains { $0.runtimeObject.name == "NSObject" })
-        #expect(matches.allSatisfy { $0.forOpenQuickly })
-        #expect(harness.viewModel.isFilteringForOpenQuickly)
-    }
-
     @Test("clicking a row pushes its object, and opening in a new tab adds a tab")
     func clickingRowsNavigates() async throws {
         let harness = try await makeHarness()
@@ -137,15 +120,6 @@ struct SidebarRuntimeObjectListViewModelTests {
         try await settleMainQueue()
         #expect(harness.environment.documentState.editorArea.focusedPane.tabs.count == 2)
         #expect(harness.environment.documentState.editorArea.focusedPane.activeTab.object == nsObjectCell.runtimeObject)
-
-        // Park the document on an empty tab so the Open Quickly click has
-        // something observable to change.
-        harness.environment.documentState.selectionRouter.trigger(.newTab)
-        #expect(harness.environment.documentState.selectedRuntimeObject == nil)
-
-        openQuicklyClickedRelay.accept(nsObjectCell)
-        try await settleMainQueue()
-        #expect(harness.environment.documentState.selectedRuntimeObject == nsObjectCell.runtimeObject)
         #expect(router.triggeredRoutes.isEmpty)
     }
 
@@ -347,8 +321,6 @@ struct SidebarRuntimeObjectListViewModelTests {
         )
         let listOutput = viewModel.transform(
             SidebarRuntimeObjectListViewModel.Input(
-                runtimeObjectClickedForOpenQuickly: openQuicklyClickedRelay.asSignal(),
-                searchStringForOpenQuickly: openQuicklySearchRelay.asSignal(),
                 addBookmark: addBookmarkRelay.asSignal()
             )
         )
