@@ -69,4 +69,4 @@ public let RuntimeViewerMachServiceName = "com.mxiris.runtimeviewer.service"
 
 /// Protocol version shared between the app and the helper service daemon.
 /// Bump this whenever the service binary changes in a way that requires reinstallation.
-public let RuntimeViewerServiceVersion: String = "1.9.0"
+public let RuntimeViewerServiceVersion: String = "1.10.0"
