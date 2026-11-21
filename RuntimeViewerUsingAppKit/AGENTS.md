@@ -684,6 +684,16 @@ Background, with the reverse-engineered addresses: `Documentations/Evolutions/00
   `EditorArea.canClosePane(_:)`. The sidebar going back to the image list leaves the editor area as it
   is, so this is how the user clears it; ⌘W on the only tab of the only pane still closes the window. The
   content's safe area makes room for the bars on show.
+- **An empty tab shows the start page** (proposal `editor-start-page`): Xcode 27.2's initial editor,
+  `ContentPlaceholderViewController` over `ContentPlaceholderViewModel` — an Open Quickly field that searches
+  the engine's images by name and the objects of the images it has indexed (`OpenQuicklyCatalog`, which
+  indexes nothing), and the engine's recent objects, which `RecentRuntimeObjectsRecorder` files from
+  `DocumentState.selectedRuntimeObject` into `AppDefaults.recentRuntimeObjectsByEngine` under the engine's
+  key, without children, ten at most. A pane keeps one page for all its empty tabs, so the page starts over
+  whenever another tab comes forward in its pane or it comes back into the pane (`startOver()`): state a
+  new page would not have — Show All, a selection, a search — is reset there. Its measurements are
+  Xcode's (`/Volumes/RE/Xcode/27.2-27B52/README.md`, "Initial editor"); change them against that, not by
+  eye.
 
 </important>
 

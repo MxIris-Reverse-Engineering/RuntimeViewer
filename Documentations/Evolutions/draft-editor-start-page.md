@@ -383,7 +383,7 @@ public struct OpenQuicklyCatalog: Sendable {
    - 行为：没有结果时 ↑ / ↓ 照常移动输入框里的光标（目视）
    - 行为：搜索框照 Xcode 的度量：高 47、连续圆角 24、没聚焦时的底色、聚焦且窗口为 key 时去底色加 3pt 强调色光环（不透明度 0.6，一半在框外）、20pt medium、放大镜框在 x = 16、文字从 62 起（目视）
    - 行为：侧栏 Open Quickly 的排序不变（既有测试照旧通过）
-5. **文档** —— `RuntimeViewerUsingAppKit/AGENTS.md`、索引、本提案的决策日志
+5. **文档**（已完成） —— `RuntimeViewerUsingAppKit/AGENTS.md`、索引、本提案的决策日志
 
 只能在界面上看到的行为（布局、尺寸、颜色、焦点环、结果浮层的位置）在 ViewModel 层测不到，列为目视验证。
 
