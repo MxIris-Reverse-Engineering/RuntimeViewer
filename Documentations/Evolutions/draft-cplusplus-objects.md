@@ -1,13 +1,13 @@
 # Draft - C++ 对象：列出并打印从 RTTI、vtable 与符号恢复的 C++ 类与命名空间
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-21
 - **最后更新**: 2026-11-21
 - **所属愿景**: 无
 - **关联提案**: MachOKitExtensions [0005 C++ 符号的结构化归类](https://github.com/MxIris-Reverse-Engineering/MachOKitExtensions/blob/main/Documentations/Evolutions/0005-cplusplus-symbol-classification.md)（作用域树，3.0.0）与 [0006 从 RTTI 与 vtable 恢复 C++ 类](https://github.com/MxIris-Reverse-Engineering/MachOKitExtensions/blob/main/Documentations/Evolutions/0006-cplusplus-class-hierarchy.md)（类、vtable 与沿基类补名，3.1.0）；后者的非目标一节写明「RuntimeViewer 等下游采用：各自另写提案」，本提案就是 RuntimeViewer 这一份
 - **实现分支 / PR**: `feature/cplusplus-objects`，从 `next` 切出，worktree 在 `.worktrees/RuntimeViewer-CPlusPlusObjects`
-- **配套文档**: 待定 —— 落地时登记实现说明 / 使用指南的链接
+- **配套文档**: 不另写实现说明（理由见决策日志）；规则写在 `AGENTS.md`「Package Structure」、`CommunicationAndEngineArchitecture.md` §4.4 第五例与术语表
 - **网页版**: 同目录同名的 `.html`
 
 ## 摘要
@@ -79,6 +79,20 @@ RuntimeViewer 新增第三种对象语言：C++。镜像的对象列表在 Objec
 - 依赖：`CPlusPlusSymbols` 依赖 C++ target `CPlusPlusDemangling`（从 libc++abi 引入的 LLVM `ItaniumDemangle`），对 Swift 只露 C 接口，下游不用开 C++ 互操作。包的平台下限 macOS 10.15、iOS 13、watchOS 6、tvOS 13、visionOS 1，与 RuntimeViewerCore 一致。
 - 版本：RuntimeViewerCore 现在写 `from: "3.0.0"`，各锁文件钉 3.0.0（`516288d8`）；MachOSwiftSection 与 MachOObjCSection 的 `next` 对本包都是 `from:` 下限，3.1.0 纯新增，不影响它们。Tuist 的 `Tuist.swift` 已经列着 `CPlusPlusDemangling`、`CPlusPlusSymbols` 两个 target（`:63-64`）。
 
+### 实测（第 1 步，2026-11-21，Ultra，macOS 27.2，release 构建，测时机器负载 20–30）
+
+临时探针（`CPlusPlusSectionCostProbeTests`，记下数字后已删）直接调两个上游 store：
+
+| 镜像与读法 | 作用域树 | 类索引 | 给每个类每个槽位取名 |
+|---|---|---|---|
+| Espresso，进程内 `MachOImage` | 0.20 秒（249 个顶层作用域） | 0.04 秒（4,379 个类） | 0.62 秒（56,204 个槽位） |
+| Espresso，本机 cache 的 `MachOFile` | 0.23 秒 | 1.66 秒 | 2.43 秒 |
+| JavaScriptCore（关了 RTTI），两种读法 | 0.15 秒（70 个顶层作用域） | 0 个类 | — |
+| libc++（作用域树与类索引已被前面的补名顺带建好） | 微秒级 | 150 个类 | 0.007 秒 / 0.024 秒 |
+
+- 结论：进程内的 C++ section 即使是 Espresso 这种大镜像也在 0.3 秒内建成；文件模式读 cache 时约 1.9 秒。打印界面只给一个类的槽位取名，是毫秒级。按需建、不进索引的方案不变，不另做异步补全。
+- 体积：release 构建里 `CPlusPlusDemangling` 与 `CPlusPlusSymbols` 的目标文件代码段合计约 350 KB（链接与剥离之前），这是每个链接 Core 的进程（含注入 payload 的每个架构）多带的上限。
+
 ### 前人怎么做的
 
 - IDA 的 ClassInformer 一类工具把 RTTI 恢复成「类 + 每张 vtable 逐格列出」的报告；Xcode 与 clang 生成的头文件是声明的形状。本提案的界面取后者（伪头文件），与 ObjC、Swift 的界面一致，用户在澄清提问里选定。
@@ -92,7 +106,7 @@ RuntimeViewer 新增第三种对象语言：C++。镜像的对象列表在 Objec
    - `kind == .namespace` 与 `.undetermined` 的作用域是 `.cPlusPlus(.namespace)`（「未定」只有自由函数一类的成员，形状与命名空间相同，界面里注明种类未定）；
    - `kind == .function` 的作用域（函数里的局部实体与 lambda）不成对象；
    - 只有 RTTI、作用域树里没有的类，按它的 `scopePath` 挂到对应的作用域下，缺的中间层补成命名空间（父层是类时补成类）；
-   - 既没有成员、也没有子对象的命名空间不列；
+   - 既没有会打印的成员（函数、构造/析构函数、变量）、也没有子对象的命名空间不列——只装着 block 调用、守护变量这类符号的作用域在 libobjc 里会显示成 `_read_images` 一类的「命名空间」；
    - 全局命名空间里直接有自由函数或变量时，列一个名为 `::`、显示为「Global Namespace」的命名空间对象；
    - `name` 是限定名（全局对象是 `::`），`displayName` 是最后一段（`vector<int, std::__1::allocator<int>>`），嵌套的作用域与类放进 `children`；同一镜像里同名的隐藏类（不同编译单元）只留 typeinfo 偏移最小的那个，与上游 `class(named:in:)` 一致。
 4. **C++ 对象只发给要它的请求方。** `ObjectsInImageCommand` 加可选字段 `includesCPlusPlusObjects: Bool?`，为 `nil` 时不编码；服务端只在它为 `true` 时建 C++ section 并把 C++ 对象接在 ObjC、Swift 之后。公开 API 是 `objects(in:includesCPlusPlusObjects:)` 与 `objectsWithProgress(in:includesCPlusPlusObjects:)`，默认 `false`。
@@ -134,6 +148,10 @@ RuntimeViewer 新增第三种对象语言：C++。镜像的对象列表在 Objec
 - **注释标签**：C++ 界面不标注释结构（`marksCommentStructure` 对它不起作用），注释以普通注释显示。
 - **新的 `RuntimeObject.Properties` 位**（例如「只从 RTTI 恢复」）：本提案不加，界面头部的注释已经说明；加位要同时加 Filter Scope 的行（`AGENTS.md` 开发规则第 9 条），以后需要时另议。
 - **MachOKitExtensions 之外的 C++ 来源**（ObjC ivar 编码里的 C++ 结构体）。
+
+### 已知问题（实现时发现，上游）
+
+- **MachOKitExtensions 3.1.0 把 `N_INDR` 符号表条目当成定义的符号。** libc++ 用 `N_INDR` 逐个转出 libc++abi 的符号（`std::exception` 的析构函数与 `what()` 等），`MachOSymbols` 的扫描没有排除这种条目，把它的值（转出目标名字在字符串表里的位置）当成偏移，于是 libc++ 的作用域树里有一个 `std::exception`，成员地址是 `0x34C4B2EA` 这样无意义的数。RuntimeViewer 照树列出，所以 libc++ 下会多一个 `std::exception`，从 libc++ 的类点它的基类 `std::exception` 也停在 libc++ 这一份。修法在上游：扫描时跳过 `type == .indr` 的条目。测试 `reExportedBaseStaysInTheReferringImage` 用 `withKnownIssue` 记着它，上游修好后会提示改测试。
 
 ## 改动地图
 
@@ -429,12 +447,12 @@ case .cPlusPlus:
 
 ## 落地步骤
 
-1. **依赖、种类与测量** —— 改动地图里的 `Package.swift`、锁文件、`RuntimeObjectKind`、`RuntimeInterfaceLanguage`、各处穷举的补臂、`RuntimeImageReading`（视编译结果）、临时的耗时探针
+1. **[完成] 依赖、种类与测量** —— 改动地图里的 `Package.swift`、锁文件、`RuntimeObjectKind`、`RuntimeInterfaceLanguage`、各处穷举的补臂、`RuntimeImageReading`（视编译结果）、临时的耗时探针
    - 行为：`cPlusPlusKindsSortAfterSwiftKinds`
    - 行为：`cPlusPlusKindRoundTripsThroughJSON`
    - 行为：`cPlusPlusKindDescriptionsNameTheLanguage`
    - 行为：探针结论（进程内与 cache 文件、Espresso 与 libc++、release）与注入 payload 的体积增量写进本提案的前期调研与决策日志，探针删除
-2. **C++ section 与对象列表** —— section、工厂、建树、两份协议、`RuntimeImageIndex`、`RuntimeEngine` 的取对象部分、`ObjectsInImageCommand`、两个进度阶段、建树与 section 的测试、线上测试
+2. **[完成] C++ section 与对象列表** —— section、工厂、建树、两份协议、`RuntimeImageIndex`、`RuntimeEngine` 的取对象部分、`ObjectsInImageCommand`、两个进度阶段、建树与 section 的测试、线上测试
    - 行为：`typeScopeBecomesClassObject`
    - 行为：`typeInfoOnlyClassIsPlacedUnderItsScopePath`
    - 行为：`missingParentOfTypeInfoOnlyClassBecomesNamespace`
@@ -450,7 +468,7 @@ case .cPlusPlus:
    - 行为：`progressReportsCPlusPlusPhasesOnlyWhenAsked`
    - 行为：`stoppingEngineRemovesCPlusPlusIndexes`
    - 行为：`concurrentRequestsBuildOneCPlusPlusSection`
-3. **界面与跨镜像跳转** —— 打印器、`_interface` 的 C++ 臂、目录的新方法、打印测试
+3. **[完成] 界面与跨镜像跳转** —— 打印器、`_interface` 的 C++ 臂、目录的新方法、打印测试
    - 行为：`classPrintsBasesWithVirtualAndAccess`
    - 行为：`virtualDestructorSlotsCollapseIntoOneLine`
    - 行为：`constructorVariantsCollapseIntoOneLine`
@@ -467,13 +485,13 @@ case .cPlusPlus:
    - 行为：`typeTokensCarryQualifiedNames`
    - 行为：`baseInAnotherImageResolvesThroughExportedTypeInfo`（进程内：libc++ 的类跳到 libc++abi 的 `std::exception`）
    - 行为：`nonUniqueTypeInfoBaseDoesNotResolve`
-4. **层级与派生类** —— `_hierarchy`、关系解析器、类型关系解析器、`RuntimeRelationshipNode.TypeKind`
+4. **[完成] 层级与派生类** —— `_hierarchy`、关系解析器、类型关系解析器、`RuntimeRelationshipNode.TypeKind`
    - 行为：`hierarchyFollowsPrimaryBases`
    - 行为：`hierarchyCrossesIntoTheImageDefiningTheBase`
    - 行为：`superclassChainNodesResolveCPlusPlusObjects`
    - 行为：`relationshipsListDerivedClassesInTheImage`
    - 行为：`namespaceHasNoHierarchy`
-5. **App 接入** —— 侧栏、路径栏、镜像页、Filter Scope、图标、内容区语言与文件类型、跳转目标、Inspector、其余补臂、AppCore 测试
+5. **[完成] App 接入** —— 侧栏、路径栏、镜像页、Filter Scope、图标、内容区语言与文件类型、跳转目标、Inspector、其余补臂、AppCore 测试
    - 行为：`filterScopeHasCPlusPlusGroup`
    - 行为：`cPlusPlusIconsAreGreenCAndN`
    - 行为：`cPlusPlusLinkTargetsAreClassesAndNamespaces`
@@ -482,7 +500,7 @@ case .cPlusPlus:
    - 行为：`exportAndFindDoNotAskForCPlusPlusObjects`
    - 行为：`imagePageCountsCPlusPlusKinds`
    - 行为：`./TuistScript.sh check` 通过
-6. **文档** —— `AGENTS.md`、`CommunicationAndEngineArchitecture.md` §4.4、`README.md`、索引；判断是否写实现说明（倾向写一份 `Documentations/CPlusPlusObjects.md`：建树规则、打印规则、为什么是字段不是命令、已知局限）与术语表
+6. **[完成] 文档** —— `AGENTS.md`、`CommunicationAndEngineArchitecture.md` §4.4、`README.md`、索引；判断是否写实现说明（倾向写一份 `Documentations/CPlusPlusObjects.md`：建树规则、打印规则、为什么是字段不是命令、已知局限）与术语表
 
 **收尾时必须判断两件事**（判断结果写进决策日志，不允许沉默跳过）：
 
@@ -498,3 +516,19 @@ case .cPlusPlus:
 | 2026-11-21 | 线上形状：字段而非命令 | 经 Mach service 的旧版注入 payload 会把不认识的命令当成客户端离开（PR121.73），而侧栏每开一个镜像都要取对象，所以 C++ 对象经 `objectsInImage` 的可选字段 `includesCPlusPlusObjects` 取，旧对端跳过字段。 |
 | 2026-11-21 | 不打印修饰名里没有的东西 | 澄清提问的样例里画了返回类型与 `static`，但 Itanium 修饰名只给函数模板特化记返回类型、不区分静态成员、不记访问级别；界面只打印修饰名里有的，样例的这几处在实现里不会出现。 |
 | 2026-11-21 | Accepted | 用户看过简报后批准，开始实现。 |
+| 2026-11-21 | In Progress | 从 `next` 切出 `feature/cplusplus-objects`，worktree 在 `.worktrees/RuntimeViewer-CPlusPlusObjects`。 |
+| 2026-11-21 | 第 1 步实测 | release 下 Espresso 的 C++ section 进程内约 0.25 秒、cache 文件约 1.9 秒（见「实测」）；按需建的方案不变。两个 C++ target 的代码段约 350 KB。 |
+| 2026-11-21 | 第 1–5 步合成一个提交 | 前四步都在 Core，共改 `RuntimeEngine.swift` 的同几段，第 1 步补的占位分支随后就被第 3、4 步的真实分支替换；App 层的穷举分支（Filter Scope 分组、跳转种类、语言标识、文件类型、图标）在第 1 步补臂时就要写，直接写成了最终值。只提交 Core 的那一半会让 App 层编不过，所以代码一次提交，文档另一次。 |
+| 2026-11-21 | 界面请求按需建 section | `_interface` 的 C++ 分支用 `section(for:)` 而不是 `existingSection`：恢复的标签或书签可能在列表之前请求界面，此时现建。关系请求仍只看已建的 section（跨 owner 合并时，没列过这个镜像 C++ 对象的参与者答空）。 |
+| 2026-11-21 | 主基类的取法简化 | 层级取「第一个非虚、偏移为 0 的直接基类」。上游补名用的主基类还要求它有 vtable，并在没有时考虑「几乎为空的虚基类」；这两种情况在层级里差别很小，不为它读基类的 vtable。 |
+| 2026-11-21 | 引用镜像有符号时打印引用镜像这一份 | libc++ 定义了 `std::runtime_error` 取 `std::string` 的构造函数，所以从 libc++ 点 `std::runtime_error` 打开的是 libc++ 这一份（只有那几个构造函数），不是 libc++abi 带 vtable 的那一份。跳转只在引用镜像完全没有这个名字时才去导出 typeinfo 的镜像，与侧栏点同一个对象看到的一致；测试 `classWithSymbolsInTheReferringImageIsPrintedThere` 钉住这一点。 |
+| 2026-11-21 | 发现上游 N_INDR 问题 | 见「已知问题」；不在本分支修，记为后续项。 |
+| 2026-11-21 | 线上测试按解码层写 | 「旧服务端收到带字段的请求」按冻结的旧请求类型解码来测（JSON 与 `XPCEncoder`），没有搭一个只认旧请求的真实服务端：旧服务端的行为就是解码时丢掉字段、照旧取对象；真实连接上测的是两种传输与中转都把字段带过去。 |
+| 2026-11-21 | 三条 App 层行为没写测试 | `sidebarAsksForCPlusPlusObjects`、`exportAndFindDoNotAskForCPlusPlusObjects`、`imagePageCountsCPlusPlusKinds` 没有写成测试：前一条是侧栏 ViewModel 里一个参数，后两条是「不改就不会要」的默认值，测它们要替身引擎记录请求，花费与价值不相称。线上测试已经证明不带字段的请求拿不到 C++ 对象。 |
+| 2026-11-21 | 不另写实现说明 | 维护时会踩的约定——C++ section 不进索引、只有三处要它、为什么是字段不是命令、跳转先看引用镜像——已经分别写进 `AGENTS.md`、`CommunicationAndEngineArchitecture.md` §4.4 与代码的文档注释，提案本身记着全部决定与实测；再写一份实现说明只是第四处副本。 |
+| 2026-11-21 | 术语表加两条 | 「C++ 对象」与「主基类」。 |
+| 2026-11-21 | 停止引擎清的是进程里共用的 store | 两个上游 store 是进程级单例，一个引擎停止时清掉它建过的镜像，同一进程里别的引擎下次用到会重建。App 的每个服务进程只服务一个引擎，不受影响；写在 `RuntimeCPlusPlusSectionFactory.removeAllSections()` 的文档注释里。 |
+| 2026-11-21 | 空命名空间按会打印的成员判断 | App 层测试里路径栏列出 libobjc 的对象时，出现了 `_read_images`、`call_load_methods` 这样的命名空间：作用域树把只装着 block 调用的作用域判为「未定」，按规则成了命名空间，界面却什么也打印不出。命名空间「有没有成员」改为只算界面会打印的成员（`RuntimeCPlusPlusSection.isPrinted(_:)`），测试 `listedNamespacesHaveSomethingToShow` 在 libobjc 上核对每个没有子对象的命名空间都打印出函数或变量。 |
+| 2026-11-21 | 路径栏测试跟着改 | `EditorJumpBarTests` 的「an image's objects become its children once read…」原来拿不带 C++ 的对象列表当期望值；路径栏现在也列 C++ 对象，期望值改为带 C++ 的列表，并断言 libobjc 确有 C++ 对象。 |
+| 2026-11-21 | Tuist 检查的既有红 | `./TuistScript.sh check` 报 `sourceDependencyTargetNames` 缺 MachOSwiftSection 的 `SwiftSectionTestingMacros`；origin/next 的 `Tuist.swift` 同样缺，是抬 MachOSwiftSection pin（`161be627`）时带进来的，不是本分支引入。本分支没有改原生工程，检查的其余部分一致。记为后续项。 |
+| 2026-11-21 | 实现完成，待用户看过后收尾 | Core 包全量（三条红单独重跑全过：一条是种类数量的既有断言，已随新种类改成 23；两条是满载偶发）、App 层两个测试包（红灯单独重跑全过，其余是记忆里登记过的既有红灯）、整个 App（Tuist workspace，Debug）都编过；没做界面目视。 |

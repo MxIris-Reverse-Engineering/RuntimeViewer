@@ -405,6 +405,8 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 
 第四例是加载失败的诊断（提案 `isolated-framework-loading`）：`LoadImageCommand` 加可选的 `reportsFailureDiagnosis`，回复从 `RuntimeEngineEmpty` 换成全可选的 `RuntimeImageLoadResponse`。请求方声明了，本版服务端就把 dyld 的拒绝作为回复里的 `failure`（带诊断）答回，不再抛错——抛出的错误过线只剩文字，结构化的诊断带不过去；没声明（旧请求方），回复与以前一样，成功是空对象、失败照旧抛出。旧服务端跳过这个字段，只回 dyld 原文，App 据原文做简化诊断。重新诊断（换宿主 App 或搜索路径）是新命令 `diagnoseImageLoad`，只发给同一次构建内嵌的进程（`RuntimeEngine.diagnosesImageLoadsOnRequest`：`.local` 与框架实例），不给可能是旧版的对端发。测试：`LoadImageFailureDiagnosisWireTests`（冻结的旧请求与旧服务端、经中转、JSON 与 `XPCEncoder` 两种编码）。
 
+第五例是 C++ 对象（提案 `cplusplus-objects`）：`ObjectsInImageCommand` 加可选的 `includesCPlusPlusObjects`，只有为真时才编码。请求方声明了，本版服务端在 ObjC 与 Swift 对象之后接上镜像的 C++ 类与命名空间，并在进度里多报两个阶段（`indexingCPlusPlusSymbols`、`indexingCPlusPlusClasses`）；没声明（旧请求方，以及本版里不要 C++ 的调用方），请求与回复都与以前逐字节相同，回复里不会出现旧版解不开的 `RuntimeObjectKind.cPlusPlus`。旧服务端跳过这个字段，照旧只回 ObjC 与 Swift，App 只是看不到 C++ 对象。没有为它加新命令，理由同第三例：侧栏每打开一个镜像都要发一次，旧版注入 payload 收到不认识的命令会断开连接（PR121.73）。C++ 对象的界面、层级与关系请求只会发给列出过 C++ 对象的对端，也就是本版对端。测试：`ObjectsInImageCPlusPlusWireTests`（冻结的旧请求、两种编码、两种传输、经中转）。
+
 新增**命令**不在此列，但旧对端会对它回「No handler registered for …」（2.1.0 起），调用方要把这当成「对端不支持」，而不是一次普通失败。旧对端只回这一段文字，所以识别只能靠前缀：`RuntimeNetworkRequestError.isUnknownCommand`，前缀是 `unknownCommandMessagePrefix`，通道拼这条回复用的也是它。中转节点自己的转发请求以 `RuntimeNetworkRequestError` 失败时，错误回复照原文写下去（`RuntimeMessageChannel.replyMessage(for:)`），不再包一层类型描述，所以经过新版中转，旧对端照样认得出（`RemoteUnknownCommandTests`）。第一个用它的是语料协调器的 `isCorpusUnsupportedByEngine`（PR121.37）。经 Mach service 的旧版注入 payload 对未知命令不回这段文字，见 PR121.73。
 
 ### 4.5 跨连接取消（引擎层，`Engine/Commands/` 的 `RuntimeEngineRequestCancellation.swift`、`RuntimeEngineInboundRequests.swift`、`RuntimeEngineForwardedRequest.swift`）
