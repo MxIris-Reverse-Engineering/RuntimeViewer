@@ -23,7 +23,7 @@ final class MainMenuController {
             if SourceEditorBridgeFactory.isAvailable {
                 editorMenuItem()
             }
-            MainMenu.window()
+            windowMenuItem()
             MainMenu.help()
         }
     }
@@ -57,6 +57,28 @@ final class MainMenuController {
             keyEquivalent: "",
         )
         .image(SFSymbols(systemName: .trash).nsImage)
+    }
+
+    // MARK: - Window
+
+    /// The standard Window menu with Welcome to RuntimeViewer above Bring All to
+    /// Front, where Xcode puts Welcome to Xcode, under the same ⇧⌘1.
+    private func windowMenuItem() -> NSMenuItem {
+        MainMenu.window { builder in
+            builder.insertItems(before: .Window.bringAllToFront) {
+                welcomeWindowItem()
+                NSMenuItem.separator()
+            }
+        }
+    }
+
+    private func welcomeWindowItem() -> NSMenuItem {
+        NSMenuItem(
+            "Welcome to RuntimeViewer",
+            action: #selector(AppDelegate.showWelcomeWindow(_:)),
+            keyEquivalent: "1",
+            modifiers: [.command, .shift],
+        )
     }
 
     // MARK: - File

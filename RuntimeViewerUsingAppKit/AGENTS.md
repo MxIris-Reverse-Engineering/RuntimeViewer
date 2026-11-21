@@ -563,9 +563,18 @@ shape it has.
 - `HelperServiceVersionChecker` — runs the helper version probe and presents reinstall alerts
 - `UpdaterService` — owns the Sparkle updater lifecycle
 - `MainMenuController` — assembles the main menu in code (the replacement for `MainMenu.xib`)
-- `WindowLifecycleController` — answers `applicationShouldHandleReopen` / `applicationShouldTerminateAfterLastWindowClosed`
+- `WindowLifecycleController` — answers `applicationShouldHandleReopen` / `applicationShouldTerminateAfterLastWindowClosed`;
+  with no document window to bring back it hands the reopen to `WelcomeController`
+- `WelcomeController` — the Welcome window (UIFoundation's `WelcomePanelController`, Xcode 26 style, `WelcomePanel`
+  trait): answers `applicationShouldOpenUntitledFile`, so launch and a Dock click with no document window show it
+  instead of a new window on My Mac while Settings › General › Show Welcome Window at Launch is on. The decisions
+  are RuntimeViewerAppCore's `WelcomeWindowPolicy`. AppKit can ask before the settings are read, so a request that
+  comes too early is held until `SettingsLifecycleController.waitUntilLoaded()` returns. **It closes the panel when
+  a document window becomes main, never when a document is added**: the document's window is not on screen then,
+  and with Quit After Closing Last Window on, closing the only window quits the app. Background:
+  `Documentations/Evolutions/draft-welcome-window.md`
 - `CommandLineHostController` — makes the running app the CLI host: asks a standalone host to leave on launch, serves the socket, removes its files on quit
-- `SettingsLifecycleController` — loads the settings at launch and flushes them at termination (root `AGENTS.md`, *Settings Integration*); once they are read it starts RuntimeViewerAppCore's `RuntimeEngineManagerSettingsFollower`, which the iOS apps start too
+- `SettingsLifecycleController` — loads the settings at launch and flushes them at termination (root `AGENTS.md`, *Settings Integration*); once they are read it starts RuntimeViewerAppCore's `RuntimeEngineManagerSettingsFollower`, which the iOS apps start too. The read is asynchronous: a launch-time decision that hangs on a setting checks `isLoaded` and otherwise awaits `waitUntilLoaded()`
 - `RuntimeDerivedDataController` — the app's side of derived data: gives the Indexing settings page its `DerivedDataClient` (location, size, Show in Finder, delete) and asks before the application menu's Delete Derived Data… deletes it (root `AGENTS.md`, *Derived data*)
 - `FileController` — opens a Mach-O file, a bundle, a folder or a dyld shared cache from disk: takes the engine from RuntimeViewerAppCore's `RuntimeFileOpener.startReading(fileAt:)` — which inspects the file off the main thread, picks the dependency cache (`Settings.file`) and calls `RuntimeEngineManager.startReading(_:)`, the same way for the iOS apps — and opens a `Document(runtimeEngine:)` on it at once, while the file service is still reading the file (the content pane's placeholder says so); once `waitUntilFileIsRead(by:)` returns the file joins Open Recent, and when it throws the window shows why in a sheet and closes after the user's OK. It also lists the dependency caches the runtime source picker's Dependency Cache level offers and re-pairs from it; `start()` starts `RuntimeFileEngineParking`, which lets a file engine's process go thirty seconds after its last window left
 - `DocumentController` — the app's `NSDocumentController` subclass: hands every file that is not a `.runtimedocument` to `FileController`, from File › Open…, Open Recent and the Dock alike. The first document controller made becomes the shared one, so `DocumentController.install()` is one of the calls in `AppDelegate.main()`, before window restoration inside `run()` would make a plain one

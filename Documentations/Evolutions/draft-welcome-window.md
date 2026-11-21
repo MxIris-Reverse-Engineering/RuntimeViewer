@@ -1,6 +1,6 @@
 # Draft - 欢迎窗口（接入 UIFoundation 的 WelcomePanel）
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-21
 - **最后更新**: 2026-11-21
@@ -100,7 +100,7 @@ tag `0.49.0` 是同一个提交 `96343f3`，没有未发版的提交）
 1. **上游（UIFoundation 0.50.0）**：`WelcomePanelController.Configuration` 加
    `public var projectListPlaceholderText: String?`，`nil` 时仍是 `"No Recent Projects"`；
    `ProjectsViewController` 读它。补测试、更新 `Documentations/WelcomePanel.md`，打 tag `0.50.0`。
-2. **依赖**：`uiFoundationTraits` 加 `"WelcomePanel"`，下限抬到 `from: "0.50.0"`，三个锁文件只抬 UIFoundation。
+2. **依赖**：`uiFoundationTraits` 加 `"WelcomePanel"`，下限抬到 `from: "0.50.0"`，四个被跟踪的锁文件只抬 UIFoundation。
 3. **设置**：`Settings.General.showsWelcomeWindowAtLaunch`，`@Default(true)`；设置 › 通用 › Windows 一节加开关，
    改写这一节的说明文字（Dock 点击的行为也随它）。
 4. **决策**：RuntimeViewerAppCore 新增纯值类型 `WelcomeWindowPolicy`，把「这时该弹欢迎窗口、开 My Mac 窗口、
@@ -119,7 +119,7 @@ tag `0.49.0` 是同一个提交 `96343f3`，没有未发版的提交）
 6. **接线**：`AppDelegate` 加 `applicationShouldOpenUntitledFile(_:)`、`welcomeController.start()` 与
    `@objc showWelcomeWindow(_:)` 三处一行转发；`WindowLifecycleController.handleReopen(for:)` 最后一支改调
    `welcomeController.showInsteadOfUntitledDocument()`；`SettingsLifecycleController` 补 `isLoaded` 与
-   `waitUntilLoaded()`；`MainMenuController` 在 Window 菜单 Zoom 之后插 Welcome to RuntimeViewer（⇧⌘1）。
+   `waitUntilLoaded()`；`MainMenuController` 在 Window 菜单 Bring All to Front 之前插 Welcome to RuntimeViewer（⇧⌘1）。
 
 ### 非目标
 
@@ -140,7 +140,7 @@ tag `0.49.0` 是同一个提交 `96343f3`，没有未发版的提交）
 | UIFoundation `Tests/UIFoundationTests/WelcomePanelTests.swift` | 修改 | 两条测试：默认文字不变、配置的文字生效 | 回归 | 1 |
 | UIFoundation `Documentations/WelcomePanel.md` | 修改 | §1 的配置说明加这一项 | 文档同批 | 1 |
 | `RuntimeViewerPackages/Package.swift` | 修改 | `uiFoundationTraits` 加 `"WelcomePanel"`；远端下限 `from: "0.50.0"` | 编进组件、拿到新属性 | 2 |
-| `RuntimeViewer*.xcworkspace/xcshareddata/swiftpm/Package.resolved`（三个） | 修改 | 只把 UIFoundation 抬到 0.50.0 | 锁文件跟上下限 | 2 |
+| `RuntimeViewer-Debug` / `-Distribution` 两个 workspace 与 `RuntimeViewerPackages`、`RuntimeViewerCommandLine` 的 `Package.resolved`（四个） | 修改 | 只把 UIFoundation 抬到 0.50.0 | 锁文件跟上下限 | 2 |
 | 根 `AGENTS.md` · *Dependency floors* | 修改 | UIFoundation 下限改为 0.50.0，写明 `WelcomePanel` trait 与 `projectListPlaceholderText` | 下限的理由要留档 | 2 |
 | `RuntimeViewerPackages/Sources/RuntimeViewerSettings/Settings+Types.swift` · `Settings.General` | 修改 | 加 `@Default(true) public var showsWelcomeWindowAtLaunch: Bool` | 开关 | 3 |
 | `RuntimeViewerPackages/Sources/RuntimeViewerSettingsUI/Components/GeneralSettingsView.swift` | 修改 | Windows 一节加 Toggle「Show Welcome Window at Launch」，改写说明文字 | 开关的界面 | 3 |
@@ -151,7 +151,7 @@ tag `0.49.0` 是同一个提交 `96343f3`，没有未发版的提交）
 | `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/WelcomeController.swift` · `WelcomeController` | 新增 | 持有面板、data source / delegate、启动与 Dock 决策、关窗观察、`@DependencyEntry` | 生命周期职责独立成控制器 | 5 |
 | `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/AppDelegate.swift` | 修改 | `@Dependency(\.welcomeController)`；`applicationShouldOpenUntitledFile(_:)`；`didFinishLaunching` 里 `welcomeController.start()`；`@objc showWelcomeWindow(_:)` | 一行转发 | 5 |
 | `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/WindowLifecycleController.swift` | 修改 | 最后一支改调 `welcomeController.showInsteadOfUntitledDocument()`，doc comment 跟着改 | Dock 点击也弹欢迎窗口 | 5 |
-| `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/MainMenuController.swift` | 修改 | `MainMenu.window(customizing:)`，Zoom 之后插分隔线与 Welcome to RuntimeViewer（⇧⌘1） | 随时能叫出来 | 5 |
+| `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/MainMenuController.swift` | 修改 | `MainMenu.window(customizing:)`，Bring All to Front 之前插 Welcome to RuntimeViewer（⇧⌘1）与分隔线 | 随时能叫出来 | 5 |
 | `RuntimeViewerUsingAppKit/AGENTS.md` · *AppDelegate and the Lifecycle Controllers* | 修改 | 控制器清单加 `WelcomeController`，写明「关欢迎窗口要等文档窗口成为主窗口」 | 规则留档 | 6 |
 | `Documentations/Evolutions/README.md`、`Documentations/README.md` | 修改 | 登记本提案；落地时改编号与状态 | 索引 | 6 |
 
@@ -257,8 +257,9 @@ Toggle("Show Welcome Window at Launch", isOn: $settings.showsWelcomeWindowAtLaun
 Toggle("Quit After Closing Last Window", isOn: $settings.terminatesAfterLastWindowClosed)
 // footer:
 // "The Welcome window lists the files you opened recently. It also shows when you click the Dock
-//  icon with no window open; when off, a new window on My Mac opens instead. When Quit After Closing
-//  Last Window is on, closing the last window quits the app."
+//  icon with no window open; when it is off, a new window on My Mac opens instead. With Quit After
+//  Closing Last Window on, closing the last window quits the app; otherwise the app keeps running
+//  with no window open."
 ```
 
 ### `WelcomeWindowPolicy`（RuntimeViewerAppCore，`App/`）
@@ -340,14 +341,14 @@ final class WelcomeController: NSObject {
         configuration.welcomeLabelText = applicationName
         configuration.projectListPlaceholderText = "No Recent Files"
         configuration.primaryAction = .init(
-            image: /* My Mac's glyph, as the runtime source picker shows it */,
+            image: SFSymbols(systemName: .plusSquare).nsImage,
             title: "New Window on My Mac",
-            action: { _ in NSDocumentController.shared.newDocument(nil) }
+            action: { _ in MainActor.assumeIsolated { NSDocumentController.shared.newDocument(nil) } }
         )
         configuration.secondaryAction = .init(
             image: SFSymbols(systemName: .folder).nsImage,
             title: "Open File…",
-            action: { _ in NSDocumentController.shared.openDocument(nil) }
+            action: { _ in MainActor.assumeIsolated { NSDocumentController.shared.openDocument(nil) } }
         )
         let panel = WelcomePanelController(configuration: configuration)
         panel.dataSource = self
@@ -387,8 +388,8 @@ extension DependencyValues {
 - 关窗等文档窗口成为主窗口，而不是在 `addDocument` 或 `makeWindowControllers` 里关：那时文档窗口还没上屏，
   开着「Quit After Closing Last Window」时，关掉唯一的窗口 App 就会退出。
 - 打开文件出错时 `openDocument(withContentsOf:)` 的 completion 里不再报一次：`FileController` 已经报过。
-- My Mac 的图标取运行源选择器给本机的同一个（`RuntimeEngineIconProvider` 的本机图标）；取不到就用 SF Symbol
-  `desktopcomputer`。
+- 两个动作的图标是 Xcode 欢迎窗口用的 SF Symbol：`plus.square`（Xcode 的 Create New Project…）与 `folder`
+  （决策日志 2026-11-21「动作图标」一行）。
 
 ### `AppDelegate`
 
@@ -417,18 +418,20 @@ func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
 
 ```swift
 MainMenu.window { builder in
-    builder.insertItems(after: .Window.zoom) {
-        NSMenuItem.separator()
+    builder.insertItems(before: .Window.bringAllToFront) {
         NSMenuItem(
             "Welcome to RuntimeViewer",
             action: #selector(AppDelegate.showWelcomeWindow(_:)),
-            keyEquivalent: "1"            // with .command + .shift, as Xcode's Welcome to Xcode
+            keyEquivalent: "1",
+            modifiers: [.command, .shift],
         )
+        NSMenuItem.separator()
     }
 }
 ```
 
-`Builder` 插项的确切写法以 UIFoundation 的 `MainMenu+Window.swift` 为准。
+插在 Bring All to Front 之前、自带一条分隔线，菜单读作 Minimize、Zoom、—、Welcome to RuntimeViewer、—、
+Bring All to Front，与 Xcode 里 Welcome to Xcode 所在的那一组位置相同。
 
 ## 替代方案考量
 
@@ -478,24 +481,24 @@ iOS、visionOS 不受影响（设置模型里多一个字段，iOS 的设置页�
 
 ## 落地步骤
 
-1. **UIFoundation：空列表文字可配，发 0.50.0** —— 改动地图 UIFoundation 四行
+1. ✅ **UIFoundation：空列表文字可配，发 0.50.0** —— 改动地图 UIFoundation 四行
    - 行为：`placeholderTextDefaultsToNoRecentProjects`
    - 行为：`placeholderTextComesFromConfiguration`
    - 测试带 `--traits WelcomePanel` 跑；会开窗口的测试放到另一台机器上跑（本机是 Ultra 就用 MacBook）。
      打 tag `0.50.0` 并推送。
-2. **RuntimeViewer 打开 trait、抬下限** —— `Package.swift`、三个锁文件、根 `AGENTS.md`
+2. ✅ **RuntimeViewer 打开 trait、抬下限** —— `Package.swift`、四个锁文件（两个 workspace 与 Packages、CommandLine 两个包；`RuntimeViewer.xcworkspace` 的锁文件不进仓库）、根 `AGENTS.md`
    - 行为：包与 App 都能编，`WelcomePanelController` 可见；`./TuistScript.sh check` 通过。
-3. **设置开关** —— `Settings+Types.swift`、`GeneralSettingsView.swift`、`SettingsPersistenceTests.swift`
-   - 行为：`showsWelcomeWindowAtLaunchDefaultsToTrue`
-   - 行为：`legacyPayloadWithoutTheKeyShowsTheWelcomeWindow`
-4. **决策** —— `WelcomeWindowPolicy` 与测试
+3. ✅ **设置开关** —— `Settings+Types.swift`、`GeneralSettingsView.swift`、`SettingsPersistenceTests.swift`
+   - 行为：`welcomeWindowSwitchRoundTrips`（默认开、关掉后存取不丢）
+   - 行为：`legacyPayloadDecoding` 补一句（旧文件没有这个键时为开）
+4. ✅ **决策** —— `WelcomeWindowPolicy` 与测试
    - 行为：`untitledRequestBeforeSettingsLoadWaits`
    - 行为：`untitledRequestShowsWelcomeWindowWhenEnabled`
    - 行为：`untitledRequestOpensUntitledDocumentWhenDisabled`
    - 行为：`heldLaunchRequestDoesNothingOnceADocumentWindowIsUp`
    - 行为：`heldLaunchRequestFollowsTheLoadedSetting`
    - 行为：`reopenFollowsTheSetting`
-5. **App 接线** —— `SettingsLifecycleController`、`WelcomeController`、`AppDelegate`、`WindowLifecycleController`、
+5. ✅（代码与构建；目视验收待用户）**App 接线** —— `SettingsLifecycleController`、`WelcomeController`、`AppDelegate`、`WindowLifecycleController`、
    `MainMenuController`
    - 行为（App 构建通过；以下由用户在 App 里目视验收）：
      - 启动弹欢迎窗口；关掉开关后重启，开的是 My Mac 窗口。
@@ -503,7 +506,7 @@ iOS、visionOS 不受影响（设置模型里多一个字段，iOS 的设置页�
      - New Window on My Mac、Open File… 两个动作；打开任何文档窗口后欢迎窗口关闭。
      - 关掉所有窗口后点 Dock 弹欢迎窗口；⇧⌘1 随时打开。
      - 开着「Quit After Closing Last Window」时，从欢迎窗口打开文件不会让 App 退出。
-6. **文档** —— `RuntimeViewerUsingAppKit/AGENTS.md`、两份索引；落地时取号、状态改 Implemented
+6. ✅（取号与 Implemented 留给收尾）**文档** —— `RuntimeViewerUsingAppKit/AGENTS.md`、两份索引；落地时取号、状态改 Implemented
 
 **收尾时必须判断两件事**（判断结果写进决策日志，不允许沉默跳过）：
 
@@ -520,3 +523,8 @@ iOS、visionOS 不受影响（设置模型里多一个字段，iOS 的设置页�
 | 2026-11-21 | 空列表文字先改上游 | 用户选择先给 UIFoundation 加可配置的占位文字并发版，不在 RuntimeViewer 里将就「No Recent Projects」。 |
 | 2026-11-21 | 只放两个动作；用 `.xcode26` 样式；不配 ViewModel | 未询问用户的默认决定：Attach 与 Load Frameworks 挂在主窗口上；样式与 App 其余界面一致；会变的决策放进 AppCore 的 `WelcomeWindowPolicy` 测试。UIFoundation 一侧只加一个可选属性，不另写提案，记在它的 `WelcomePanel.md` 与发版说明里。 |
 | 2026-11-21 | Accepted | 用户批准，开始实现。 |
+| 2026-11-21 | 动作图标用 `plus.square` 与 `folder` | 偏离提案：原定第一个动作用来源选择器给 My Mac 的设备字形。那要在建面板时经 `RuntimeEngineIconProvider` 碰引擎管理器，字形还带自己的配色；改用 Xcode 欢迎窗口自己的符号（Create New Project… 的 `plus.square`），与 Xcode 一致。 |
+| 2026-11-21 | Welcome to RuntimeViewer 放在 Bring All to Front 之前 | 偏离提案：原定插在 Zoom 之后。放在 Bring All to Front 之前、前后各一条分隔线，与 Xcode 里 Welcome to Xcode 所在的那一组位置相同。 |
+| 2026-11-21 | `Tuist.swift` 缺 `SwiftSectionTestingMacros` 不在本分支修 | `./TuistScript.sh check` 报这一项，trait 的比对通过。缺项来自 next 上已有的 MachOSwiftSection pin（C++ 对象那次合并抬到的提交带了这个新 target），与本提案无关，留给 next 上处理。 |
+| 2026-11-21 | 设置测试改为一条往返测试加一句旧文件断言 | 原列的两个用例名合并成 `welcomeWindowSwitchRoundTrips` 与 `legacyPayloadDecoding` 里的一句，覆盖的行为不变。 |
+| 2026-11-21 | 实现完成，待用户看过后收尾 | 包级测试与 Tuist 的 App 构建通过；目视验收交给用户。文档判断：不另写使用指南或实现说明，决策与约束已写进 `RuntimeViewerUsingAppKit/AGENTS.md`（`WelcomeController` 一条）与本提案；没有新术语。 |

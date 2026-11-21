@@ -26,11 +26,12 @@ struct GeneralSettingsView: View {
             }
 
             Section {
+                Toggle("Show Welcome Window at Launch", isOn: $settings.showsWelcomeWindowAtLaunch)
                 Toggle("Quit After Closing Last Window", isOn: $settings.terminatesAfterLastWindowClosed)
             } header: {
                 Text("Windows")
             } footer: {
-                Text("When off, the app keeps running with no window open and clicking its Dock icon opens a new window. When on, closing the last window quits the app.")
+                Text("The Welcome window lists the files you opened recently. It also shows when you click the Dock icon with no window open; when it is off, a new window on My Mac opens instead. With Quit After Closing Last Window on, closing the last window quits the app; otherwise the app keeps running with no window open.")
             }
 
             Section {

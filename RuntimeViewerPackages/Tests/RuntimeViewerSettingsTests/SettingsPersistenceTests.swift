@@ -155,6 +155,18 @@ struct SettingsPersistenceTests {
         #expect(changeRecorder.changeCount == 1)
     }
 
+    @Test("turning the Welcome window off survives a save and a load")
+    func welcomeWindowSwitchRoundTrips() throws {
+        let settings = Settings()
+        #expect(settings.general.showsWelcomeWindowAtLaunch == true)
+
+        settings.general.showsWelcomeWindowAtLaunch = false
+        let data = try JSONEncoder().encode(settings)
+        let decoded = try JSONDecoder().decode(Settings.self, from: data)
+
+        #expect(decoded.general.showsWelcomeWindowAtLaunch == false)
+    }
+
     @Test("legacy payloads retain stored values and default newer fields")
     func legacyPayloadDecoding() throws {
         let data = Data(
@@ -178,6 +190,7 @@ struct SettingsPersistenceTests {
         #expect(settings.general.sidebarMaxExpansionDepth == 3)
         #expect(settings.general.terminatesAfterLastWindowClosed == false)
         #expect(settings.general.toolbarActivityStyle == .automatic)
+        #expect(settings.general.showsWelcomeWindowAtLaunch == true)
         #expect(settings.notifications.isEnabled == false)
         #expect(settings.notifications.showOnConnect == false)
         #expect(settings.notifications.showOnDisconnect == true)
