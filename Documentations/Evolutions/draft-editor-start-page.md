@@ -7,7 +7,7 @@
 - **所属愿景**: 无
 - **关联提案**: [0076 编辑器分栏](0076-editor-panes.md)（空标签与「唯一一栏的关闭按钮清空编辑区」）、[0092 编辑栏的路径栏](0092-editor-jump-bar.md)（镜像页与 `.openImage`）、[0069 文件模式](0069-file-mode.md)（读文件时的占位）、[0085 Filter Scope 按 Engine 与 Image 记住](0085-filter-scope-memory.md)（按 Engine 记忆的键）
 - **实现分支 / PR**: `feature/editor-start-page`
-- **配套文档**: 待定 —— 落地时登记实现说明 / 使用指南的链接
+- **配套文档**: 不另写；规则在 `RuntimeViewerUsingAppKit/AGENTS.md` 编辑区一节，Xcode 的度量在 `/Volumes/RE/Xcode/27.2-27B52/README.md`「Initial editor (IDEInitialEditor)」，自审裁决在 [`KnownIssues/2026-11-21-editor-start-page-review-findings.md`](../KnownIssues/2026-11-21-editor-start-page-review-findings.md)
 - **网页版**: 同目录同名的 `.html`
 
 ## 摘要
@@ -426,3 +426,4 @@ public struct OpenQuicklyCatalog: Sendable {
 | 2026-11-21 | 第 4 步第二轮审查后调整 | 页面空白处能取得焦点之后，它会进 Tab 顺序（焦点看似丢失）、焦点在它上面时打字会响——改为不进 Tab 顺序，打字时把焦点交回搜索框、字接在原有文字后面。「读取期间转圈」仍没有测试：要一个读得慢的目录才出现，列为目视。 |
 | 2026-11-21 | 自审 | `/code-review medium` 审功能分支相对 `next` 的全部改动，六条逐条按四问核实，记在 [`KnownIssues/2026-11-21-editor-start-page-review-findings.md`](../KnownIssues/2026-11-21-editor-start-page-review-findings.md)：回车打开旧查询的结果（SP.1）与读目录时回车被吞（SP.2）一并修掉，带两条回归测试；页面空白处的方向键等不再转进输入框（SP.3）；图标照 Xcode 占 32 点的位、按 24 点画（SP.4）；目录在一次搜索期间不刷新（SP.5）与输入框文字经 relay 上报（SP.6）不修，理由留档。 |
 | 2026-11-21 | 自审第二轮 | 只审 SP.1–SP.4 的修复，又找出两条：挂起的回车在用户接着打字后会为新文字自动打开（SP.7，已修，带回归测试）；挂起期间方向键选的是旧结果里的行（SP.8，不修）。 |
+| 2026-11-21 | 实现完成，待用户看过后收尾 | 五步都已完成并推送功能分支。文档判断：不另写使用指南或实现说明——调用方契约只在 App 内部，维护要知道的「一栏一页、要复位」「度量照 Xcode」两条写进了 `RuntimeViewerUsingAppKit/AGENTS.md`；新术语「起始页」登记进 `Documentations/Glossary.md`。没做的验证：界面目视（布局、颜色、焦点、结果板）与 macOS 27 上的点击取焦点都没有在 App 里实测——这次没有启动 App 做界面操作，只编过 App、跑了 ViewModel 层的测试，留给用户看效果时确认。 |
