@@ -1,24 +1,43 @@
 import Foundation
 import Testing
 
-/// The macOS app target holds no view model (proposal `view-models-to-app-core`): every ViewModel and
-/// cell ViewModel is RuntimeViewerAppCore's, where a test can build and drive it; the app keeps the view
-/// controllers, coordinators, lifecycle controllers and the views bound to RuntimeViewerAppCore's types.
-/// The compiler does not hold the app to this, so this reads the app target's sources —
-/// `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/`, comments and strings left out — and reports,
-/// file and line,
+/// The app targets hold no view model (proposal `view-models-to-app-core` for the macOS app,
+/// `window-model-on-ios` for the iOS-family apps): every ViewModel and cell ViewModel is
+/// RuntimeViewerAppCore's, where a test can build and drive it; an app keeps the view controllers,
+/// coordinators, lifecycle controllers and the views bound to RuntimeViewerAppCore's types. The
+/// compiler does not hold the apps to this, so this reads each app target's sources — comments and
+/// strings left out — and reports, file and line,
 ///
 /// - a type declared with a name ending in `ViewModel`, and
 /// - a type whose inheritance clause names `ViewModel<…>`, `CellViewModel` or `ViewModelProtocol`.
 ///
 /// A generic parameter or an associated type named `ViewModel`, as a view controller declares, is no
 /// view model and passes.
-@Suite("The macOS app target holds no view model")
+@Suite("The app targets hold no view model")
 struct AppTargetBoundaryTests {
-    private static let appTargetRelativePath = "RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit"
+    /// An app target whose sources the checks read.
+    struct AppTarget: Sendable, CustomTestStringConvertible {
+        /// The target's source folder, from the repository's root.
+        let relativePath: String
+        /// Fewer Swift files than this means the scan reads the wrong place.
+        let minimumSourceFileCount: Int
+        /// View models the target still declares because a later step moves them, by name. An entry
+        /// whose view model is gone fails, so the exception goes with it.
+        let viewModelsAwaitingTheirMove: Set<String>
 
-    private static let appTargetDirectoryURL = PackageSourceScan.repositoryDirectoryURL
-        .appendingPathComponent(appTargetRelativePath, isDirectory: true)
+        var directoryURL: URL {
+            PackageSourceScan.repositoryDirectoryURL.appendingPathComponent(relativePath, isDirectory: true)
+        }
+
+        var testDescription: String { relativePath }
+    }
+
+    static let appTargets: [AppTarget] = [
+        AppTarget(relativePath: "RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit", minimumSourceFileCount: 50, viewModelsAwaitingTheirMove: []),
+        // The source folder of the iOS, jailbroken iOS and visionOS apps. Its empty MainViewModel merges
+        // into RuntimeViewerAppCore's in step four of the iOS feature parity vision, with MainRoute.
+        AppTarget(relativePath: "RuntimeViewerUsingUIKit/RuntimeViewerUsingUIKit", minimumSourceFileCount: 15, viewModelsAwaitingTheirMove: ["MainViewModel"]),
+    ]
 
     private static let viewModelBaseNames: Set<String> = ["ViewModel", "CellViewModel", "ViewModelProtocol"]
 
@@ -29,41 +48,53 @@ struct AppTargetBoundaryTests {
     /// a `where` clause.
     private static let inheritancePattern = #"\b(?:class|struct|enum|actor)\s+[A-Za-z_][A-Za-z0-9_]*\s*(?:<[^{]*?>)?\s*:\s*([^{]*)"#
 
-    @Test("the app target's sources are where the scan reads them")
-    func appTargetDirectoryExists() throws {
+    @Test("the app target's sources are where the scan reads them", arguments: appTargets)
+    func appTargetDirectoryExists(_ appTarget: AppTarget) throws {
         var isDirectory: ObjCBool = false
-        #expect(FileManager.default.fileExists(atPath: Self.appTargetDirectoryURL.path, isDirectory: &isDirectory) && isDirectory.boolValue, "\(Self.appTargetRelativePath) is not where the scan looks; the checks below would pass by reading nothing")
-        let sourceFiles = try PackageSourceScan.sourceFiles(inDirectory: Self.appTargetDirectoryURL)
-        #expect(sourceFiles.count > 50, "only \(sourceFiles.count) Swift files read from \(Self.appTargetRelativePath)")
+        #expect(FileManager.default.fileExists(atPath: appTarget.directoryURL.path, isDirectory: &isDirectory) && isDirectory.boolValue, "\(appTarget.relativePath) is not where the scan looks; the checks below would pass by reading nothing")
+        let sourceFiles = try PackageSourceScan.sourceFiles(inDirectory: appTarget.directoryURL)
+        #expect(sourceFiles.count >= appTarget.minimumSourceFileCount, "only \(sourceFiles.count) Swift files read from \(appTarget.relativePath)")
     }
 
-    @Test("no type in the app target is named as a view model")
-    func appTargetDeclaresNoViewModel() throws {
+    @Test("no type in the app target is named as a view model", arguments: appTargets)
+    func appTargetDeclaresNoViewModel(_ appTarget: AppTarget) throws {
         let declarationRegex = try Regex(Self.declarationPattern)
         var findings: [String] = []
-        for sourceFile in try PackageSourceScan.sourceFiles(inDirectory: Self.appTargetDirectoryURL) {
+        var viewModelsStillAwaitingTheirMove: Set<String> = []
+        for sourceFile in try PackageSourceScan.sourceFiles(inDirectory: appTarget.directoryURL) {
             for line in sourceFile.lines {
                 for match in line.code.matches(of: declarationRegex) {
                     guard let nameRange = match.output[1].range else { continue }
                     let name = String(line.code[nameRange])
-                    if name.hasSuffix("ViewModel") {
+                    guard name.hasSuffix("ViewModel") else { continue }
+                    if appTarget.viewModelsAwaitingTheirMove.contains(name) {
+                        viewModelsStillAwaitingTheirMove.insert(name)
+                    } else {
                         findings.append("\(sourceFile.relativePath):\(line.number) declares \(name)")
                     }
                 }
             }
         }
         #expect(findings.isEmpty, "view models go in RuntimeViewerAppCore (RuntimeViewerPackages/Sources/AGENTS.md):\n\(findings.joined(separator: "\n"))")
+        #expect(viewModelsStillAwaitingTheirMove == appTarget.viewModelsAwaitingTheirMove, "moved out, so take the exception away: \(appTarget.viewModelsAwaitingTheirMove.subtracting(viewModelsStillAwaitingTheirMove).sorted())")
     }
 
-    @Test("no type in the app target inherits a view model base")
-    func appTargetInheritsNoViewModel() throws {
+    @Test("no type in the app target inherits a view model base", arguments: appTargets)
+    func appTargetInheritsNoViewModel(_ appTarget: AppTarget) throws {
+        let declarationRegex = try Regex(Self.declarationPattern)
         let inheritanceRegex = try Regex(Self.inheritancePattern)
         var findings: [String] = []
-        for sourceFile in try PackageSourceScan.sourceFiles(inDirectory: Self.appTargetDirectoryURL) {
+        for sourceFile in try PackageSourceScan.sourceFiles(inDirectory: appTarget.directoryURL) {
             for line in sourceFile.lines {
                 guard let match = line.code.firstMatch(of: inheritanceRegex),
                       let clauseRange = match.output[1].range
                 else { continue }
+                // A view model waiting for its move inherits a view model base, as it should.
+                if let declaration = line.code.firstMatch(of: declarationRegex),
+                   let nameRange = declaration.output[1].range,
+                   appTarget.viewModelsAwaitingTheirMove.contains(String(line.code[nameRange])) {
+                    continue
+                }
                 var clause = Substring(line.code[clauseRange])
                 if let whereRange = clause.range(of: " where ") {
                     clause = clause[..<whereRange.lowerBound]
