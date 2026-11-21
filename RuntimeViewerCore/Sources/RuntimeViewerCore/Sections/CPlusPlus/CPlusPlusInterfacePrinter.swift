@@ -25,18 +25,34 @@ struct CPlusPlusInterfacePrinter {
     struct Function: Hashable, Sendable {
         /// Only a function template specialization's mangling has one.
         var returnType: String?
+        /// Where `returnType` spells named types, as
+        /// `CPlusPlusSymbolName.returnTypeReferences` gives them.
+        var returnTypeRanges: [Range<String.Index>]
         /// The name with its template arguments: `push_back`, `~vector`,
         /// `get<int>`.
         var name: String
         /// `(int, char const*)`; `nil` prints none.
         var parameters: String?
+        /// Where `parameters` spells named types, as
+        /// `CPlusPlusSymbolName.parameterTypeReferences` gives them: ordered
+        /// by where they start, a template's range around its arguments'.
+        var parameterTypeRanges: [Range<String.Index>]
         /// `const`, `volatile`, `&`, `&&`, in that order.
         var qualifiers: [String]
 
-        init(returnType: String? = nil, name: String, parameters: String? = "()", qualifiers: [String] = []) {
+        init(
+            returnType: String? = nil,
+            returnTypeRanges: [Range<String.Index>] = [],
+            name: String,
+            parameters: String? = "()",
+            parameterTypeRanges: [Range<String.Index>] = [],
+            qualifiers: [String] = []
+        ) {
             self.returnType = returnType
+            self.returnTypeRanges = returnTypeRanges
             self.name = name
             self.parameters = parameters
+            self.parameterTypeRanges = parameterTypeRanges
             self.qualifiers = qualifiers
         }
     }
@@ -370,11 +386,12 @@ struct CPlusPlusInterfacePrinter {
 
     private func append(_ function: Function, to string: inout SemanticString) {
         if let returnType = function.returnType {
-            string.append(returnType + " ", type: .standard)
+            appendSignaturePart(returnType, typeRanges: function.returnTypeRanges, to: &string)
+            string.append(" ", type: .standard)
         }
         string.append(function.name, type: .function(.declaration))
         if let parameters = function.parameters {
-            string.append(parameters, type: .standard)
+            appendSignaturePart(parameters, typeRanges: function.parameterTypeRanges, to: &string)
         }
         for qualifier in function.qualifiers {
             string.append(" ", type: .standard)
@@ -383,6 +400,25 @@ struct CPlusPlusInterfacePrinter {
             } else {
                 string.append(qualifier, type: .standard)
             }
+        }
+    }
+
+    /// `text` with each named type it spells as a class name, the way bases
+    /// and forward declarations print theirs, so it colours and links the
+    /// same; the rest — punctuation, built-in types, qualifiers — as plain
+    /// text. Of nested ranges only the outermost counts: a token is either a
+    /// template with its arguments or none of it.
+    private func appendSignaturePart(_ text: String, typeRanges: [Range<String.Index>], to string: inout SemanticString) {
+        var position = text.startIndex
+        for typeRange in typeRanges where typeRange.lowerBound >= position && typeRange.upperBound <= text.endIndex {
+            if position < typeRange.lowerBound {
+                string.append(String(text[position ..< typeRange.lowerBound]), type: .standard)
+            }
+            string.append(String(text[typeRange]), type: .type(.class, .name))
+            position = typeRange.upperBound
+        }
+        if position < text.endIndex {
+            string.append(String(text[position...]), type: .standard)
         }
     }
 

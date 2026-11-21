@@ -3,6 +3,7 @@ import Testing
 import MachOKit
 import MachOKitExtensions
 import CPlusPlusSymbols
+import Semantic
 @testable import RuntimeViewerCore
 
 /// C++ objects of this process's libc++abi and libc++ (proposal
@@ -16,7 +17,7 @@ import CPlusPlusSymbols
 /// shared by the whole process, and one test drops what they hold.
 @Suite("C++ objects", .serialized)
 struct CPlusPlusSectionTests {
-    private struct Missing: Error, CustomStringConvertible {
+    private struct Missing: Swift.Error, CustomStringConvertible {
         let description: String
     }
 
@@ -223,6 +224,36 @@ struct CPlusPlusSectionTests {
         #expect(baseInterface.object.imagePath == Self.libcxxabiPath)
         let libcxxObjects = Self.flattened(try await engine.objects(in: Self.libcxxPath, includesCPlusPlusObjects: true))
         #expect(libcxxObjects["std::exception"] == nil)
+    }
+
+    @Test("the named types of a signature are class names, so they colour and link like bases")
+    func signatureTypesAreClassNames() async throws {
+        let engine = try await Self.makeEngine("signature-types")
+        defer { Task { await engine.stop() } }
+        _ = try await engine.objects(in: Self.libcxxPath, includesCPlusPlusObjects: true)
+        let link = RuntimeObject(name: "std::runtime_error", displayName: "std::runtime_error", kind: .cPlusPlus(.class), imagePath: Self.libcxxPath, children: [])
+        let interface = try #require(try await engine.interface(for: link, options: Self.options()))
+        var classNames: [String] = []
+        interface.interfaceString.enumerateSpans { spanText, type, _ in
+            if type == .type(.class, .name) { classNames.append(String(spanText)) }
+        }
+        // `runtime_error(std::__1::basic_string<char, …> const&)`: the whole
+        // specialization is one name, `const&` stays outside it.
+        let stringType = try #require(classNames.first { $0.hasPrefix("std::__1::basic_string<char") })
+        #expect(stringType.hasSuffix(">"))
+    }
+
+    @Test("an Objective-C method's static locals make no namespace")
+    func objectiveCMethodLocalsMakeNoNamespace() async throws {
+        let quartzCorePath = "/System/Library/Frameworks/QuartzCore.framework/Versions/A/QuartzCore"
+        let engine = try await Self.makeEngine("objective-c-method-locals")
+        defer { Task { await engine.stop() } }
+        try await engine.loadImage(at: quartzCorePath)
+        let names = Self.flattened(try await engine.objects(in: quartzCorePath, includesCPlusPlusObjects: true).filter(\.kind.isCPlusPlus)).keys
+        // QuartzCore is Objective-C++: `dispatch_once` tokens in its methods
+        // are mangled `Z 26-[CAMetalDrawable texture] E 9onceToken`.
+        #expect(names.contains { $0.hasPrefix("CA::") })
+        #expect(!names.contains { $0.hasPrefix("-[") || $0.hasPrefix("+[") })
     }
 
     @Test("a class the referring image defines symbols of is printed from that image")

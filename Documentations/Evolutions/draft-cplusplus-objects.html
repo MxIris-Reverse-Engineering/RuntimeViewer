@@ -199,7 +199,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
   <h2>要你定</h2>
   <div class="callout callout-note">
     <p class="callout-title">没有待定的事</p>
-    <p>实现中发现的上游问题（<code>N_INDR</code> 条目被当成定义的符号）已按用户批准在 MachOKitExtensions 3.2.1 修复，本提案的下限随之抬到 3.2.1。</p>
+    <p>实现中发现的两处上游问题都已按用户批准在 MachOKitExtensions 修复：<code>N_INDR</code> 条目被当成定义的符号（3.2.1）；ObjC 方法被判成「未定」作用域，且签名里的类型没有位置（3.3.0，上游提案 0008）。本提案的下限随之抬到 3.3.0。</p>
   </div>
   <div class="callout callout-warning">
     <p class="callout-title">与澄清提问里的样例不同的地方</p>
@@ -220,7 +220,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
   <div class="figure">
   <svg viewBox="0 0 1000 560" role="img" aria-label="What changed">
     <rect class="group" x="10" y="10" width="300" height="120" rx="10"/>
-    <text class="group-label" x="22" y="32">MachOKitExtensions 3.2.1</text>
+    <text class="group-label" x="22" y="32">MachOKitExtensions 3.3.0</text>
     <rect class="box-kept" x="25" y="44" width="270" height="34" rx="6"/><text x="35" y="66">CPlusPlusSymbolIndexStore</text>
     <rect class="box-kept" x="25" y="86" width="270" height="34" rx="6"/><text x="35" y="108">CPlusPlusClassIndexStore</text>
 
@@ -308,8 +308,8 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
   <table>
     <thead><tr><th>文件 / 类型</th><th>动作</th><th>改什么</th><th>为什么</th><th>步骤</th></tr></thead>
     <tbody>
-      <tr><td><code>RuntimeViewerCore/Package.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>MachOKitExtensions 下限 <code>from: "3.2.1"</code>；<code>RuntimeViewerCore</code> 加 <code>CPlusPlusSymbols</code> product</td><td>方案第 11 条</td><td class="numeric">1</td></tr>
-      <tr><td>各 <code>Package.resolved</code></td><td><span class="tag tag-changed">修改</span></td><td>MachOKitExtensions 移到 3.2.1</td><td>同上</td><td class="numeric">1</td></tr>
+      <tr><td><code>RuntimeViewerCore/Package.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>MachOKitExtensions 下限 <code>from: "3.3.0"</code>；<code>RuntimeViewerCore</code> 加 <code>CPlusPlusSymbols</code> product</td><td>方案第 11 条</td><td class="numeric">1</td></tr>
+      <tr><td>各 <code>Package.resolved</code></td><td><span class="tag tag-changed">修改</span></td><td>MachOKitExtensions 移到 3.3.0</td><td>同上</td><td class="numeric">1</td></tr>
       <tr><td>Core <code>Objects/RuntimeObjectKind.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>加 <code>.cPlusPlus(CPlusPlus)</code>、<code>level</code> 2–3（C 之后、ObjC 之前，其后顺延）、<code>allCases</code> 同序、<code>description</code>、<code>isCPlusPlus</code></td><td>方案第 1 条</td><td class="numeric">1</td></tr>
       <tr><td>Core <code>Interfaces/RuntimeInterfaceLanguage.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>加 <code>.cPlusPlus</code>（<code>"cpp"</code>）</td><td>方案第 1 条</td><td class="numeric">1</td></tr>
       <tr><td>Core 里穷举种类的各处（<code>RuntimeEngine.swift</code>、<code>RuntimeObject+GeneratedInterface</code>、<code>+CounterpartKind</code>、<code>SharedCacheRelays</code>、<code>Search/*</code>、<code>Export/*</code>、<code>Relationships/*</code>）</td><td><span class="tag tag-changed">修改</span></td><td>第 1 步只补行为不变的臂；真实的 C++ 臂在第 3、4 步</td><td>新 case 让穷举 switch 编不过</td><td class="numeric">1</td></tr>
@@ -354,12 +354,12 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
     <li><strong>对象树</strong>：类型作用域与 RTTI 类是类（按限定名合并，RTTI 优先）；命名空间与「未定」作用域是命名空间；函数作用域丢弃；只有 RTTI 的类按 <code>scopePath</code> 挂进去、缺的层补齐；没有会打印的成员、也没有子对象的命名空间不列；全局有成员时列一个 <code>::</code>（Global Namespace）；同名隐藏类留 typeinfo 偏移最小的。</li>
     <li><strong>只发给要它的请求方</strong>：<code>ObjectsInImageCommand</code> 加 <code>includesCPlusPlusObjects: Bool?</code>（<code>nil</code> 不编码），公开 API 默认 <code>false</code>；只有侧栏、路径栏、镜像页传 <code>true</code>。</li>
     <li><strong>进度</strong>：两个新阶段，只在请求带字段时发出。</li>
-    <li><strong>伪头文件</strong>：类的头部注释、基类、每张 vtable 的虚函数（槽位号、地址、overrides / inherited）、非虚成员函数、变量、嵌套类型；构造与析构变体合并；元数据符号不当成员；只打印修饰名里有的；地址跟随 <code>addMethodIMPAddressComments</code>。</li>
-    <li><strong>跳转</strong>：C++ 记号按文字链接；本镜像找不到就要到基类修饰名，按导出的 <code>_ZTI…</code> 找定义它的镜像；非唯一 RTTI 找不到就不跳。</li>
+    <li><strong>伪头文件</strong>：类的头部注释、基类、每张 vtable 的虚函数（槽位号、地址、overrides / inherited）、非虚成员函数、变量、嵌套类型；构造与析构变体合并；元数据符号不当成员；只打印修饰名里有的；地址跟随 <code>addMethodIMPAddressComments</code>；参数与返回类型里的命名类型按上游给的位置打印成类名记号（模板连同实参一个）。</li>
+    <li><strong>跳转</strong>：C++ 记号按文字链接；本镜像找不到就要到基类修饰名，按导出的 <code>_ZTI…</code> 找定义它的镜像；非唯一 RTTI 找不到就不跳。参数与返回类型里的类名同样建链接。</li>
     <li><strong>补名的搜索路径</strong>：独立文件用目录的 <code>dependencySearchPaths(forImageAt:)</code>。</li>
     <li><strong>Inspector</strong>：主基类链与本镜像里的派生类（「Derived Classes」）。</li>
     <li><strong>App</strong>：Filter Scope 在 C 与 Objective-C 之间的 C++ 组、绿色 <code>C</code> / <code>N</code> 图标、<code>"cpp"</code> 语言标识（桥接对应到重建版的 <code>SourceModelEditorLanguage.cpp</code>，框架解析给关键字着色、语义区间重新标注类型与成员）、<code>cPlusPlusHeader</code> 与 <code>hpp</code>、镜像页计数。</li>
-    <li><strong>依赖</strong>：MachOKitExtensions 下限 3.2.1，Core 加 <code>CPlusPlusSymbols</code>，锁文件只移这一个包；<code>Tuist.swift</code> 补上 3.2.0 新增的两个 target。</li>
+    <li><strong>依赖</strong>：MachOKitExtensions 下限 3.3.0，Core 加 <code>CPlusPlusSymbols</code>，锁文件只移这一个包；<code>Tuist.swift</code> 补上 3.2.0 新增的两个 target。</li>
   </ol>
   <details>
     <summary>非目标</summary>
@@ -368,7 +368,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
         <li>Find（语料、成员搜索）、导出、MCP、CLI、命名词云、派生数据都不接 C++。</li>
         <li>交叉引用：C++ 对象没有成员地址，不提供 Callers / Callees / Type References；交叉引用里的 C++ 名字仍不 demangle。</li>
         <li>字段（RTTI 与 vtable 不带字段，protobuf 是上游之后的提案）。</li>
-        <li>参数里的类型跳转；返回类型、<code>static</code>、访问级别的推断。</li>
+        <li>修饰名没记的返回类型、<code>static</code>、访问级别的推断。</li>
         <li>函数作用域里的局部实体。</li>
         <li>别的镜像里的派生类；借用 shared cache 镜像时跨 owner 合并 C++ 层级。</li>
         <li>C++ 界面的注释标签（不标注释结构）。</li>
@@ -479,8 +479,8 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
   </div>
   <p>按需建、不进索引的方案不变。两个 C++ target 的代码段合计约 350 KB（链接与剥离之前）。</p>
   <div class="callout callout-warning">
-    <p class="callout-title">已知问题（上游，已在 3.2.1 修复）</p>
-    <p>MachOKitExtensions 3.2.0 及以前的符号扫描没有排除 <code>N_INDR</code> 条目，libc++ 逐个转出的 <code>std::exception</code> 符号被当成 libc++ 自己的。3.2.1 起两条符号表路径都跳过它们，本提案的下限抬到 3.2.1。</p>
+    <p class="callout-title">已知问题（上游，已在 3.2.1、3.3.0 修复）</p>
+    <p>MachOKitExtensions 3.2.0 及以前的符号扫描没有排除 <code>N_INDR</code> 条目，libc++ 逐个转出的 <code>std::exception</code> 符号被当成 libc++ 自己的。3.2.1 起两条符号表路径都跳过它们，3.3.0 起，外层不带参数的局部名（ObjC++ 里 ObjC 方法的局部静态变量）也是函数作用域，QuartzCore 不再列出 <code>-[CAMetalDrawable texture]</code> 这类命名空间。本提案的下限抬到 3.3.0。</p>
   </div>
   <details>
     <summary>现状代码</summary>
@@ -568,7 +568,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <section id="log">
   <h2>决策日志</h2>
   <details>
-    <summary>23 条，最近一条：内容区用重建版的 C++ 语言着色</summary>
+    <summary>24 条，最近一条：参数类型着色，经上游 3.3.0</summary>
     <div class="details-body">
       <div class="table-wrap">
       <table>
@@ -598,6 +598,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
           <tr><td class="numeric">2026-11-21</td><td>实现完成，待用户看过后收尾</td><td>Core 全量、App 层两个测试包与整个 App 都过；红灯单独重跑全过或是既有红灯；没做界面目视。</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>C++ 排到 C 与 Objective-C 之间</td><td>用户看过 App 后要求。<code>level</code> 改为 C++ 紧接 C、其后顺延，<code>allCases</code> 同序；Filter Scope 的组顺序改为 C、C++、Objective-C、Swift。侧栏分节、路径栏、镜像页都按 <code>level</code> 排。</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>内容区用重建版的 C++ 语言着色</td><td>用户发现 C++ 界面没有颜色。读重建版源码查明：没有语言就没有语言服务，语义区间的调整器也装不上，「只按语义区间上色」不成立。桥接把 <code>"cpp"</code> 对应到 <code>SourceModelEditorLanguage.cpp</code>，非目标里去掉这一条；桥接测试修复前红、修复后绿。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>参数类型着色，经上游 3.3.0</td><td>用户指出参数里的类型没有颜色、ObjC 方法被列成命名空间；用户选择到上游加接口发 3.3.0（提案 0008），不在 RV 里解析参数文本。打印器把上游给的类型位置输出成类名记号，参数类型因此着色、可跳转；「参数里的类型跳转」不再是非目标。</td></tr>
         </tbody>
       </table>
       </div>

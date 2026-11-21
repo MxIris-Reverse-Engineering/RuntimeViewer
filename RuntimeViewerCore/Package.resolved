@@ -69,8 +69,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOKitExtensions",
       "state" : {
-        "revision" : "039ebbc2860c671f25c78a3d5584dddc5182ab83",
-        "version" : "3.2.1"
+        "revision" : "541972d14aebba7671007ae0658b3bf2575ff05c",
+        "version" : "3.3.0"
       }
     },
     {
