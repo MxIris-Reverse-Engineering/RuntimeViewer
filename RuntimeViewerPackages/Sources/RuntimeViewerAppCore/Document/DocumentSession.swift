@@ -20,10 +20,10 @@ public final class DocumentSession {
 
     public let documentState: DocumentState
 
-    /// Files every object the window shows into its engine's recent objects, which an empty editor
-    /// pane's start page lists (proposal `editor-start-page`). From `open()` to `close()`; macOS
-    /// only, the one platform with the start page.
-    private var recentRuntimeObjectsRecorder: RecentRuntimeObjectsRecorder?
+    /// Files every image the window uses and every object it shows into its engine's recent images,
+    /// which an empty editor pane's start page lists (proposal `editor-start-page`). From `open()`
+    /// to `close()`; macOS only, the one platform with the start page.
+    private var recentRuntimeImagesRecorder: RecentRuntimeImagesRecorder?
 
     private var isClosed = false
 
@@ -42,8 +42,8 @@ public final class DocumentSession {
     public func open() {
         documentState.startBackgroundWork()
         #if os(macOS)
-        if !isClosed, recentRuntimeObjectsRecorder == nil {
-            recentRuntimeObjectsRecorder = RecentRuntimeObjectsRecorder(documentState: documentState)
+        if !isClosed, recentRuntimeImagesRecorder == nil {
+            recentRuntimeImagesRecorder = RecentRuntimeImagesRecorder(documentState: documentState)
         }
         #endif
     }
@@ -52,7 +52,7 @@ public final class DocumentSession {
     /// brought into being, opened or not. Only the first call does anything.
     public func close() {
         isClosed = true
-        recentRuntimeObjectsRecorder = nil
+        recentRuntimeImagesRecorder = nil
         documentState.documentWillClose()
     }
 }

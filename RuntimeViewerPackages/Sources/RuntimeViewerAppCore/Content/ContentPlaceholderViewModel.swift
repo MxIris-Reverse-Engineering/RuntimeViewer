@@ -4,8 +4,9 @@ import RuntimeViewerArchitectures
 import MemberwiseInit
 
 /// What the content pane shows while it has no object: the start page — Xcode's
-/// initial editor, an Open Quickly field and the engine's recent objects
-/// (proposal `editor-start-page`) — or, while the file service is still
+/// initial editor, an Open Quickly field over the engine's recent images, or the
+/// recent objects of the image the sidebar is in (proposal `editor-start-page`) —
+/// or, while the file service is still
 /// reading the window's file, that it is. A window opens on a file the moment
 /// the user opens it, and a dyld shared cache keeps the service busy for a
 /// while; without this the window would sit empty with no sign that anything
@@ -21,8 +22,8 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
 
     @RxObserved public private(set) var placeholder: Placeholder = .noSelection
 
-    /// The button at the end of the Recent Objects header, after Xcode's initial editor: none
-    /// while every recent object shows, otherwise Show All, which becomes Show Less.
+    /// The button at the end of the recent list's header, after Xcode's initial editor: none
+    /// while every recent item shows, otherwise Show All, which becomes Show Less.
     public enum ShowAllButton: Equatable, Sendable {
         case hidden
         case showAll
@@ -39,7 +40,7 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
 
     /// What shows under the Open Quickly field.
     public enum Search: Equatable {
-        /// Nothing searched: the recent objects show.
+        /// Nothing searched: the recent items show.
         case inactive
         /// The engine's images and indexed objects are being read for the first search.
         case loading
@@ -48,7 +49,7 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
         case results([ContentStartPageItemCellViewModel], selectedIndex: Int?)
     }
 
-    /// How many recent objects show until Show All: Xcode's initial editor's `defaultRowCount`.
+    /// How many recent items show until Show All: Xcode's initial editor's `defaultRowCount`.
     public nonisolated static let defaultRecentRowCount = 8
 
     /// How many characters the Open Quickly field needs before it searches: Xcode's initial editor
@@ -82,18 +83,32 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
 
     private let clearSearchFieldRelay = PublishRelay<Void>()
 
-    /// The recent objects the start page shows, most recent first: the first
-    /// `defaultRecentRowCount` until Show All.
+    /// The recent list's title while the sidebar is at its image list.
+    public nonisolated static let recentImagesTitle = "Recent Images"
+
+    /// The recent list's title while the sidebar is in an image.
+    public nonisolated static let recentObjectsTitle = "Recent Objects"
+
+    /// What the start page lists, most recent first, following the sidebar: the engine's recent
+    /// images while the sidebar is at its image list, the recent objects of the image the sidebar is
+    /// in once it is in one. The first `defaultRecentRowCount` until Show All.
     @RxObserved public private(set) var recentItems: [ContentStartPageItemCellViewModel] = []
+
+    /// The recent list's title: `recentImagesTitle` or `recentObjectsTitle`, after the list on show.
+    @RxObserved public private(set) var recentItemsTitle: String = ContentPlaceholderViewModel.recentImagesTitle
 
     @RxObserved public private(set) var showAllButton: ShowAllButton = .hidden
 
-    /// Every recent object of the engine, most recent first.
+    /// Every recent item of the list the sidebar picks, most recent first.
     private var allRecentItems: [ContentStartPageItemCellViewModel] = []
 
     /// Whether Show All is on. It stays on while the list changes, as Xcode's `@State` does, and
-    /// goes off whenever the page starts over (`startOver()`).
+    /// goes off whenever the page starts over (`startOver()`) or the sidebar picks another list.
     private var isShowingAllRecentItems = false
+
+    /// The list the sidebar picks, as last listed: the engine, and the canonical path of the image
+    /// the sidebar is in, `nil` at its image list.
+    private var recentListSource: (engine: ObjectIdentifier, imagePath: String?)?
 
     private let startedOverRelay = PublishRelay<Void>()
 
@@ -116,7 +131,7 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
             .observeOnMainScheduler()
             .bind(to: $placeholder)
             .disposed(by: rx.disposeBag)
-        followRecentObjects()
+        followRecentItems()
         followTheTabShown()
     }
 
@@ -146,34 +161,85 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
         startedOverRelay.accept(())
     }
 
-    /// Lists the recent objects of the window's engine — read again when the window moves to
-    /// another engine — as they are now, and again whenever any window on the engine records one
-    /// (`RecentRuntimeObjectsRecorder`). A record on another engine changes nothing here: the store
-    /// holds every engine's list, and only this engine's is compared.
-    private func followRecentObjects() {
-        let recentObjectsByEngine = appDefaults.$recentRuntimeObjectsByEngine
-        documentState.$runtimeEngineSession.asObservable()
-            .map(\.engine)
-            .distinctUntilChanged { $0 === $1 }
-            .flatMapLatest { engine in
-                recentObjectsByEngine
-                    .map { objectsByEngine in RecentRuntimeObjects(engine: engine).objects(in: objectsByEngine) }
-                    .distinctUntilChanged(RecentRuntimeObjects.listsAreAlike)
-                    .map { recentObjects in (engine, recentObjects) }
+    /// What a recent list holds: image paths at the sidebar's image list, objects in an image.
+    private enum RecentList {
+        case images([String])
+        case objects([RuntimeObject])
+
+        /// Whether two lists name the same items, objects in the same forms — which `==` on objects
+        /// does not tell: it compares them by identity alone.
+        static func areAlike(_ firstList: RecentList, _ secondList: RecentList) -> Bool {
+            switch (firstList, secondList) {
+            case (.images(let firstImagePaths), .images(let secondImagePaths)):
+                firstImagePaths == secondImagePaths
+            case (.objects(let firstObjects), .objects(let secondObjects)):
+                RecentRuntimeImages.listsAreAlike(firstObjects, secondObjects)
+            default:
+                false
             }
-            .observeOnMainScheduler()
-            .subscribeOnNext { [weak self] engine, recentObjects in
-                guard let self else { return }
-                let engineName = engine.source.description
-                allRecentItems = recentObjects.map { object in
-                    ContentStartPageItemCellViewModel(item: .object(object), engineName: engineName, engineID: engine.engineID)
-                }
-                updateShownRecentItems()
-            }
-            .disposed(by: rx.disposeBag)
+        }
     }
 
-    /// Shows the recent objects Show All lets through, and the button that says which.
+    /// Lists, from the window's engine's recent images, what the sidebar picks: the images while it
+    /// is at its image list, the recent objects of the image it is in once it is in one. Read again
+    /// when the sidebar moves or the window moves to another engine, and again whenever any window
+    /// on the engine records something (`RecentRuntimeImagesRecorder`). A record on another engine
+    /// changes nothing here: the store holds every engine's list, and only this engine's is
+    /// compared. The sidebar's path is compared in the engine's canonical form, the form the store
+    /// keeps, worked out afresh at every change of the store: the engine learns that form only after
+    /// it connects, and nothing announces when it has, so the list catches up at the next record.
+    private func followRecentItems() {
+        let recentImagesByEngine = appDefaults.$recentRuntimeImagesByEngine
+        Observable.combineLatest(
+            documentState.$runtimeEngineSession.asObservable()
+                .map(\.engine)
+                .distinctUntilChanged { $0 === $1 },
+            documentState.$currentImageNode.asObservable()
+                .map { $0?.path }
+                .distinctUntilChanged()
+        )
+        .flatMapLatest { engine, sidebarImagePath in
+            let recentImages = RecentRuntimeImages(engine: engine)
+            return recentImagesByEngine
+                .map { imagesByEngine -> (String?, RecentList) in
+                    guard let sidebarImagePath else {
+                        return (nil, .images(recentImages.images(in: imagesByEngine).map(\.imagePath)))
+                    }
+                    let canonicalImagePath = engine.canonicalImagePath(sidebarImagePath)
+                    return (canonicalImagePath, .objects(recentImages.objects(ofImageAt: canonicalImagePath, in: imagesByEngine)))
+                }
+                .distinctUntilChanged { $0.0 == $1.0 && RecentList.areAlike($0.1, $1.1) }
+                .map { canonicalImagePath, recentList in (engine, canonicalImagePath, recentList) }
+        }
+        .observeOnMainScheduler()
+        .subscribeOnNext { [weak self] engine, imagePath, recentList in
+            guard let self else { return }
+            let source = (engine: ObjectIdentifier(engine), imagePath: imagePath)
+            if let recentListSource, recentListSource != source {
+                isShowingAllRecentItems = false
+            }
+            recentListSource = source
+            let engineName = engine.source.description
+            switch recentList {
+            case .images(let imagePaths):
+                allRecentItems = imagePaths.map { imagePath in
+                    ContentStartPageItemCellViewModel(item: .image(path: imagePath), engineName: engineName, engineID: engine.engineID)
+                }
+            case .objects(let objects):
+                allRecentItems = objects.map { object in
+                    ContentStartPageItemCellViewModel(item: .object(object), engineName: engineName, engineID: engine.engineID)
+                }
+            }
+            let title = imagePath == nil ? Self.recentImagesTitle : Self.recentObjectsTitle
+            if title != recentItemsTitle {
+                recentItemsTitle = title
+            }
+            updateShownRecentItems()
+        }
+        .disposed(by: rx.disposeBag)
+    }
+
+    /// Shows the recent items Show All lets through, and the button that says which.
     private func updateShownRecentItems() {
         let canShowMore = allRecentItems.count > Self.defaultRecentRowCount
         let shownItems = canShowMore && !isShowingAllRecentItems ? Array(allRecentItems.prefix(Self.defaultRecentRowCount)) : allRecentItems
@@ -314,10 +380,10 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
         /// The page is about to come back into its pane, and starts over as a new one would.
         @Init(default: Signal<Void>.empty())
         public let pageWillAppear: Signal<Void>
-        /// The Recent Objects header's Show All / Show Less button.
+        /// The recent list header's Show All / Show Less button.
         @Init(default: Signal<Void>.empty())
         public let showAllClicked: Signal<Void>
-        /// A recent object opened, and where.
+        /// A recent item opened, and where.
         @Init(default: Signal<ContentStartPageItemOpening>.empty())
         public let recentItemOpened: Signal<ContentStartPageItemOpening>
         /// The Open Quickly field's text, at every change.
@@ -340,6 +406,7 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
     public struct Output {
         public let placeholder: Driver<Placeholder>
         public let recentItems: Driver<[ContentStartPageItemCellViewModel]>
+        public let recentItemsTitle: Driver<String>
         public let showAllButton: Driver<ShowAllButton>
         /// The page started over: the view selects nothing.
         public let startedOver: Signal<Void>
@@ -411,6 +478,7 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
         return Output(
             placeholder: $placeholder.asDriver(),
             recentItems: $recentItems.asDriver(),
+            recentItemsTitle: $recentItemsTitle.asDriver(),
             showAllButton: $showAllButton.asDriver(),
             startedOver: startedOverRelay.asSignal(),
             search: $search.asDriver(),
