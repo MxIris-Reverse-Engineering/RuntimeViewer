@@ -50,6 +50,7 @@ struct ThemeSettingsView: View {
             }
 
             Section {
+                #if os(macOS)
                 LabeledContent("Font Size") {
                     Stepper(
                         "",
@@ -60,6 +61,23 @@ struct ThemeSettingsView: View {
                     )
                     .labelsHidden()
                 }
+                #else
+                // The iOS stepper is only its two buttons, with no field
+                // showing the value, so the row shows it.
+                Stepper(
+                    value: $theme.fontSize,
+                    in: Self.minimumFontSize...Self.maximumFontSize,
+                    step: 1
+                ) {
+                    HStack {
+                        Text("Font Size")
+                        Spacer()
+                        Text("\(theme.fontSize, format: .number.precision(.fractionLength(0))) pt")
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                #endif
             } header: {
                 Text("Editor")
             }
