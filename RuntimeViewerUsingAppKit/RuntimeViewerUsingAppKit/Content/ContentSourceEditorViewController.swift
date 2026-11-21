@@ -434,8 +434,9 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
 
     /// The language the editor highlights an interface as: the language it is asked for in, or the
     /// object's own — an Objective-C object's Generated Interface is Swift. C++ is `cpp`, which the
-    /// bridge gives no SourceModel language of the editor's own: the interface is coloured by its
-    /// semantic runs alone (`SourceEditorBridge.language(forIdentifier:)`).
+    /// bridge maps to the reconstruction's C++ language (`SourceEditorBridge.language(forIdentifier:)`).
+    /// An identifier the bridge has no language for leaves the whole interface uncoloured: without a
+    /// language the data source has no language service to retype the semantic runs on.
     private static func languageIdentifier(for kind: RuntimeObjectKind, interfaceLanguage: RuntimeInterfaceLanguage?) -> String {
         if interfaceLanguage == .swift {
             return "swift"

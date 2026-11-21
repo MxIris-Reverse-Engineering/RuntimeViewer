@@ -639,12 +639,15 @@ extension SourceEditorBridge {
         sourceEditorView.editorGapController.hasGapItemWithIdentifier(InlineExpansionGapIdentifier(identifier: identifier))
     }
 
-    /// The SourceModel language a `languageIdentifier` of `setSource` names; nil leaves the text
-    /// uncoloured by the framework's own parse.
+    /// The SourceModel language a `languageIdentifier` of `setSource` names. Nil leaves the text
+    /// uncoloured altogether, semantic runs included: without a language the data source has no
+    /// `SourceModelLanguageService`, the only place the `SemanticNodeTypeAdjuster` goes.
     static func language(forIdentifier languageIdentifier: String) -> (any SourceEditorLanguage)? {
         switch languageIdentifier {
         case "swift": SourceModelEditorLanguage.swift
         case "objc": SourceModelEditorLanguage.objc
+        // `xcode.lang.cpp`, whose specification (`C++.xclangspec`) SourceModel ships.
+        case "cpp": SourceModelEditorLanguage.cpp
         default: nil
         }
     }

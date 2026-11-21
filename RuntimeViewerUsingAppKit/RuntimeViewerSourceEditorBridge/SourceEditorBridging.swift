@@ -36,8 +36,9 @@ public protocol SourceEditorBridging: NSObjectProtocol {
     /// the parse.
     ///
     /// - Parameters:
-    ///   - languageIdentifier: `"swift"` or `"objc"`. Any other value renders the text without
-    ///     the framework's own parse rather than failing.
+    ///   - languageIdentifier: `"swift"`, `"objc"` or `"cpp"`. Any other value renders the text
+    ///     uncoloured rather than failing — without the framework's parse there is nothing for
+    ///     the semantic runs to retype either.
     ///   - semanticRanges: UTF-16 ranges into `source`, parallel to `semanticNodeTypeNames`.
     ///   - semanticNodeTypeNames: the framework's node type names, which are also the theme's
     ///     syntax keys — `"xcode.syntax.identifier.class"` and friends. Passed as names rather
@@ -80,8 +81,8 @@ public protocol SourceEditorBridging: NSObjectProtocol {
     ///   - showsLineNumbers: the gutter's line numbers. The gutter itself stays installed
     ///     either way — it is also what draws the active-line emphasis.
     ///   - showsFoldingRibbon: the fold arrows between the gutter and the text. Folding needs
-    ///     a language service that can name foldable ranges, which is what the `"swift"` and
-    ///     `"objc"` identifiers get; any other language shows a ribbon with nothing in it.
+    ///     a language service that can name foldable ranges, which is what the `"swift"`, `"objc"`
+    ///     and `"cpp"` identifiers get; any other language shows a ribbon with nothing in it.
     ///   - showsStickyHeaders: pins the enclosing declarations to the top while scrolling.
     ///   - showsMinimap: the document overview down the right edge. Off by default — it is
     ///     the only one of these that takes width away from the text.

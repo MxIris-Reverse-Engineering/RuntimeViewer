@@ -54,7 +54,7 @@ RuntimeViewer 新增第三种对象语言：C++。镜像的对象列表在 Objec
 - `_interface(for:options:resolvesReferencesAcrossImages:)`（`Engine/RuntimeEngine.swift:846-891`）按种类分派：`.swift` 去 Swift section，`.c, .objc` 去 ObjC section；`.objc(.type)` 在本镜像找不到时经 `objcSectionFactory.section(for: RuntimeObjCName)` 去定义它的镜像找。
 - `RuntimeObjectInterface.interfaceString` 是 `FrozenSemanticString`（`Interfaces/RuntimeObjectInterface.swift:17, 35-49`）。颜色完全由 `SemanticType` 决定（`standard`、`comment`、`keyword`、`type(TypeKind, Context)`、`member`、`function` 等，swift-semantic-string 的 `Sources/Semantic/SemanticType.swift`；映射在 `RuntimeViewerUsingAppKit/…/Content/SourceEditorThemeConversion.swift:73-90` 与 `RuntimeViewerAppUI/Theme/ThemePreset+ThemeProfile.swift:79-110`），没有按语言的着色。
 - 跳转：ObjC 与 C 的界面按 `.type` 记号的文字建链接，目标种类由 `ContentInterface.linkTargetKind(of:in:)` 按对象种类决定（`RuntimeViewerAppCore/Content/ContentInterface.swift:141-220`），目标对象的 `imagePath` 是当前镜像，引擎在本镜像找不到时自己去别的镜像找。
-- SourceEditor 面板把语言标识交给桥接（`ContentSourceEditorViewController.swift:437-445`，现在只有 `"swift"`、`"objc"`）；桥接只认这两个，别的标识返回 `nil`，即「不用框架自己的解析着色」，语义区间照样上色（`RuntimeViewerSourceEditorBridge/SourceEditorBridge.swift:642-649`）。
+- SourceEditor 面板把语言标识交给桥接（`ContentSourceEditorViewController.swift:437-445`，现在只有 `"swift"`、`"objc"`）；桥接只认这两个，别的标识返回 `nil`（`RuntimeViewerSourceEditorBridge/SourceEditorBridge.swift:642-649`）。**`nil` 意味着整页不着色**：数据源没有语言服务，语义区间的调整器（`SemanticNodeTypeAdjuster`）只装在 `SourceModelLanguageService` 上，于是也装不上。写提案时这里记成了「语义区间照样上色」，是没读重建版源码的推断，用户在 App 里看到 C++ 界面没有颜色后才查明。重建版 27.2.0-alpha.2 自带 C++ 语言：`SourceModelEditorLanguage.cpp`（`xcode.lang.cpp`，`SourceModelSupport/LanguageService/SourceModelEditorLanguage.swift`），语言描述 `C++.xclangspec` 随 SourceModel 发布。
 - `RuntimeInterfaceLanguage` 是字符串（`occ`、`swift`），刻意做成旧对端也解得开的开放集合（`Interfaces/RuntimeInterfaceLanguage.swift`）。
 - 生成选项里离 C++ 最近的地址开关是 ObjC 的 `addMethodIMPAddressComments`（MachOObjCSection `ObjCDeclarationRendering/ObjCGenerationOptions.swift:30`），Swift 的是 `printMemberAddress`（`Interfaces/SwiftGenerationOptions.swift:45`）。
 
@@ -99,7 +99,7 @@ RuntimeViewer 新增第三种对象语言：C++。镜像的对象列表在 Objec
 
 ## 提议方案
 
-1. **新对象种类 `RuntimeObjectKind.cPlusPlus(CPlusPlus)`**，两个子种类 `.class`（「C++ Class」，结构体与类在修饰名里分不开，一律叫类）与 `.namespace`（「C++ Namespace」），排在 Swift 之后。新界面语言 `RuntimeInterfaceLanguage.cPlusPlus`，原文 `"cpp"`。
+1. **新对象种类 `RuntimeObjectKind.cPlusPlus(CPlusPlus)`**，两个子种类 `.class`（「C++ Class」，结构体与类在修饰名里分不开，一律叫类）与 `.namespace`（「C++ Namespace」），排在 C 之后、Objective-C 之前：侧栏的分节、路径栏、镜像页的计数与 Filter Scope 的分组都按这个顺序。新界面语言 `RuntimeInterfaceLanguage.cPlusPlus`，原文 `"cpp"`。
 2. **每个镜像一个 C++ section，由第三个工厂按需建。** `RuntimeCPlusPlusSection<Reading>`（actor）在建成时读作用域树与类索引、做好对象树；`RuntimeCPlusPlusSectionFactory<Reading>` 照 ObjC 工厂的形状按镜像缓存、合并同一镜像的并发构建（`RuntimeSectionBuild`）、`removeAllSections()` 时一并让两个上游 store 丢掉这个镜像。**C++ section 不属于「已索引」**：后台索引、语料、`_isImageIndexed` 都不碰它，第一次有人要 C++ 对象时才建，所以不给每个镜像的索引增加任何开销。
 3. **对象树怎么建。**
    - 作用域树里 `kind == .type` 的作用域，以及类索引里的每个类（按 `qualifiedName` 合并到同名作用域上），都是 `.cPlusPlus(.class)`；
@@ -129,7 +129,7 @@ RuntimeViewer 新增第三种对象语言：C++。镜像的对象列表在 Objec
    - 层级是主基类链（每层取第一个偏移为 0、非虚的基类，与上游补名用的主基类相同），基类在别的镜像就按第 7 条找到那个镜像再往上走；`hierarchy(for:)` 给名字，`superclassChain(for:)` 给能跳转的对象；
    - 关系页的标题是「Derived Classes」，内容是本镜像里直接派生自它的类（`derivedClasses(of:in:)`）；别的镜像里的派生类不找。
    - 多重继承的其余基类只在界面头部列出。
-10. **App 一侧。** Filter Scope 加 C++ 一组（类、命名空间两个勾选项）；图标是绿色的 `C`（类）与 `N`（命名空间），与 C 的结构体、Find 里 C/C++ 函数的绿色同属 C 家族；SourceEditor 面板对 C++ 传 `"cpp"`，桥接不认识它，只按语义区间上色；内容的文件类型是 `UTType.cPlusPlusHeader`，分享与拖出时扩展名 `hpp`；镜像页的按种类计数带上 C++。
+10. **App 一侧。** Filter Scope 在 C 与 Objective-C 之间加 C++ 一组（类、命名空间两个勾选项）；图标是绿色的 `C`（类）与 `N`（命名空间），与 C 的结构体、Find 里 C/C++ 函数的绿色同属 C 家族；SourceEditor 面板对 C++ 传 `"cpp"`，桥接把它对应到重建版的 `SourceModelEditorLanguage.cpp`：与 ObjC、Swift 一样，框架自己的解析给关键字着色，语义区间把类型与成员重新标注；内容的文件类型是 `UTType.cPlusPlusHeader`，分享与拖出时扩展名 `hpp`；镜像页的按种类计数带上 C++。
 11. **依赖。** RuntimeViewerCore 的 MachOKitExtensions 下限改为 `from: "3.2.1"`（3.1.0 带来类索引，3.2.1 修了 `N_INDR` 条目，见「已知问题」），`RuntimeViewerCore` target 加 `CPlusPlusSymbols` product；各锁文件只让 MachOKitExtensions 移动。3.2.0 新增的两个测试支持 target（`MachOFixtureSupport`、`MachOTestingSupport`）补进 `Tuist.swift` 的 `sourceDependencyTargetNames`。
 
 ### 非目标
@@ -144,7 +144,6 @@ RuntimeViewer 新增第三种对象语言：C++。镜像的对象列表在 Objec
 - **参数里的类型跳转**、返回类型、`static` 与访问级别的推断。
 - **函数作用域里的局部实体**（`kind == .function` 的作用域）。
 - **别的镜像里的派生类**、跨 owner 合并 C++ 的层级（借用 shared cache 镜像的 engine 上，C++ 的层级只在镜像的主人那里求）。
-- **SourceEditor 的 C++ 语言**：重建版 SourceEditor 有没有 C++ 的 SourceModel 语言，要读它的源码才能定（`RuntimeViewerPrecompiledLibraries/SourceEditor/AGENTS.md`），本提案不接。
 - **注释标签**：C++ 界面不标注释结构（`marksCommentStructure` 对它不起作用），注释以普通注释显示。
 - **新的 `RuntimeObject.Properties` 位**（例如「只从 RTTI 恢复」）：本提案不加，界面头部的注释已经说明；加位要同时加 Filter Scope 的行（`AGENTS.md` 开发规则第 9 条），以后需要时另议。
 - **MachOKitExtensions 之外的 C++ 来源**（ObjC ivar 编码里的 C++ 结构体）。
@@ -159,9 +158,9 @@ RuntimeViewer 新增第三种对象语言：C++。镜像的对象列表在 Objec
 
 | 文件 / 类型 | 动作 | 改什么 | 为什么 | 步骤 |
 |---|---|---|---|---|
-| `RuntimeViewerCore/Package.swift` | 修改 | MachOKitExtensions 下限 `from: "3.1.0"`，注释写明为了 `CPlusPlusClassIndexStore`；`RuntimeViewerCore` target 加 `.product(name: "CPlusPlusSymbols", package: "MachOKitExtensions")` | 方案第 11 条 | 1 |
-| 各 `Package.resolved`（三个 workspace、`RuntimeViewerCore`、`RuntimeViewerPackages`、`RuntimeViewerCommandLine`） | 修改 | MachOKitExtensions 移到 3.1.0 | 同上 | 1 |
-| Core `Objects/RuntimeObjectKind.swift` · `RuntimeObjectKind`、新的嵌套 `CPlusPlus` | 修改 | 加 `.cPlusPlus(CPlusPlus)`，`level` 21–22、`allCases`、`description`（`C++ Class`、`C++ Namespace`）、`isCPlusPlus` | 方案第 1 条 | 1 |
+| `RuntimeViewerCore/Package.swift` | 修改 | MachOKitExtensions 下限 `from: "3.2.1"`，注释写明 3.2.1 不再收 `N_INDR` 条目、3.1.0 带来 `CPlusPlusClassIndexStore`；`RuntimeViewerCore` target 加 `.product(name: "CPlusPlusSymbols", package: "MachOKitExtensions")` | 方案第 11 条 | 1 |
+| 各 `Package.resolved`（三个 workspace、`RuntimeViewerCore`、`RuntimeViewerPackages`、`RuntimeViewerCommandLine`） | 修改 | MachOKitExtensions 移到 3.2.1 | 同上 | 1 |
+| Core `Objects/RuntimeObjectKind.swift` · `RuntimeObjectKind`、新的嵌套 `CPlusPlus` | 修改 | 加 `.cPlusPlus(CPlusPlus)`，`level` 2–3（C 之后、ObjC 之前，其后的种类顺延）、`allCases` 同序、`description`（`C++ Class`、`C++ Namespace`）、`isCPlusPlus` | 方案第 1 条 | 1 |
 | Core `Interfaces/RuntimeInterfaceLanguage.swift` | 修改 | 加 `static let cPlusPlus = RuntimeInterfaceLanguage(rawValue: "cpp")` | 方案第 1 条 | 1 |
 | Core 里穷举 `RuntimeObjectKind` 的各处：`Engine/RuntimeEngine.swift`（`_interface`、`_imageName(ofObjectName:)`、`_hierarchy`、`_memberAddresses`）、`Objects/RuntimeObject+GeneratedInterface.swift`、`Objects/RuntimeObject+CounterpartKind.swift`、`SharedCache/RuntimeEngine+SharedCacheRelays.swift`、`Search/RuntimeEngine+Search.swift`、`Search/Matching/*`、`Export/*`、`Relationships/*` | 修改 | 第 1 步只补让它编过、行为不变的臂（C++ 走「无」的分支：没有生成界面、没有对应面、不进语料、导出按头文件）；`_interface`、`_hierarchy` 的真实 C++ 臂在第 3、4 步 | 新 case 让穷举 switch 编不过 | 1 |
 | `RuntimeViewerCore/Sources/RuntimeViewerCrossReferences/` 里穷举种类的三处（`Analysis/CrossReferenceQuery.swift`、`Analysis/FunctionReferenceBuilder.swift`、`Models/RuntimeFunctionReference.swift`） | 修改 | 补臂，C++ 不是可查引用的类型 | 同上 | 1 |
@@ -186,11 +185,13 @@ RuntimeViewer 新增第三种对象语言：C++。镜像的对象列表在 Objec
 | AppCore `Sidebar/RuntimeObject/SidebarRuntimeObjectListViewModel.swift` | 修改 | 两处取对象传 `includesCPlusPlusObjects: true` | 方案第 4 条 | 5 |
 | AppUI `EditorArea/JumpBar/EditorJumpBarItemStore.swift` | 修改 | 取对象传 `true`；按种类分组带上 C++ | 同上 | 5 |
 | AppCore `Content/ContentImageViewModel.swift` | 修改 | 三处取对象传 `true` | 镜像页的计数带 C++ | 5 |
-| AppCore `Sidebar/RuntimeObject/RuntimeObjectScope.swift` · `KindGroup` | 修改 | 加 `.cPlusPlus`（标题「C++」） | 方案第 10 条 | 5 |
-| App `Sidebar/RuntimeObject/SidebarRuntimeObjectScopeViewController.swift` | 修改 | 新组一行与两个种类的按钮标题 | 同上 | 5 |
+| AppCore `Sidebar/RuntimeObject/RuntimeObjectScope.swift` · `KindGroup` | 修改 | 加 `.cPlusPlus`（标题「C++」），排在 `.c` 与 `.objectiveC` 之间 | 方案第 10 条 | 5 |
+| App `Sidebar/RuntimeObject/SidebarRuntimeObjectScopeViewController.swift` | 修改 | 新组一行（C 与 Objective-C 之间）与两个种类的按钮标题 | 同上 | 5 |
 | AppCore `RuntimeObject/RuntimeObjectIcon.swift` | 修改 | `.cPlusPlus(.class)` → `("C", .green)`，`.cPlusPlus(.namespace)` → `("N", .green)` | 同上 | 5 |
 | AppCore `Content/ContentInterface.swift` · `linkTargetKind` | 修改 | C++ 臂（方案第 7 条） | 跳转 | 5 |
 | App `Content/ContentSourceEditorViewController.swift` · `languageIdentifier` | 修改 | `.cPlusPlus` → `"cpp"` | 方案第 10 条 | 5 |
+| `RuntimeViewerUsingAppKit/RuntimeViewerSourceEditorBridge/SourceEditorBridge.swift` · `language(forIdentifier:)`，`SourceEditorBridging.swift` 的文档注释 | 修改 | `"cpp"` → `SourceModelEditorLanguage.cpp` | 没有语言就整页不着色（前期调研） | 5 |
+| `RuntimeViewerUsingAppKit/RuntimeViewerSourceEditorBridgeTests/SemanticRetypingTests.swift`、`SourceEditorTestHarness.swift` | 修改 | 经 `"cpp"` 设下的 C++ 文本，关键字由框架着色、类型引用按语义区间重新标注；harness 的 `setSource` 可传语言标识 | 第 5 步行为 | 5 |
 | AppCore `Main/MainViewModel.swift`、App `Main/MainWindowController.swift` | 修改 | `UTType.cPlusPlusHeader` 与扩展名 `hpp` | 同上 | 5 |
 | App `Inspector/InspectorRuntimeObjectCoordinator.swift` · `TabConfiguration` | 修改 | C++ 类有层级页（父类链）与关系页 | 方案第 9 条 | 5 |
 | AppCore `Inspector/InspectorRelationshipsViewModel.swift` | 修改 | C++ 类的标题「Derived Classes」、内容是 `subclasses` | 同上 | 5 |
@@ -206,11 +207,11 @@ RuntimeViewer 新增第三种对象语言：C++。镜像的对象列表在 Objec
 改了什么：
 
 ```text
-MachOKitExtensions 3.1.0 (package, floor 3.0.0 -> 3.1.0)
+MachOKitExtensions 3.2.1 (package, floor 3.0.0 -> 3.2.1)
   CPlusPlusSymbols  (product)         CPlusPlusSymbolIndexStore (scopes), CPlusPlusClassIndexStore (RTTI, vtables)
 
 RuntimeViewerCore
-  Objects/RuntimeObjectKind           ~ + case cPlusPlus(.class | .namespace)
+  Objects/RuntimeObjectKind           ~ + case cPlusPlus(.class | .namespace), sorted after C, before ObjC
   Interfaces/RuntimeInterfaceLanguage ~ + .cPlusPlus ("cpp")
   Images/RuntimeImageIndex            ~ builds a third factory
   Images/*ImageCatalog                ~ + image(definingCPlusPlusTypeInfoForMangledTypeName:)
@@ -228,10 +229,11 @@ RuntimeViewerCore
 RuntimeViewerAppCore / AppUI / App
   Sidebar object list, jump bar, image page   ~ ask with includesCPlusPlusObjects: true
   Find, export, word cloud, MCP, CLI, indexing  (unchanged: default false, never see C++)
-  RuntimeObjectScope.KindGroup        ~ + .cPlusPlus
+  RuntimeObjectScope.KindGroup        ~ + .cPlusPlus, between .c and .objectiveC
   RuntimeObjectIcon                   ~ + green "C" / "N"
   ContentInterface.linkTargetKind     ~ + C++ arm
-  ContentSourceEditorViewController   ~ "cpp" (bridge: no SourceModel language, semantic colours only)
+  ContentSourceEditorViewController   ~ "cpp"
+  SourceEditorBridge                  ~ "cpp" -> SourceModelEditorLanguage.cpp (parse + semantic retyping)
   Inspector tabs / relationships      ~ C++ class: hierarchy + "Derived Classes"
 ```
 
@@ -298,7 +300,7 @@ extension RuntimeInterfaceLanguage {
 }
 ```
 
-`level`：`.cPlusPlus(.class)` 21，`.cPlusPlus(.namespace)` 22。
+`level`：`.cPlusPlus(.class)` 2，`.cPlusPlus(.namespace)` 3，紧接 C 的结构体（0）与联合体（1）；ObjC 的四种顺延为 4–7，Swift 的十五种为 8–22。`level` 是私有的，只供 `Comparable` 用，不上线、不落盘（`Codable` 按 case 名合成），所以改号不影响兼容。`allCases` 按同一顺序排（`allCasesOrdered` 测试要求）。
 
 ### 命令与公开 API
 
@@ -443,12 +445,12 @@ case .cPlusPlus:
 
 ### 发布
 
-不需要新的权限、entitlement 或隐私清单条目。不影响公证与 Sparkle。MachOKitExtensions 3.1.0 已发布，发版前照常编 `RuntimeViewer-Distribution.xcworkspace` 核对锁文件。
+不需要新的权限、entitlement 或隐私清单条目。不影响公证与 Sparkle。MachOKitExtensions 3.2.1 已发布，发版前照常编 `RuntimeViewer-Distribution.xcworkspace` 核对锁文件。
 
 ## 落地步骤
 
 1. **[完成] 依赖、种类与测量** —— 改动地图里的 `Package.swift`、锁文件、`RuntimeObjectKind`、`RuntimeInterfaceLanguage`、各处穷举的补臂、`RuntimeImageReading`（视编译结果）、临时的耗时探针
-   - 行为：`cPlusPlusKindsSortAfterSwiftKinds`
+   - 行为：`cPlusPlusKindsSortBetweenCAndObjectiveCKinds`
    - 行为：`cPlusPlusKindRoundTripsThroughJSON`
    - 行为：`cPlusPlusKindDescriptionsNameTheLanguage`
    - 行为：探针结论（进程内与 cache 文件、Espresso 与 libc++、release）与注入 payload 的体积增量写进本提案的前期调研与决策日志，探针删除
@@ -494,6 +496,7 @@ case .cPlusPlus:
 5. **[完成] App 接入** —— 侧栏、路径栏、镜像页、Filter Scope、图标、内容区语言与文件类型、跳转目标、Inspector、其余补臂、AppCore 测试
    - 行为：`filterScopeHasCPlusPlusGroup`
    - 行为：`cPlusPlusIconsAreGreenCAndN`
+   - 行为：`aCPlusPlusInterfaceIsParsedAndRetyped`（桥接测试）
    - 行为：`cPlusPlusLinkTargetsAreClassesAndNamespaces`
    - 行为：`cPlusPlusClassGetsHierarchyAndDerivedClassesTabs`
    - 行为：`sidebarAsksForCPlusPlusObjects`
@@ -533,3 +536,5 @@ case .cPlusPlus:
 | 2026-11-21 | Tuist 检查的既有红 | `./TuistScript.sh check` 报 `sourceDependencyTargetNames` 缺 MachOSwiftSection 的 `SwiftSectionTestingMacros`；origin/next 的 `Tuist.swift` 同样缺，是抬 MachOSwiftSection pin（`161be627`）时带进来的，不是本分支引入。本分支没有改原生工程，检查的其余部分一致。记为后续项。 |
 | 2026-11-21 | 上游修 N_INDR 并抬到 3.2.1 | 用户批准去上游修。MachOKitExtensions 新增 SPI `NlistProtocol.isIndirect`，`SymbolSweep` 两条符号表路径跳过 `N_INDR` 条目，复现测试 `IndirectSymbolEntryTests`、`IndirectSymbolEntryScopeTests` 先红后绿，按同一规则算期望值的旧测试一并改；发布为 3.2.1。Foundation 也有 196 个这样的 C 符号此前被收成了假偏移。本提案的下限随之改为 3.2.1，`Tuist.swift` 补上 3.2.0 新增的两个 target，`withKnownIssue` 改为正面断言。 |
 | 2026-11-21 | 实现完成，待用户看过后收尾 | Core 包全量（三条红单独重跑全过：一条是种类数量的既有断言，已随新种类改成 23；两条是满载偶发）、App 层两个测试包（红灯单独重跑全过，其余是记忆里登记过的既有红灯）、整个 App（Tuist workspace，Debug）都编过；没做界面目视。 |
+| 2026-11-21 | C++ 排到 C 与 Objective-C 之间 | 用户在 App 里看过后要求 C++ 放在 C 下面、Objective-C 上面。`RuntimeObjectKind` 的 `level` 改为 C++ 紧接 C（类 2、命名空间 3，其后顺延），`allCases` 同序；`KindGroup` 与 Filter Scope 弹窗的组顺序改为 C、C++、Objective-C、Swift。侧栏分节、路径栏、镜像页计数都按 `level` 排，一处改动全部跟上；引擎回复里对象的先后不变（各处都会排序）。 |
+| 2026-11-21 | 内容区用重建版的 C++ 语言着色 | 用户发现 C++ 界面整页没有颜色。读重建版 27.2.0-alpha.2 的源码查明：桥接对不认识的标识不给语言，数据源就没有语言服务，语义区间的调整器也装不上，所以前期调研里「只按语义区间上色」的说法不成立。重建版自带 `SourceModelEditorLanguage.cpp` 与 `C++.xclangspec`，桥接把 `"cpp"` 对应到它；原先列在「不做」里的「SourceEditor 的 C++ 语言」随之去掉。桥接测试 `aCPlusPlusInterfaceIsParsedAndRetyped` 修复前红、修复后绿。 |

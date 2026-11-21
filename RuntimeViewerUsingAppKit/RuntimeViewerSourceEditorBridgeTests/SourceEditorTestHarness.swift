@@ -117,12 +117,14 @@ final class SourceEditorTestHarness {
     }
 
     /// - Parameters:
+    ///   - languageIdentifier: as the content pane passes it — `"swift"`, `"objc"` or `"cpp"`.
     ///   - semanticRanges: UTF-16 ranges into `source`, as the content pane passes the runs the
     ///     interface generator recorded.
     ///   - semanticNodeTypeNames: parallel to `semanticRanges`: the node type each run is retyped to.
     ///   - restoresScrollPosition: as the content pane passes it, `false` when a reveal follows.
     func setSource(
         _ source: String,
+        languageIdentifier: String = "swift",
         semanticRanges: [NSRange] = [],
         semanticNodeTypeNames: [String] = [],
         commentDecorations: SourceEditorBridgingCommentDecorations? = nil,
@@ -131,7 +133,7 @@ final class SourceEditorTestHarness {
         lineCount = source.components(separatedBy: "\n").count
         bridge.setSource(
             source,
-            languageIdentifier: "swift",
+            languageIdentifier: languageIdentifier,
             semanticRanges: semanticRanges.map { NSValue(range: $0) },
             semanticNodeTypeNames: semanticNodeTypeNames,
             commentDecorations: commentDecorations,
