@@ -1,6 +1,6 @@
 # Draft - 长类型拆行：生成选项里加「Break Long Types」
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-21
 - **最后更新**: 2026-11-21
@@ -35,9 +35,9 @@
 ## 提议方案
 
 1. **选项**：`SwiftGenerationOptions` 加两个字段——`breaksLongTypes: Bool`（`@Default(false)`）与 `maximumLineWidth: Int`（`@Default(100)`），再加一个计算属性 `multilineTypeFormatting: MultilineTypeFormatting?`：关着时 `nil`，开着时按 `maximumLineWidth` 构造。`.mcp` 预设明确保持关闭：MCP 的使用者是 agent，按整行搜索声明，一个声明散到多行对它不利。
-2. **引擎**：`RuntimeSwiftSection` 存下当前的 `MultilineTypeFormatting?`，在 `updateConfiguration(using:…)` 里和打印配置一起比较；变了就同样清掉两份 interface 缓存。`interface(for:)` 对 `printDefinitions` 得到的每个定义的打印各格式化一次再拼接——这样 `typeUTF8Range` 量的就是格式化后的第一个定义，宏展开的归属照旧对得上；宏展开的每一块（`MacroExpansionPart.content`）在 `interfaceParts(of:in:)` 里同样格式化。`importedInterface(for:)` 在 `separatingMarks` 之前格式化。格式化始终发生在拆 region 之前，注释标签与宏归属读到的是格式化后的偏移。
+2. **引擎**：`RuntimeSwiftSection` 存下当前的 `MultilineTypeFormatting?`，在 `updateConfiguration(using:…)` 里和打印配置一起比较；变了就同样清掉两份 interface 缓存。`interface(for:)` 对 `printDefinitions` 得到的每个定义的打印各格式化一次再拼接——这样 `typeUTF8Range` 量的就是格式化后的第一个定义，宏展开的归属照旧对得上；宏展开的各块不格式化（它们带着嵌套属性的 UTF-8 范围，见决策日志）。`importedInterface(for:)` 在 `separatingMarks` 之前格式化。格式化始终发生在拆 region 之前，注释标签与宏归属读到的是格式化后的偏移。
 3. **界面**：生成选项面板的 Swift 一栏在「Expand Macros」下面加勾选框「Break Long Types」。导出元数据（`RuntimeInterfaceExportMetadata`）写明这个选项的状态。
-4. **查找**：`ContentHighlightRequest.locate(in:)` 第一步在「整行相同」找不到时，再试一次「跨行相同」：把语料行与正文里从某一行开始的连续几行都去掉全部空白后比较，相同就把这几行当作那条语料行，按原来的办法在其中定位命中（命中在语料行里的位置，按去空白后的字符序号映射回正文）。取离语料行号最近的一组。语料本身不变。
+4. **查找**：`ContentHighlightRequest.locate(in:)` 第一步在「整行相同」（或长行的「窗口在某一行里」）找不到时，再在一份去掉全部空白的正文里找：整行的语料行要恰好对上从某行第一个可见字符到某行最后一个可见字符的一段，长行截出的窗口可以落在行中间。取离语料行号最近的一处，命中按「去空白后的第几个 UTF-16 单元」映射回正文。语料本身不变。
 
 ### 非目标
 
@@ -157,9 +157,9 @@ private func formatted(_ print: SemanticString) -> SemanticString {
 
 `locate(in:)` 第一步改为：
 
-1. 照旧找整行相同（去首尾空白）的行，取离语料行号最近的。
-2. 找不到时，把语料行去掉全部空白得到 `compactLineText`；对正文的每一行，若它去空白后是 `compactLineText` 的前缀，就向下逐行拼接（都去空白），直到长度不小于 `compactLineText`；恰好相等即为一组候选（起止行）。取起始行离语料行号最近的一组。
-3. 在候选的几行里定位命中：命中在语料行中的位置换算成「去空白后的第几个字符」，再在这几行里数到同一个非空白字符，得到正文里的范围；命中跨了插入的换行时，范围从起点算到终点（包含中间的换行与缩进）。没有查询词时选中整组的第一行内容，与原来选中整行一致。
+1. 照旧找整行相同（去首尾空白）的行，或含有长行窗口的行，取离语料行号最近的。
+2. 找不到时，把正文与语料行（或窗口）都去掉全部空白，得到两串 UTF-16 单元，正文那串记下每个单元在原文里的偏移（`CompactedText`）。在正文那串里找语料那串的每次出现：整行的语料行只认从某行第一个可见单元开始、到某行最后一个可见单元结束的一段；窗口可以落在行中间。取起点所在行离语料行号最近的一处。
+3. 命中在语料行（或窗口）里的位置换算成「去空白后的第几个单元」，在那一处数到同一个单元，得到正文里的范围；命中跨了插入的换行时，范围从起点算到终点（包含中间的换行与缩进）。整行的情况没有命中范围时，先在那一段里按查询词找，再退回选中整段。
 
 只有拆行会让一条语料行散到多行，所以这一步只在第一步落空时才走，关着拆行时行为逐字不变。
 
@@ -197,26 +197,27 @@ private func formatted(_ print: SemanticString) -> SemanticString {
 
 ## 落地步骤
 
-1. **选项字段与预设** —— 改动地图第 1、2、3、11 行
+1. **选项字段与预设**（已完成） —— 改动地图第 1、2、3、11 行
    - 行为：`defaultOptionsLeaveLongTypesOnOneLine`
    - 行为：`optionsSavedBeforeBreakLongTypesExistedDecodeWithItOff`
    - 行为：`breakLongTypesDerivesTheFormattingWithTheStoredWidth`
    - 行为：`theMCPOptionsLeaveLongTypesOnOneLine`
-2. **引擎格式化与缓存失效** —— 改动地图第 4、5 行
+2. **引擎格式化与缓存失效**（已完成） —— 改动地图第 4、5 行
    - 行为：`interfaceBreaksLongTypesWhenAsked`
    - 行为：`interfaceWithBreakLongTypesOffIsUnchanged`
    - 行为：`togglingBreakLongTypesRegeneratesTheCachedInterface`
    - 行为：`macroExpansionsStillAttachToTheirTypeWhenFormatted`
    - 行为：`togglingBreakLongTypesKeepsThePrinter`（打印器不重建）
-3. **面板与导出元数据** —— 改动地图第 6、7 行
+3. **面板与导出元数据**（已完成；面板一行未经 App 构建验证，见决策日志） —— 改动地图第 6、7 行
    - 行为：面板 Swift 一栏出现「Break Long Types」，勾上后内容区刷新为拆开的文字（无测试目标，人工核对）
    - 行为：`exportMetadataDescribesBreakLongTypes`
-4. **查找跨行定位** —— 改动地图第 8、9 行
+4. **查找跨行定位**（已完成） —— 改动地图第 8、9 行
    - 行为：`aCorpusLineBrokenAcrossDisplayedLinesIsLocated`
-   - 行为：`aHitInsideABrokenTypeMapsToTheSameCharacters`
+   - 行为：`aHitAcrossAnInsertedBreakCoversTheBreak`
    - 行为：`theNearestBrokenOccurrenceWins`
-   - 行为：`aWholeLineMatchStillWinsFirst`
-5. **抬依赖 pin**（MachOSwiftSection 推送 `next` 之后） —— 改动地图第 10 行
+   - 行为：`aWindowOfABrokenLongLineIsLocated`
+   - 行为：`aWholeLineMatchStillWinsFirst`、`aRunInsideALongerLineIsNotTakenForTheCorpusLine`（旧行为不变）
+5. **抬依赖 pin**（已完成：MachOSwiftSection `25c4515c`） —— 改动地图第 10 行
    - 行为：不带本地依赖的构建通过
 6. **文档** —— 改动地图第 11 行
    - 行为：索引与提案状态一致
@@ -235,3 +236,7 @@ private func formatted(_ print: SemanticString) -> SemanticString {
 | 2026-11-21 | Created as Draft | MachOSwiftSection 新增了按括号拆长类型的格式化，RuntimeViewer 要把它接到界面上，SwiftUI 视图的 `Body` 才能在这里看清层级。 |
 | 2026-11-21 | 只加勾选框，查找跨行定位 | 澄清提问后用户选定：面板里只加一个勾选框，行宽固定 100 列、数值存进选项；查找改为能跨被拆开的行定位，不接受退化。 |
 | 2026-11-21 | Accepted | 用户批准，开始实现。功能分支 `feature/multiline-type-formatting`，从 `next` 切出；先用本地依赖开发，MachOSwiftSection 推送 `next` 后再抬 pin。机器负载高时构建用低优先级跑。 |
+| 2026-11-21 | 宏展开块不格式化 | 方案原写在 `interfaceParts(of:in:)` 里格式化宏展开的每一块。实现时发现每一块带着嵌套宏属性相对自身文字的 UTF-8 范围（`MacroExpansionPart.NestedExpansion.attributeUTF8Range`），插入换行会让它们指错位置；展开出来的又都是很短的成员声明。改为不格式化，正文照常格式化、宏归属不受影响。 |
+| 2026-11-21 | 查找的跨行定位也覆盖「窗口」 | 方案只写了整行对不上时的跨行比对。实现时发现引擎会把超过 320 个 UTF-16 单元的语料行截成一段带 `…` 的窗口交给查找——SwiftUI 的 `Body` 正是这种——走的是另一条分支。两条分支统一改用一份「去掉空白的正文」：整行的情况要求比对上的一段恰好从某行第一个可见字符开始、到某行最后一个可见字符结束；窗口的情况允许落在行中间。命中位置都按「去空白后的第几个 UTF-16 单元」映射回正文。 |
+| 2026-11-21 | 查找测试先在旧代码上变红 | 新测试不带查询词，免得旧的「按查询词就近匹配」碰巧找到同一处；换回改动前的 `ContentHighlightRequest` 跑过一次，四条新测试（拆开的整行、跨插入换行的命中、多处取最近、拆开的长行窗口）都失败，两条旧行为保护通过；换回新代码后全部通过。 |
+| 2026-11-21 | 实现完成，待用户看过后收尾 | 第 1–4 步完成，在 JHs-Mac-Studio-Ultra 上用本地依赖（`USING_LOCAL_DEPENDENCIES=1`，MachOSwiftSection 本地 `next` 已含 `MultilineTypeFormatting`）以低优先级构建：`RuntimeViewerCore` 定向 42 个测试（含 `RuntimeInterfaceCorpusVisibilityTests`，它不按选项自动枚举，新选项不影响它）、`RuntimeViewerPackages` 的 `ContentHighlightRequestTests` 与 `ContentTextHighlightTests` 20 个测试全过。面板那一行（`GenerationOptionsViewController`）在 App target 里，没有单独的测试目标，机器负载高、没做 App 构建，也没在界面上人工看过。第 5 步（MachOSwiftSection 推送 `next` 后抬 pin）与第 6 步（落地时补齐本分支的索引行）留到收尾。文档判断：不另写说明或指南，没有新术语；CLI 与 agent 插件不变。 |

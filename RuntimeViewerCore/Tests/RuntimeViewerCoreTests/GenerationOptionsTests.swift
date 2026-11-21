@@ -219,6 +219,48 @@ struct SwiftGenerationOptionsTests {
         let decoded = try JSONDecoder().decode(SwiftGenerationOptions.self, from: data)
         #expect(decoded == original)
     }
+
+    // MARK: - Break Long Types (proposal multiline-type-formatting)
+
+    @Test("default options leave long types on one line")
+    func defaultOptionsLeaveLongTypesOnOneLine() {
+        let options = SwiftGenerationOptions.default
+        #expect(options.breaksLongTypes == false)
+        #expect(options.maximumLineWidth == 100)
+        #expect(options.multilineTypeFormatting == nil)
+    }
+
+    /// Generation Options are kept in the user's defaults, and an engine in
+    /// another process decodes them from the interface command; neither a
+    /// saved set nor an older peer's has the keys.
+    @Test("options saved before Break Long Types existed decode with it off")
+    func optionsSavedBeforeBreakLongTypesExistedDecodeWithItOff() throws {
+        let savedSwiftOptions = Data(#"{"printFieldOffset":true,"expandsMacros":true}"#.utf8)
+        let decodedSwiftOptions = try JSONDecoder().decode(SwiftGenerationOptions.self, from: savedSwiftOptions)
+        #expect(decodedSwiftOptions.breaksLongTypes == false)
+        #expect(decodedSwiftOptions.maximumLineWidth == 100)
+        #expect(decodedSwiftOptions.expandsMacros == true)
+    }
+
+    @Test("Break Long Types derives the formatting with the stored width")
+    func breakLongTypesDerivesTheFormattingWithTheStoredWidth() {
+        var options = SwiftGenerationOptions.default
+        options.maximumLineWidth = 80
+        #expect(options.multilineTypeFormatting == nil)
+
+        options.breaksLongTypes = true
+        #expect(options.multilineTypeFormatting?.maximumLineWidth == 80)
+
+        options.maximumLineWidth = 0
+        #expect(options.multilineTypeFormatting?.maximumLineWidth == 1)
+    }
+
+    /// `full` on the command line and the MCP server keep every declaration on
+    /// one line: a client searches the text a declaration at a time.
+    @Test("the MCP options leave long types on one line")
+    func mcpOptionsLeaveLongTypesOnOneLine() {
+        #expect(RuntimeObjectInterface.GenerationOptions.mcp.swiftInterfaceOptions.breaksLongTypes == false)
+    }
 }
 
 @Suite("RuntimeObjectInterface.GenerationOptions")

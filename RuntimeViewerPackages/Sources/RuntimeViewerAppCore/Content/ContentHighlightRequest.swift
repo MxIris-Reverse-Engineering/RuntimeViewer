@@ -13,7 +13,11 @@ import RuntimeViewerCore
 /// 1. a line equal to `lineText`, the one nearest `lineNumber` when several
 ///    are, with `matchRangeInLine` applied inside it — or, when `lineText` is
 ///    a window the engine cut out of a long line, a line containing it, with
-///    the hit at the same place inside the window;
+///    the hit at the same place inside the window — or, when no line equals
+///    it, consecutive lines that spell it once whitespace is left out: a
+///    corpus line Break Long Types laid out over several lines on screen
+///    (proposal `multiline-type-formatting`), with the hit on the same
+///    characters;
 /// 2. failing that, `query` matched the way the search matched it — its
 ///    `matchMode`, ASCII case folding, identifier boundaries, regular
 ///    expressions — the hit nearest `lineNumber`;
@@ -74,6 +78,11 @@ public struct ContentHighlightRequest: Hashable, Sendable {
             if let range = locateWindow(window, in: lines, nearLineIndex: targetLineIndex) {
                 return range
             }
+            // The line was broken over several lines on screen: the window spells part of them
+            // once whitespace is left out of both.
+            if let range = locateBrokenWindow(window, in: lines, of: displayedText, nearLineIndex: targetLineIndex) {
+                return range
+            }
         } else {
             let normalizedLineText = Self.normalized(lineText)
             if !normalizedLineText.isEmpty {
@@ -85,6 +94,11 @@ public struct ContentHighlightRequest: Hashable, Sendable {
                 }
                 if let bestLine {
                     return rangeInsideLine(bestLine, pattern: pattern)
+                }
+                // Broken over several lines on screen: only whitespace was added, so whole lines
+                // spell the corpus line once it is left out of both.
+                if let range = locateBrokenLine(in: lines, of: displayedText, nearLineIndex: targetLineIndex, pattern: pattern) {
+                    return range
                 }
             }
         }
@@ -195,5 +209,148 @@ public struct ContentHighlightRequest: Hashable, Sendable {
             return NSRange(location: line.utf16Offset + found.location, length: found.length)
         }
         return NSRange(location: lineStart, length: lineContentLength)
+    }
+
+    // MARK: - A corpus line broken over several lines on screen
+
+    /// A text without its whitespace — what Break Long Types adds: line breaks,
+    /// indentation, and the space a broken `, ` loses — as UTF-16 code units,
+    /// with the UTF-16 offset in the text of each unit kept.
+    private struct CompactedText {
+        var units: [UInt16] = []
+        var originalOffsets: [Int] = []
+
+        init(_ text: String) {
+            var offset = 0
+            for unit in text.utf16 {
+                if !Self.isLayoutWhitespace(unit) {
+                    units.append(unit)
+                    originalOffsets.append(offset)
+                }
+                offset += 1
+            }
+        }
+
+        private static func isLayoutWhitespace(_ unit: UInt16) -> Bool {
+            Unicode.Scalar(unit)?.properties.isWhitespace ?? false
+        }
+
+        /// How many units kept come before the text's UTF-16 offset `offset`.
+        func keptCount(before offset: Int) -> Int {
+            var lowerBound = 0
+            var upperBound = originalOffsets.count
+            while lowerBound < upperBound {
+                let middle = (lowerBound + upperBound) / 2
+                if originalOffsets[middle] < offset {
+                    lowerBound = middle + 1
+                } else {
+                    upperBound = middle
+                }
+            }
+            return lowerBound
+        }
+
+        /// Where in `units` each occurrence of `other`'s units starts.
+        func occurrences(of other: CompactedText) -> [Int] {
+            guard let firstUnit = other.units.first, other.units.count <= units.count else { return [] }
+            var starts: [Int] = []
+            for start in 0 ... (units.count - other.units.count) where units[start] == firstUnit {
+                if units[start ..< start + other.units.count].elementsEqual(other.units) {
+                    starts.append(start)
+                }
+            }
+            return starts
+        }
+    }
+
+    /// The index into `lines` of the line holding `utf16Offset`.
+    private static func lineIndex(holding utf16Offset: Int, in lines: [Line]) -> Int {
+        var lowerBound = 0
+        var upperBound = lines.count
+        while lowerBound < upperBound {
+            let middle = (lowerBound + upperBound) / 2
+            if lines[middle].utf16Offset <= utf16Offset {
+                lowerBound = middle + 1
+            } else {
+                upperBound = middle
+            }
+        }
+        return max(0, lowerBound - 1)
+    }
+
+    /// The range in the displayed text from the `visibleStart`-th unit kept
+    /// after `occurrenceStart` up to the end of the `visibleEnd - 1`-th: the
+    /// same characters a range of the compacted corpus text covered.
+    private static func displayedRange(of displayed: CompactedText, occurrenceStart: Int, visibleStart: Int, visibleEnd: Int) -> NSRange {
+        let start = displayed.originalOffsets[occurrenceStart + visibleStart]
+        guard visibleEnd > visibleStart else { return NSRange(location: start, length: 0) }
+        let end = displayed.originalOffsets[occurrenceStart + visibleEnd - 1] + 1
+        return NSRange(location: start, length: end - start)
+    }
+
+    /// The corpus line on screen as whole consecutive lines that spell it once
+    /// whitespace is left out — the run starting nearest `targetLineIndex` —
+    /// with the hit on the same characters; `nil` when no run does.
+    private func locateBrokenLine(in lines: [Line], of displayedText: String, nearLineIndex targetLineIndex: Int, pattern: RuntimeTextPattern?) -> NSRange? {
+        let corpusLine = CompactedText(lineText)
+        guard !corpusLine.units.isEmpty else { return nil }
+        let displayed = CompactedText(displayedText)
+        var bestStart: Int?
+        var bestDistance = Int.max
+        for start in displayed.occurrences(of: corpusLine) {
+            let firstLineIndex = Self.lineIndex(holding: displayed.originalOffsets[start], in: lines)
+            let lastLineIndex = Self.lineIndex(holding: displayed.originalOffsets[start + corpusLine.units.count - 1], in: lines)
+            // Whole lines only: nothing visible before the run on its first line, or after it on
+            // its last.
+            let startsTheLine = displayed.keptCount(before: lines[firstLineIndex].utf16Offset) == start
+            let endOfLastLine = lines[lastLineIndex].utf16Offset + lines[lastLineIndex].text.utf16.count
+            let endsTheLine = displayed.keptCount(before: endOfLastLine) == start + corpusLine.units.count
+            guard startsTheLine, endsTheLine else { continue }
+            let distance = abs(lines[firstLineIndex].index - targetLineIndex)
+            if distance < bestDistance {
+                bestDistance = distance
+                bestStart = start
+            }
+        }
+        guard let bestStart else { return nil }
+
+        if let matchRangeInLine, matchRangeInLine.location >= 0, matchRangeInLine.location + matchRangeInLine.length <= lineText.utf16.count {
+            let visibleStart = corpusLine.keptCount(before: matchRangeInLine.location)
+            let visibleEnd = corpusLine.keptCount(before: matchRangeInLine.location + matchRangeInLine.length)
+            if visibleStart < corpusLine.units.count {
+                return Self.displayedRange(of: displayed, occurrenceStart: bestStart, visibleStart: visibleStart, visibleEnd: visibleEnd)
+            }
+        }
+        let wholeRun = Self.displayedRange(of: displayed, occurrenceStart: bestStart, visibleStart: 0, visibleEnd: corpusLine.units.count)
+        if let found = pattern?.ranges(in: (displayedText as NSString).substring(with: wholeRun)).first {
+            return NSRange(location: wholeRun.location + found.location, length: found.length)
+        }
+        return wholeRun
+    }
+
+    /// The hit inside the lines on screen that spell `window` once whitespace
+    /// is left out — the occurrence nearest `targetLineIndex` — at the same
+    /// characters it sits on inside the window; `nil` when none does.
+    private func locateBrokenWindow(_ window: (text: String, leadingMarkerLength: Int), in lines: [Line], of displayedText: String, nearLineIndex targetLineIndex: Int) -> NSRange? {
+        guard !window.text.isEmpty, let matchRangeInLine else { return nil }
+        let locationInWindow = matchRangeInLine.location - window.leadingMarkerLength
+        guard locationInWindow >= 0, locationInWindow + matchRangeInLine.length <= window.text.utf16.count else { return nil }
+        let compactWindow = CompactedText(window.text)
+        guard !compactWindow.units.isEmpty else { return nil }
+        let displayed = CompactedText(displayedText)
+        var bestStart: Int?
+        var bestDistance = Int.max
+        for start in displayed.occurrences(of: compactWindow) {
+            let distance = abs(lines[Self.lineIndex(holding: displayed.originalOffsets[start], in: lines)].index - targetLineIndex)
+            if distance < bestDistance {
+                bestDistance = distance
+                bestStart = start
+            }
+        }
+        guard let bestStart else { return nil }
+        let visibleStart = compactWindow.keptCount(before: locationInWindow)
+        let visibleEnd = compactWindow.keptCount(before: locationInWindow + matchRangeInLine.length)
+        guard visibleStart < compactWindow.units.count else { return nil }
+        return Self.displayedRange(of: displayed, occurrenceStart: bestStart, visibleStart: visibleStart, visibleEnd: visibleEnd)
     }
 }

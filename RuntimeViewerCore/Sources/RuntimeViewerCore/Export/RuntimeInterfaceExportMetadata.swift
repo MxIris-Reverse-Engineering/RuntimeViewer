@@ -264,6 +264,11 @@ extension RuntimeInterfaceExportMetadata.DumpOptionsInfo {
                 options.synthesizeOpaqueType,
                 "Synthesizes placeholder declarations for opaque Swift types when needed."
             ),
+            option(
+                "Break long types",
+                options.breaksLongTypes,
+                "Breaks a type that runs past \(options.maximumLineWidth) columns, not counting indentation, over several lines at its brackets."
+            ),
             .init(
                 name: "Member sort order",
                 value: options.memberSortOrder.displayName,

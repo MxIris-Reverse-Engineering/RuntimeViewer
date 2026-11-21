@@ -75,7 +75,30 @@ public struct SwiftGenerationOptions: Sendable, Equatable, Hashable {
     @Default(false)
     public var expandsMacros: Bool
 
+    /// Break a type that runs past `maximumLineWidth` over several lines, at its brackets —
+    /// MachOSwiftSection's `MultilineTypeFormatting`: each argument of a generic with two or more
+    /// arguments on a line of its own, a single-argument generic, a tuple or a parameter list only
+    /// around something inside it that breaks. A SwiftUI view's `Body` otherwise prints as one line
+    /// thousands of characters long. Off in settings saved before it existed, and in the MCP options.
+    @Default(false)
+    public var breaksLongTypes: Bool
+
+    /// The widest a line may be, not counting its indentation, before `breaksLongTypes` breaks its
+    /// types. The generation options panel has no control for it yet.
+    @Default(100)
+    public var maximumLineWidth: Int
+
     public static let `default` = Self()
+}
+
+extension SwiftGenerationOptions {
+    /// The formatting these options ask for; `nil` while `breaksLongTypes` is off. A width below one
+    /// column — a hand-edited preference, an older peer's value — reads as one column rather than
+    /// stopping the engine. Read by the Swift section, which applies it.
+    var multilineTypeFormatting: MultilineTypeFormatting? {
+        guard breaksLongTypes else { return nil }
+        return MultilineTypeFormatting(maximumLineWidth: max(1, maximumLineWidth))
+    }
 }
 
 extension SwiftGenerationOptions {

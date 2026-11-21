@@ -73,7 +73,10 @@ extension RuntimeObjectInterface {
                 printEnumLayout: true,
                 synthesizeOpaqueType: true,
                 printExportedDeclarationsOnly: false,
-                expandsMacros: true
+                expandsMacros: true,
+                // An LLM client searches the text a declaration at a time; one broken over
+                // several lines no longer matches a search for it whole.
+                breaksLongTypes: false
             )
         )
     }

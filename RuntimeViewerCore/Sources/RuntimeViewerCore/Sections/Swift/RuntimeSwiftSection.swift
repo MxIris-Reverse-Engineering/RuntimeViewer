@@ -105,6 +105,12 @@ actor RuntimeSwiftSection<Reading: RuntimeImageReading>: RuntimeSwiftSectioning 
 
     private var lastTransformerConfiguration: Transformer.SwiftConfiguration = .init()
 
+    /// How the long types of an interface are laid out over several lines; `nil` leaves every type on
+    /// one line. Applied to each definition's print before the marks are taken out, so the comment
+    /// structure and the macro placements read the formatted offsets. Not part of the printer's
+    /// configuration: changing it clears the interface caches without handing the printer anything.
+    private var multilineTypeFormatting: MultilineTypeFormatting?
+
     /// Whether `printer` holds the opaque type resolver; see
     /// `updateConfiguration(using:transformer:marksCommentStructure:)`.
     private var isOpaqueTypeResolverRegistered = false
@@ -455,7 +461,10 @@ extension RuntimeSwiftSection {
         let marksCommentStructure = printer.configuration.marksCommentStructure
         let marksAttachedMacros = printer.configuration.marksAttachedMacros
         let definitions = try printedDefinitions(for: object)
-        let definitionPrints = try await Self.printDefinitions(definitions, using: printer)
+        // Each definition formatted on its own: joining only puts blank lines between them, so the
+        // result is the same as formatting the whole, and `typeUTF8Range` below measures the
+        // formatted first definition.
+        let definitionPrints = try await Self.printDefinitions(definitions, using: printer).map { formatted($0) }
         let newInterfaceString = Self.joinedDefinitionPrints(definitionPrints)
         let separatedPrint = Self.separatingMarks(of: newInterfaceString, marksAttachedMacros: marksAttachedMacros,
                                                   marksCommentStructure: marksCommentStructure)
@@ -486,6 +495,15 @@ extension RuntimeSwiftSection {
         interfaceByObject[object.key] = newInterface
         #log(.debug, "Interface generated and cached")
         return newInterface
+    }
+
+    /// `print` with its long types laid out over several lines when the options ask for it. Only
+    /// line breaks and indentation are added: the marks the print carries — comment structure,
+    /// attached macros, nested definitions — stay on the components they were on. A macro
+    /// expansion's parts are left as printed: they are short member declarations, and a part
+    /// carries the UTF-8 ranges of its nested attributes, which inserted lines would move.
+    private func formatted(_ print: SemanticString) -> SemanticString {
+        multilineTypeFormatting?.format(print) ?? print
     }
 
     /// What the header of this image's Objective-C class says about Swift imports, as far as the
@@ -553,7 +571,7 @@ extension RuntimeSwiftSection {
         }
         // The marks attached macros bring are taken out with the rest; an imported interface shows
         // no macro of its own to expand.
-        let separatedPrint = Self.separatingMarks(of: interfaceString, marksAttachedMacros: marksAttachedMacros,
+        let separatedPrint = Self.separatingMarks(of: formatted(interfaceString), marksAttachedMacros: marksAttachedMacros,
                                                   marksCommentStructure: marksCommentStructure)
         let interface = RuntimeObjectInterface(
             object: object,
@@ -1893,6 +1911,17 @@ extension RuntimeSwiftSection {
             printer.updateConfiguration(newPrintConfiguration)
             printerConfigurationUpdateCount += 1
             #log(.debug, "Print configuration changed, clearing interface cache")
+            interfaceByObject.removeAll()
+            importedInterfaceByObject.removeAll()
+        }
+
+        // Formatting runs on the finished print, so turning it on or off, or changing its width,
+        // only drops the cached interfaces: the printer — and a file engine's static layout
+        // calculator with it — stays as it is.
+        let newMultilineTypeFormatting = options.multilineTypeFormatting
+        if newMultilineTypeFormatting != multilineTypeFormatting {
+            multilineTypeFormatting = newMultilineTypeFormatting
+            #log(.debug, "Long type formatting changed, clearing interface cache")
             interfaceByObject.removeAll()
             importedInterfaceByObject.removeAll()
         }
