@@ -191,7 +191,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 
 <section id="summary">
   <h2>摘要</h2>
-  <p>编辑栏里一个空标签（新窗口、⌘T 新开的标签、用关闭按钮清空的唯一一栏）原先只显示一行灰字「Select a runtime object」。本提案照 Xcode 27.2 空编辑器显示的初始页（IDEKit 的 <code>IDEInitialEditor</code>）把它换成一张起始页：顶部一个大号的 <strong>Open Quickly</strong> 搜索框，输入满 3 个字符即在框下浮出匹配的镜像与对象，回车或点击打开；下面是 <strong>Recent Objects</strong>，列出这个 Engine 上最近在编辑栏里看过的对象（图标、名字，下面一行是「Engine 〉 镜像」的路径），最多记 10 个、默认显示 8 行、可 Show All 展开，双击或回车打开。最近列表按 Engine 存盘、跨启动保留。读文件时的「Reading …」占位不变。App 级的欢迎窗口由另一会话负责，不在本提案范围内。</p>
+  <p>编辑栏里一个空标签（新窗口、⌘T 新开的标签、用关闭按钮清空的唯一一栏）原先只显示一行灰字「Select a runtime object」。本提案照 Xcode 27.2 空编辑器显示的初始页（IDEKit 的 <code>IDEInitialEditor</code>）把它换成一张起始页：顶部一个大号的 <strong>Open Quickly</strong> 搜索框，输入满 3 个字符即在框下浮出匹配的镜像与对象，回车或点击打开；下面是 <strong>Recent Objects</strong>，列出这个 Engine 上最近在编辑栏里看过的对象（图标、名字，下面一行是「Engine 〉 镜像」的路径），最多记 10 个、默认显示 8 行、可 Show All 展开，双击或回车打开。最近列表按 Engine 存盘、跨启动保留。读文件时的「Reading …」占位不变。File › Open Quickly…（⇧⌘O）的浮动条改成与起始页<strong>同一个搜索</strong>（用户看过初版后要求），从 1 个字符起就搜，有文档窗口时总可用；侧栏原来只搜当前镜像的那一份 Open Quickly 删掉。App 级的欢迎窗口由另一会话负责，不在本提案范围内。</p>
 </section>
 
 <section id="notes">
@@ -203,7 +203,8 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
       <li>最近列表按 Engine 记（相当于 Xcode 按工作区记），上限 10，没有清空按钮；跟着存储实时刷新。</li>
       <li>路径行写「Engine 名 〉 镜像名」，图标是 Engine 的图标。</li>
       <li>存下来的对象不带 <code>children</code>；已有标签显示同一对象时用那个标签里的形态打开。</li>
-      <li>搜索框的范围是整个 Engine（镜像名 + 已索引镜像的对象），不跟着侧栏当前镜像；⇧⌘O 的浮动 Open Quickly 不变。</li>
+      <li>搜索框的范围是整个 Engine（镜像名 + 已索引镜像的对象），不跟着侧栏当前镜像；⇧⌘O 的浮动条用同一个搜索，但照 Xcode 的窗口从 1 个字符起搜（只有起始页要满 3 个）。</li>
+      <li>⇧⌘O 的行与起始页的相同（图标、名字、路径行），选中的打开在焦点栏，⌥ 下一栏、⇧⌥ 新标签，与侧栏点击一致。</li>
       <li>结果板盖在最近列表上、浮在框下；结果行 56 高。页面背景沿用内容区原来的背景。</li>
     </ul>
   </div>
@@ -213,7 +214,8 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
       <li>第一次搜索会读这个 Engine 所有已索引镜像的对象列表，不封顶；开了 Always Index 或索引了大半个 shared cache 时第一次会慢。</li>
       <li><code>AppDefaults</code> 的文件存储不分 Debug 与发布版，同时开着会互相覆盖最近列表；用过的 Engine 键不清理。</li>
       <li>一次搜索期间目录不刷新，期间新索引的镜像要清空输入框再搜（SP.5）；挂起回车期间方向键选的是旧结果（SP.8）。</li>
-      <li>界面目视（布局、颜色、焦点、结果板）与 macOS 27 上的点击取焦点没有在 App 里实测。</li>
+      <li>同一窗口先后用起始页的框与 ⇧⌘O，会各读一份目录（SP.12）；浮动条按词核对结果、切换 Engine 后核对结果来源这两处没有自动测试（SP.13、SP.15）。</li>
+      <li>界面目视（布局、颜色、焦点、结果板、⇧⌘O 浮动条的行）与 macOS 27 上的点击取焦点没有在 App 里实测。</li>
     </ul>
   </div>
 </section>
@@ -223,42 +225,54 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
   <ul class="legend">
     <li><i class="swatch swatch-added"></i>新增</li>
     <li><i class="swatch swatch-changed"></i>修改</li>
+    <li><i class="swatch swatch-removed"></i>删除</li>
     <li><i class="swatch swatch-kept"></i>不变</li>
   </ul>
   <div class="figure">
-  <svg viewBox="0 0 1000 470" role="img" aria-label="Modules and types changed">
-    <rect class="group" x="10" y="10" width="560" height="450" rx="10"/>
+  <svg viewBox="0 0 1000 560" role="img" aria-label="Modules and types changed">
+    <rect class="group" x="10" y="10" width="560" height="540" rx="10"/>
     <text class="group-label" x="22" y="30">RuntimeViewerAppCore/</text>
+    <rect class="group" x="600" y="10" width="390" height="450" rx="10"/>
+    <text class="group-label" x="612" y="30">RuntimeViewerUsingAppKit (app)</text>
+    <rect class="group" x="600" y="480" width="390" height="70" rx="10"/>
+    <text class="group-label" x="612" y="500">RuntimeViewerCore/</text>
+    <path class="arrow" d="M 615 64 L 590 64 L 590 90 L 292 90 L 292 64 L 285 64"/>
+    <path class="arrow" d="M 155 86 L 155 94"/>
+    <path class="arrow" d="M 25 70 L 16 70 L 16 272 L 25 272"/>
+    <path class="arrow" d="M 155 302 L 155 294"/>
+    <path class="arrow" d="M 285 266 L 293 266 L 293 168 L 285 168"/>
+    <path class="arrow" d="M 155 190 L 155 198"/>
+    <path class="arrow" d="M 615 324 L 590 324 L 590 356 L 292 356 L 292 324 L 285 324"/>
+    <path class="arrow" d="M 427 146 L 427 138"/>
+    <path class="arrow arrow-weak" d="M 427 94 L 427 86"/>
     <rect class="box-changed" x="25" y="42" width="260" height="44" rx="6"/><text x="35" y="60">ContentPlaceholderViewModel</text><text class="caption" x="35" y="77">recents, Show All, search, open</text>
     <rect class="box-added" x="25" y="94" width="260" height="44" rx="6"/><text x="35" y="112">ContentStartPageItemCellViewModel</text><text class="caption" x="35" y="129">row: icon, name, path</text>
     <rect class="box-added" x="25" y="146" width="260" height="44" rx="6"/><text x="35" y="164">OpenQuicklyCatalog</text><text class="caption" x="35" y="181">images + indexed objects, match</text>
-    <rect class="box-added" x="25" y="198" width="260" height="44" rx="6"/><text x="35" y="216">OpenQuicklyRanking</text><text class="caption" x="35" y="233">shared Open Quickly ranking</text>
-    <rect class="box-changed" x="25" y="250" width="260" height="44" rx="6"/><text x="35" y="268">SidebarRuntimeObjectListViewModel</text><text class="caption" x="35" y="285">uses OpenQuicklyRanking</text>
+    <rect class="box-added" x="25" y="198" width="260" height="44" rx="6"/><text x="35" y="216">OpenQuicklyRanking</text><text class="caption" x="35" y="233">ranking taken from the sidebar</text>
+    <rect class="box-added" x="25" y="250" width="260" height="44" rx="6"/><text x="35" y="268">OpenQuicklySearch</text><text class="caption" x="35" y="285">one search: catalog on first match</text>
+    <rect class="box-added" x="25" y="302" width="260" height="44" rx="6"/><text x="35" y="320">OpenQuicklyViewModel</text><text class="caption" x="35" y="337">⇧⌘O bar: matches per term, open</text>
     <rect class="box-added" x="300" y="42" width="255" height="44" rx="6"/><text x="310" y="60">RecentRuntimeObjects</text><text class="caption" x="310" y="77">record, dedupe, cap 10</text>
     <rect class="box-added" x="300" y="94" width="255" height="44" rx="6"/><text x="310" y="112">RecentRuntimeObjectsRecorder</text><text class="caption" x="310" y="129">follows selectedRuntimeObject</text>
     <rect class="box-changed" x="300" y="146" width="255" height="44" rx="6"/><text x="310" y="164">DocumentSession</text><text class="caption" x="310" y="181">open() starts the recorder</text>
     <rect class="box-changed" x="300" y="198" width="255" height="44" rx="6"/><text x="310" y="216">AppDefaults</text><text class="caption" x="310" y="233">+ recentRuntimeObjectsByEngine</text>
     <rect class="box-changed" x="300" y="250" width="255" height="44" rx="6"/><text x="310" y="268">RuntimeImageKind</text><text class="caption" x="310" y="285">+ isBundleDirectoryName</text>
-    <rect class="group" x="600" y="10" width="390" height="250" rx="10"/>
-    <text class="group-label" x="612" y="30">RuntimeViewerUsingAppKit (app)</text>
+    <rect class="box-changed" x="300" y="302" width="255" height="44" rx="6"/><text x="310" y="320">EditorArea</text><text class="caption" x="310" y="337">+ shownForm(of:)</text>
+    <rect class="box-removed" x="25" y="360" width="530" height="44" rx="6"/><text x="35" y="378">Sidebar…ListViewModel, …CellViewModel, …ViewModel</text><text class="caption" x="35" y="395">− their own Open Quickly: inputs, outputs, materialization, forOpenQuickly</text>
+    <rect class="box-changed" x="25" y="410" width="530" height="44" rx="6"/><text x="35" y="428">RuntimeObjectCellTag</text><text class="caption" x="35" y="445">privateDeclaration(isClickable:) → privateDeclaration</text>
+    <rect class="box-kept" x="25" y="470" width="260" height="34" rx="6"/><text x="35" y="492">DocumentState</text>
+    <rect class="box-kept" x="300" y="470" width="255" height="34" rx="6"/><text x="310" y="492">RuntimeEngine</text>
     <rect class="box-changed" x="615" y="42" width="360" height="44" rx="6"/><text x="625" y="60">ContentPlaceholderViewController</text><text class="caption" x="625" y="77">start page layout and bindings</text>
     <rect class="box-added" x="635" y="94" width="340" height="44" rx="6"/><text x="645" y="112">OpenQuicklyField, StartPageView</text><text class="caption" x="645" y="129">Xcode-sized field; background click</text>
     <rect class="box-added" x="635" y="146" width="340" height="44" rx="6"/><text x="645" y="164">RecentItemsTableView, SearchResultsTableView</text><text class="caption" x="645" y="181">lists; results float on glass</text>
-    <rect class="box-changed" x="615" y="198" width="360" height="44" rx="6"/><text x="625" y="216">ContentCoordinator</text><text class="caption" x="625" y="233">passes editorPaneID</text>
-    <rect class="group" x="600" y="280" width="390" height="70" rx="10"/>
-    <text class="group-label" x="612" y="300">RuntimeViewerCore/</text>
-    <rect class="box-changed" x="615" y="308" width="360" height="34" rx="6"/><text x="625" y="330">RuntimeObject + withChildren(_:)</text>
-    <rect class="box-kept" x="25" y="330" width="260" height="34" rx="6"/><text x="35" y="352">DocumentState</text>
-    <rect class="box-kept" x="300" y="330" width="255" height="34" rx="6"/><text x="310" y="352">RuntimeEngine</text>
-    <path class="arrow" d="M 615 64 L 285 64"/>
-    <path class="arrow" d="M 155 86 L 155 94"/>
-    <path class="arrow arrow-weak" d="M 155 330 L 155 294"/>
-    <path class="arrow" d="M 427 138 L 427 146"/>
-    <path class="arrow arrow-weak" d="M 427 216 L 285 64"/>
-    <path class="arrow arrow-weak" d="M 427 330 L 155 190"/>
+    <rect class="box-added" x="615" y="198" width="360" height="44" rx="6"/><text x="625" y="216">ContentStartPageItemCellView</text><text class="caption" x="625" y="233">row view: start page and ⇧⌘O bar</text>
+    <rect class="box-changed" x="615" y="250" width="360" height="44" rx="6"/><text x="625" y="268">ContentCoordinator</text><text class="caption" x="625" y="285">passes editorPaneID</text>
+    <rect class="box-changed" x="615" y="302" width="360" height="44" rx="6"/><text x="625" y="320">MainWindowController, MainCoordinator</text><text class="caption" x="625" y="337">⇧⌘O command, QuickActionBar, its VM</text>
+    <rect class="box-changed" x="615" y="354" width="360" height="44" rx="6"/><text x="625" y="372">MainMenuController</text><text class="caption" x="625" y="389">Open Quickly… targets the window</text>
+    <rect class="box-removed" x="615" y="406" width="360" height="44" rx="6"/><text x="625" y="424">SidebarRuntimeObjectListViewController</text><text class="caption" x="625" y="441">− QuickActionBar, openQuickly(_:)</text>
+    <rect class="box-changed" x="615" y="508" width="360" height="34" rx="6"/><text x="625" y="530">RuntimeObject + withChildren(_:)</text>
   </svg>
   </div>
-  <p class="figure-caption">起始页的 VM 读存储里本 Engine 的最近对象、按需读引擎的搜索目录；记录器跟着 <code>DocumentState</code> 写存储。</p>
+  <p class="figure-caption">起始页的 VM 与 ⇧⌘O 浮动条的 VM 各持有一个 <code>OpenQuicklySearch</code>，按需读引擎的搜索目录；起始页另读存储里本 Engine 的最近对象，记录器跟着 <code>DocumentState</code> 写存储。侧栏那一份 Open Quickly 整个删掉。</p>
   <div class="figure figure-narrow">
 <pre><code>any pane shows an object
   → DocumentState.$selectedRuntimeObject (distinct by identity)
@@ -267,11 +281,16 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
   → ContentPlaceholderViewModel (every empty pane of every window on the engine)
   → rows → ContentPlaceholderViewController
 
-typing in the field (3 characters or more; shorter text never reaches the search)
+typing in the start page's field (3 characters or more)
+  or in the ⇧⌘O bar (1 character or more)
+  → OpenQuicklySearch.matches(for:limit:)   [nothing read while the engine lists no image]
   → OpenQuicklyCatalog.load(imagePaths:from:)   [once per search, 8 images at a time]
   → OpenQuicklyCatalog.matches(for:limit:) → FilterEngine + OpenQuicklyRanking
-  → results → Return (waits for the newest results) / click
-  → .focusEditorPane(paneID) → .open(object, in:) | .openImage(path, in:)</code></pre>
+  → results → Return (the page waits for the newest results; the bar takes its current term's) / click
+  → .focusEditorPane(paneID) → .open(shownForm ?? object, in:) | .openImage(path, in:)
+
+search ends: field emptied, page starts over, bar closed, item opened, engine switched
+  → the term still being answered is dropped → OpenQuicklySearch.end()</code></pre>
   </div>
 </section>
 
@@ -292,11 +311,19 @@ typing in the field (3 characters or more; shorter text never reaches the search
       <tr><td><code>AppCore/Document/DocumentSession.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>open()</code> 启动记录器（macOS）</td><td>每个窗口都记</td><td class="numeric">2</td></tr>
       <tr><td><code>AppCore/Storage/AppDefaults.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>加 <code>recentRuntimeObjectsByEngine</code></td><td>按 Engine 存盘</td><td class="numeric">2</td></tr>
       <tr><td><code>RuntimeViewerCore/…/RuntimeObject.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>加 <code>withChildren(_:)</code></td><td>去子树不逐字段复制</td><td class="numeric">2</td></tr>
-      <tr><td><code>AppCore/Content/OpenQuicklyCatalog.swift</code></td><td><span class="tag tag-added">新增</span></td><td>一次搜索的目录、从 Engine 读、匹配</td><td>搜索的范围与匹配</td><td class="numeric">4</td></tr>
-      <tr><td><code>AppCore/Filtering/OpenQuicklyRanking.swift</code></td><td><span class="tag tag-added">新增</span></td><td>从侧栏抽出的排序</td><td>两处同一排序</td><td class="numeric">4</td></tr>
-      <tr><td><code>SidebarRuntimeObjectListViewModel.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>改调共用排序，行为不变</td><td>去重</td><td class="numeric">4</td></tr>
-      <tr><td>测试（AppCore）</td><td><span class="tag tag-added">新增</span></td><td>行、最近列表与记录器、起始页、搜索、目录</td><td>每步的行为清单</td><td class="numeric">1–4</td></tr>
-      <tr><td><code>RuntimeViewerUsingAppKit/AGENTS.md</code>、<code>Glossary.md</code>、索引、<code>KnownIssues</code></td><td><span class="tag tag-changed">修改</span></td><td>起始页的规则、术语、自审裁决</td><td>文档与代码同批</td><td class="numeric">5</td></tr>
+      <tr><td><code>AppCore/OpenQuickly/OpenQuicklyCatalog.swift</code>（第 6 步从 <code>Content/</code> 挪来）</td><td><span class="tag tag-added">新增</span></td><td>一次搜索的目录、从 Engine 读、匹配</td><td>搜索的范围与匹配</td><td class="numeric">4、6</td></tr>
+      <tr><td><code>AppCore/OpenQuickly/OpenQuicklyRanking.swift</code>（第 7 步从 <code>Filtering/</code> 挪来）</td><td><span class="tag tag-added">新增</span></td><td>从侧栏抽出的排序</td><td>两处同一排序</td><td class="numeric">4、7</td></tr>
+      <tr><td><code>AppCore/OpenQuickly/OpenQuicklySearch.swift</code></td><td><span class="tag tag-added">新增</span></td><td>一次搜索：第一次匹配时读目录、<code>end()</code> 丢掉；镜像树为空时不读</td><td>起始页与 ⇧⌘O 共用</td><td class="numeric">6</td></tr>
+      <tr><td><code>AppCore/OpenQuickly/OpenQuicklyViewModel.swift</code></td><td><span class="tag tag-added">新增</span></td><td>⇧⌘O 浮动条的 VM：每个词的匹配连同这个词输出；关掉、打开、换 Engine 时结束搜索</td><td>窗口一层的 Open Quickly</td><td class="numeric">6</td></tr>
+      <tr><td><code>AppCore/EditorArea/EditorArea.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>加 <code>shownForm(of:)</code></td><td>打开对象时沿用标签里的形态</td><td class="numeric">6</td></tr>
+      <tr><td><code>Content/ContentStartPageItemCellView.swift</code></td><td><span class="tag tag-added">新增</span></td><td>行视图从起始页控制器里提出来</td><td>起始页与浮动条共用</td><td class="numeric">6</td></tr>
+      <tr><td><code>MainWindowController.swift</code>、<code>MainCoordinator.swift</code>、<code>MainMenuController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>⇧⌘O 的命令与浮动条挪到窗口，协调器建它的 VM，菜单项指向窗口</td><td>有文档窗口时总可用</td><td class="numeric">6</td></tr>
+      <tr><td><code>SidebarRuntimeObjectListViewController.swift</code></td><td><span class="tag tag-removed">删除</span></td><td>去掉它的 <code>QuickActionBar</code> 与 <code>openQuickly(_:)</code></td><td>命令归窗口</td><td class="numeric">6、7</td></tr>
+      <tr><td><code>SidebarRuntimeObjectListViewModel.swift</code></td><td><span class="tag tag-removed">删除</span></td><td>第 4 步改调共用排序；第 7 步删掉 Open Quickly 的输入输出与按需物化机制</td><td>侧栏不再有自己的 Open Quickly</td><td class="numeric">4、7</td></tr>
+      <tr><td><code>SidebarRuntimeObjectViewModel.swift</code>、<code>SidebarRuntimeObjectCellViewModel.swift</code>、<code>RuntimeObjectCellTag.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>删掉 <code>invalidateNodeDerivedState()</code>、<code>forOpenQuickly</code>、<code>haystack(for:)</code> 与 tag 的 <code>isClickable</code> 参数；<code>isImageLoaded()</code> 成为测试接缝</td><td>同上</td><td class="numeric">7</td></tr>
+      <tr><td>测试（AppCore）</td><td><span class="tag tag-added">新增</span></td><td>行、最近列表与记录器、起始页、搜索、目录、浮动条；<code>TestRuntimeEngine.makeUnconnected</code></td><td>每步的行为清单</td><td class="numeric">1–7</td></tr>
+      <tr><td>侧栏 Open Quickly 的两份专测</td><td><span class="tag tag-removed">删除</span></td><td><code>OpenQuicklyMaterializationBoundsTests</code>、<code>OpenQuicklyLazyConstructionTests</code>；其余侧栏测试去掉相关用例，重载的两种结局改为直接断言列表清空</td><td>被测的代码已删</td><td class="numeric">7</td></tr>
+      <tr><td><code>RuntimeViewerUsingAppKit/AGENTS.md</code>、<code>Glossary.md</code>、索引、<code>KnownIssues</code></td><td><span class="tag tag-changed">修改</span></td><td>起始页的规则、术语、自审裁决（SP.1–SP.16）；惰性 cell ViewModel 一节改述；旧裁决 PR100.8 注明不再适用</td><td>文档与代码同批</td><td class="numeric">5、7</td></tr>
     </tbody>
   </table>
   </div>
@@ -313,7 +340,8 @@ typing in the field (3 characters or more; shorter text never reaches the search
         <li><strong>读文件时</strong>：照旧转圈加「Reading “…”…」，读完回到起始页。</li>
       </ol>
       <p>每个文档在 <code>DocumentSession.open()</code> 里起一个记录器，跟着焦点栏当前标签的对象，把它记到这个 Engine 的列表最前（按身份去重、换形态不算再看一次），最多 10 个，写进 <code>AppDefaults.recentRuntimeObjectsByEngine</code>。一栏只有一个起始页，所以换到另一个标签或页面重新放进栏里时都从头开始。只在 macOS 记。</p>
-      <p><strong>非目标</strong>：App 级欢迎窗口；改 ⇧⌘O 的浮动 Open Quickly；Engine 端按名字找对象或为搜索触发索引；最近列表的右键菜单、移除、清空、拖出与 Xcode 的错误横幅；iOS、visionOS；C++ 对象。</p>
+      <p><strong>⇧⌘O</strong>（第 6、7 步）：File › Open Quickly… 的浮动条（UIFoundation 的 <code>QuickActionBar</code>）挪到窗口一层，与起始页用同一个 <code>OpenQuicklySearch</code>，从 1 个字符起搜、只收下当前这个词的结果；行与起始页的相同，选中的打开在焦点栏。侧栏原来那一份连同它的按需物化机制删掉。</p>
+      <p><strong>非目标</strong>：App 级欢迎窗口；改 ⇧⌘O 浮动条的外观；Engine 端按名字找对象或为搜索触发索引；最近列表的右键菜单、移除、清空、拖出与 Xcode 的错误横幅；iOS、visionOS；C++ 对象。</p>
     </div>
   </details>
 </section>
@@ -381,7 +409,7 @@ typing in the field (3 characters or more; shorter text never reaches the search
 <section id="impact">
   <h2>影响</h2>
   <ul>
-    <li>用户可见：空标签显示起始页；新增按名字找镜像与已索引对象、回到最近看过的对象。⇧⌘O、侧栏、读文件占位、Load Frameworks 页不变。</li>
+    <li>用户可见：空标签显示起始页；新增按名字找镜像与已索引对象、回到最近看过的对象。⇧⌘O 改为搜整个 Engine、从 1 个字符起、有文档窗口时总可用，行与起始页相同；侧栏（除了不再有自己的 Open Quickly）、读文件占位、Load Frameworks 页不变。</li>
     <li>数据：新增 <code>AppStorage/recentRuntimeObjectsByEngine.json</code>，读不出当空，旧版本忽略它。</li>
     <li>平台：只在 macOS 15+；iOS、visionOS 不变。发布：无新权限，不影响公证与 Sparkle。</li>
   </ul>
@@ -395,6 +423,8 @@ typing in the field (3 characters or more; shorter text never reaches the search
     <li><strong>Show All 与打开最近对象</strong>（已完成）：8 行与按钮、双击与回车、沿用标签里的形态、页面复位、点击取焦点。</li>
     <li><strong>Open Quickly 搜索框</strong>（已完成）：目录、共用排序、搜索与按键、结果板、Xcode 外观、焦点。</li>
     <li><strong>文档</strong>（已完成）：<code>AGENTS.md</code>、术语表、索引、自审裁决。</li>
+    <li><strong>⇧⌘O 与起始页同一个搜索</strong>（已完成）：<code>OpenQuicklySearch</code>、浮动条的 VM、命令挪到窗口、共用的行视图；结束搜索时丢掉还在作答的词、核对结果来自哪个 Engine、镜像树为空时不读。</li>
+    <li><strong>删掉侧栏自己的 Open Quickly</strong>（已完成）：输入输出、按需物化、专测与文档段落；侧栏其余行为不变。</li>
   </ol>
   <p>每步过行为测试（先红后绿，另做变异检查）与两位审查者的审查；只能在界面上看到的行为列为目视，未在 App 里实测。</p>
 </section>
@@ -412,7 +442,7 @@ typing in the field (3 characters or more; shorter text never reaches the search
 <section id="log">
   <h2>决策日志</h2>
   <details>
-    <summary>最近一条：实现完成，待用户看过后收尾</summary>
+    <summary>最近一条：实现完成（第 6、7 步），待用户看过后收尾</summary>
     <div class="details-body">
       <div class="table-wrap">
       <table>
@@ -426,6 +456,11 @@ typing in the field (3 characters or more; shorter text never reaches the search
           <tr><td class="numeric">2026-11-21</td><td>与 Xcode 有意不同</td><td>路径行一行；页面不整页滚动；放大镜用 SF Symbols。</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>自审</td><td>SP.1–SP.4、SP.7 修掉（回车等最新结果、按键转交、图标位），SP.5、SP.6、SP.8 不修，理由留档。</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>实现完成，待用户看过后收尾</td><td>不另写指南或实现说明；术语「起始页」已登记；界面目视未做。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>⇧⌘O 与起始页统一</td><td>用户看过初版后要求：Xcode 里两者是同一套搜索。加第 6 步（统一范围，浮动条从 1 个字符起）与第 7 步（删掉侧栏那一份）。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>第 6 步审查后调整</td><td>关掉、打开、换 Engine 都经同一条流复位并丢掉在答的词；结果带上来源 Engine；空镜像树的目录不留用（SP.9–SP.11）。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>第 7 步的取舍</td><td>tag 的 <code>isClickable</code> 参数收掉；单元格模糊模式的性能基线随配置删掉；重载测试改为直接断言列表清空。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>修复再审后调整</td><td>镜像树为空时什么也不读（SP.14）；取消检查补测试，Engine 核对无接缝、不补（SP.15）；补「未加载也清空列表」的测试（SP.16）。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>实现完成（第 6、7 步），待用户看过后收尾</td><td>七步都已完成；⇧⌘O 的界面与按键没在 App 里实测。</td></tr>
         </tbody>
       </table>
       </div>

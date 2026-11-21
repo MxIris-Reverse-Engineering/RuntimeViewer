@@ -12,7 +12,7 @@
 
 ## 摘要
 
-编辑栏里一个空标签（新窗口、⌘T 新开的标签、用关闭按钮清空的唯一一栏）现在只显示一行灰字「Select a runtime object」。本提案照 Xcode 27.2 空编辑器显示的初始页（IDEKit 的 `IDEInitialEditor`）把它换成一张起始页：顶部一个大号的 **Open Quickly** 搜索框，输入满 3 个字符即在框下浮出匹配的镜像与对象，回车或点击打开；下面是 **Recent Objects**，列出这个 Engine 上最近在编辑栏里看过的对象（图标、名字，下面一行是「Engine 〉 镜像」的路径），最多记 10 个、默认显示 8 行、可 Show All 展开，双击或回车打开。最近列表按 Engine 存盘、跨启动保留。读文件时的「Reading …」占位不变。另一个会话在做的 App 级欢迎窗口（启动时、没有文档时出现的窗口）不在本提案范围内。
+编辑栏里一个空标签（新窗口、⌘T 新开的标签、用关闭按钮清空的唯一一栏）现在只显示一行灰字「Select a runtime object」。本提案照 Xcode 27.2 空编辑器显示的初始页（IDEKit 的 `IDEInitialEditor`）把它换成一张起始页：顶部一个大号的 **Open Quickly** 搜索框，输入满 3 个字符即在框下浮出匹配的镜像与对象，回车或点击打开；下面是 **Recent Objects**，列出这个 Engine 上最近在编辑栏里看过的对象（图标、名字，下面一行是「Engine 〉 镜像」的路径），最多记 10 个、默认显示 8 行、可 Show All 展开，双击或回车打开。最近列表按 Engine 存盘、跨启动保留。读文件时的「Reading …」占位不变。File › Open Quickly…（⇧⌘O）的浮动条改成与起始页同一个搜索（第 6 步，用户看过初版后要求），从 1 个字符起就搜，有文档窗口时总可用；侧栏原来只搜当前镜像的那一份 Open Quickly 删掉（第 7 步）。另一个会话在做的 App 级欢迎窗口（启动时、没有文档时出现的窗口）不在本提案范围内。
 
 ## 动机
 
@@ -192,13 +192,16 @@ any pane shows an object
   → ContentPlaceholderViewModel (every empty pane of every window on the engine)
   → rows → ContentPlaceholderViewController
 
-typing in the field
-  → ContentPlaceholderViewModel.searchText (count ≥ minimumInstantQueryLength)
-  → OpenQuicklyCatalog.load(from: engine)   [once per search session]
-       imageNodes + indexedImagePathList() + objects(in:) per indexed image
-  → OpenQuicklyCatalog.matches(for:limit:) → FilterEngine + OpenQuicklyRanking
-  → results → Return / click
-  → .focusEditorPane(paneID) → .open(object, in:) | .openImage(path, in:)
+typing in the start page's field (3 characters or more)      typing in the ⇧⌘O bar (1 character or more)
+  → ContentPlaceholderViewModel                                → OpenQuicklyViewModel (MainWindowController's QuickActionBar)
+                      ↘                                      ↙
+                        OpenQuicklySearch.matches(for:limit:)   [one per page / bar; nothing read while the engine lists no image]
+                          → OpenQuicklyCatalog.load(imagePaths:from:)   [once per search, 8 images at a time]
+                               imageNodes + indexedImagePathList() + objects(in:) per indexed image
+                          → OpenQuicklyCatalog.matches(for:limit:) → FilterEngine + OpenQuicklyRanking
+  → results → Return / click                                   → matches of the bar's current term → Return / click
+  → .focusEditorPane(paneID) → .open(shownForm ?? object, in:) | .openImage(path, in:)
+search ends (field emptied, page starts over / bar closed, item opened, engine switched) → OpenQuicklySearch.end()
 ```
 
 ## 详细设计
@@ -335,7 +338,8 @@ public struct OpenQuicklyCatalog: Sendable {
 
 - 空标签不再显示「Select a runtime object」，改为起始页：Open Quickly 搜索框、Recent Objects 列表（有记录时）。
 - 新增：在起始页的搜索框里可以按名字找镜像与已索引镜像里的对象，回车或点击打开；最近看过的对象出现在列表里，点击回到它。
-- 不变：⇧⌘O 的浮动 Open Quickly、侧栏、读文件时的占位、Load Frameworks 页。
+- 改变：⇧⌘O 的浮动 Open Quickly 搜整个 Engine（镜像 + 已索引镜像的对象）、从 1 个字符起，有文档窗口时总可用，不再只搜侧栏当前镜像；它的行与起始页的相同（图标、名字、路径行）。
+- 不变：侧栏（除了不再有自己的 Open Quickly）、读文件时的占位、Load Frameworks 页。
 
 ### 可发现性
 
@@ -470,3 +474,4 @@ public struct OpenQuicklyCatalog: Sendable {
 | 2026-11-21 | 第 6 步审查后调整 | 审查者指出：关掉浮动条只结束了目录、没丢掉还在作答的词，那次搜索会把目录重新读起来并一直留着；切换 Engine 时旧 Engine 的结果会被标成新 Engine 的；镜像树还没出来时读到的空目录会被留用一整次搜索。改为关掉、打开一项、切换 Engine 都经同一条流复位（与起始页的做法相同），结果带上它来自的 Engine、落地时核对，`OpenQuicklySearch` 在调用方已取消时不再读目录、镜像树为空时不缓存目录；三条各带回归测试。另记为已知：起始页与浮动条各持有一个 `OpenQuicklySearch`，同一窗口里先后用两者会各读一份目录。 |
 | 2026-11-21 | 第 7 步的两处取舍 | 删掉侧栏的 Open Quickly 之后，`RuntimeObjectCellTag.privateDeclaration(isClickable:)` 只剩传 `true` 的调用，收成无参数的 `privateDeclaration`；单元格在「模糊模式」下的性能基线测的是侧栏 Open Quickly 的配置（侧栏自己的过滤不用模糊匹配，生产代码里只剩 `OpenQuicklyCatalog` 用），一并删掉。`SidebarReloadInvalidationTests` 原来经 Open Quickly 的索引验证「重载失败要丢掉上次的列表」，改为直接断言 `nodes` 被清空，去掉清空那一行它会变红；「镜像未加载时也要调钩子」那条随钩子删掉。 |
 | 2026-11-21 | 第 6 步修复与第 7 步审查后调整 | 审查者指出：镜像树为空时不缓存目录，于是每敲一个键都新起一次读取、`end()` 也取消不到，改为此时什么也不读；为 SP.9、SP.10 写的测试有一部分覆盖不到它们点名的检查，取消检查补了测试，结果上的 Engine 核对没有接缝可测、登记为不补；删掉钩子后「镜像未加载也清空列表」没人测了，给重载加了可覆写的 `isImageLoaded()` 补上。另外，全量测试里起始页一条挂起回车的测试在负载下偶尔失败，是测试先于「搜索结束」那一拍断言，改为等到搜索结束。裁决见 `Documentations/KnownIssues/2026-11-21-editor-start-page-review-findings.md` 的 SP.14–SP.16；旧清单里 PR100.8（侧栏 Open Quickly 物化表无上限）随第 7 步不再适用，已在原处注明。 |
+| 2026-11-21 | 实现完成（第 6、7 步），待用户看过后收尾 | 七步都已完成并推送功能分支，第 6、7 步各过了审查关（第 6 步两轮、第 7 步连同第 6 步的修复一轮、修复再复审一轮）。文档判断：⇧⌘O 的变化写进本提案「影响」与 `RuntimeViewerUsingAppKit/AGENTS.md`（惰性 cell ViewModel 一节改述），不另写指南；已裁决清单补 SP.9–SP.16、旧清单 PR100.8 注明不再适用。没做的验证：浮动条与起始页的界面目视、⇧⌘O 的按键与修饰键都没在 App 里实测。 |
