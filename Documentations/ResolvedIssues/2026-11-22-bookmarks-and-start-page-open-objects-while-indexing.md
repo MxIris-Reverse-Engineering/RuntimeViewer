@@ -42,7 +42,8 @@
 - `SidebarImageListLoadWaitTests` 两条回归测试只用修复前就有的 API：一个由测试控制何时加载完的对象列表（`GatedSidebarListViewModel`）挡着时，书签页的 `loadState` 一直是 `.loading`、起始页不列任何对象，放行后两处都列出来。修复前两条都失败，修复后通过。
 - `SidebarImageListLoadTests` 覆盖新接口：进入 image 先等待、列表加载完或失败都结束等待、回到 image 列表清空、只听最后一个上报者、别的 image 的上报不算；书签页转发列表进度；起始页等待时整页换成等待、显示列表的进度、最近列表为空，等待结束时最近对象已经放好，快速加载不显示等待，再次加载重新等待。
 - `ContentStartPageViewModelTests` 的 `enterImage` 改为进入 image 后报一次 `.settled`，表示列表已加载完。
-- 在 JH's Mac Studio Ultra（macOS 27.2、Xcode 27.2）上，两个新套件连同起始页、Open Quickly、image 页、书签页、对象列表、重载失效、`DocumentState` 当前镜像、`AppCoreBoundaryTests`、`CrossPlatformSourceGuardTests` 共 12 个套件 91 条测试全部通过。界面没有在 App 里目视验收。
+- 在 JH's Mac Studio Ultra（macOS 27.2、Xcode 27.2）上，在合进 `next` 的结果上，两个新套件连同起始页、Open Quickly、image 页、书签页、对象列表、重载失效、`DocumentState` 当前镜像、`AppCoreBoundaryTests`、`CrossPlatformSourceGuardTests`，以及同日侧栏重载修复的 `SidebarSelectionAcrossEngineReloadTests`、`SidebarRuntimeObjectTextFilterTests`，共 14 个套件 103 条测试全部通过；App 经 Tuist workspace 编译通过。
+- 用户在 App 里看过界面：起始页最初只把条目区换成进度视图，看过后改成整页等待（见上文「修复」），改后由用户确认收尾。
 
 ## 与侧栏重载修复的关系
 
