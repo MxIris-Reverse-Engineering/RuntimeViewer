@@ -135,7 +135,7 @@ struct SidebarImageListLoadTests {
 
     // MARK: - The start page
 
-    @Test("the start page waits in place of the recent objects, with the list's progress")
+    @Test("the start page gives way to the list's progress alone while it waits")
     func startPageWaitsWithTheListsProgress() async throws {
         let environment = try await makeEnvironment()
         recordRecentObjects([nsObject], in: environment)
@@ -147,16 +147,16 @@ struct SidebarImageListLoadTests {
 
         reporter.report(.loading(swiftTypesProgress))
 
-        _ = try await nextValue(from: startPage.output.recentList) { $0 == .waitingForImageList }
+        _ = try await nextValue(from: startPage.output.placeholder) { $0 == .waitingForImageList }
         let progress = try await nextValue(from: startPage.output.imageListLoadingProgress) { $0 != .preparing }
         #expect(progress == ImageIndexingProgress(fraction: swiftTypesProgress.overallFraction, description: "Extracting Swift types...", itemCount: "120/3400"))
-        #expect(startPage.viewModel.recentItemsTitle == ContentPlaceholderViewModel.recentObjectsTitle)
-        #expect(startPage.viewModel.showAllButton == .hidden)
         #expect(startPage.viewModel.recentItems.isEmpty)
+        #expect(startPage.viewModel.showAllButton == .hidden)
 
         reporter.report(.settled)
-        let recentList = try await nextValue(from: startPage.output.recentList) { $0 != .waitingForImageList }
-        #expect(recentList.items.map(\.item) == [.object(nsObject)])
+        _ = try await nextValue(from: startPage.output.placeholder) { $0 == .noSelection }
+        // The list is in place by the time the page shows again.
+        #expect(startPage.viewModel.recentItems.map(\.item) == [.object(nsObject)])
     }
 
     @Test("a list that loads quickly never shows the wait")
@@ -165,16 +165,16 @@ struct SidebarImageListLoadTests {
         recordRecentObjects([nsObject], in: environment)
         let startPage = makeStartPage(in: environment)
         defer { withExtendedLifetime(startPage) {} }
-        let recentLists = startPage.output.recentList.asObservable().replayAll()
-        let connection = recentLists.connect()
+        let placeholders = startPage.output.placeholder.asObservable().replayAll()
+        let connection = placeholders.connect()
         defer { connection.dispose() }
 
         _ = try enterImage(TestImages.libobjc, in: environment)
         environment.documentState.makeSidebarImageListLoadReporter(forImageAt: TestImages.libobjc).report(.settled)
-        _ = try await nextValue(from: recentLists) { $0.items.map(\.item) == [.object(self.nsObject)] }
+        _ = try await nextValue(from: startPage.output.recentItems) { $0.map(\.item) == [.object(self.nsObject)] }
 
-        let shownLists = try await values(from: recentLists, during: 0.3)
-        #expect(!shownLists.contains(.waitingForImageList))
+        let shownPlaceholders = try await values(from: placeholders, during: 0.3)
+        #expect(!shownPlaceholders.contains(.waitingForImageList))
     }
 
     @Test("the list loading the image again brings the wait back")
@@ -187,14 +187,15 @@ struct SidebarImageListLoadTests {
         let reporter = environment.documentState.makeSidebarImageListLoadReporter(forImageAt: TestImages.libobjc)
         defer { withExtendedLifetime(reporter) {} }
         reporter.report(.settled)
-        _ = try await nextValue(from: startPage.output.recentList) { !$0.items.isEmpty }
+        _ = try await nextValue(from: startPage.output.recentItems) { !$0.isEmpty }
 
         // The image was not loaded, and the user loads it from the sidebar.
         reporter.report(.loading(nil))
 
-        _ = try await nextValue(from: startPage.output.recentList) { $0 == .waitingForImageList }
+        _ = try await nextValue(from: startPage.output.placeholder) { $0 == .waitingForImageList }
         reporter.report(.settled)
-        _ = try await nextValue(from: startPage.output.recentList) { !$0.items.isEmpty }
+        _ = try await nextValue(from: startPage.output.placeholder) { $0 == .noSelection }
+        #expect(!startPage.viewModel.recentItems.isEmpty)
     }
 
     // MARK: - Helpers

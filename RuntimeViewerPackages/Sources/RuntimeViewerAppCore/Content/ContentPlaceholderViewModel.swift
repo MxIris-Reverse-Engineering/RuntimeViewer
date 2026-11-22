@@ -10,7 +10,8 @@ import MemberwiseInit
 /// reading the window's file, that it is. A window opens on a file the moment
 /// the user opens it, and a dyld shared cache keeps the service busy for a
 /// while; without this the window would sit empty with no sign that anything
-/// is happening.
+/// is happening. While the sidebar's object list of the image it is in is
+/// still loading it, the page waits for the list instead.
 public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
     public enum Placeholder: Equatable {
         /// Nothing is selected: the start page.
@@ -18,9 +19,19 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
         /// The window's file is being read, named as the runtime source
         /// picker names it.
         case readingFile(named: String)
+        /// The sidebar is in an image its object list is still loading: the page shows nothing
+        /// but the list's progress (`imageListLoadingProgress`), so that none of the image's
+        /// recent objects opens before the list could open it.
+        case waitingForImageList
     }
 
+    /// What the page is: the window's file being read comes first, then the wait for the
+    /// sidebar's object list, then the start page.
     @RxObserved public private(set) var placeholder: Placeholder = .noSelection
+
+    /// What the window's file being read makes the page (`placeholders(for:)`): `.readingFile`
+    /// while it is read, `.noSelection` otherwise.
+    private var filePlaceholder: Placeholder = .noSelection
 
     /// The button at the end of the recent list's header, after Xcode's initial editor: none
     /// while every recent item shows, otherwise Show All, which becomes Show Less.
@@ -89,33 +100,14 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
     /// The recent list's title while the sidebar is in an image.
     public nonisolated static let recentObjectsTitle = "Recent Objects"
 
-    /// What shows under the recent list's title.
-    public enum RecentListContent: Equatable {
-        /// The recent items, most recent first: the first `defaultRecentRowCount` until Show All.
-        case items([ContentStartPageItemCellViewModel])
-        /// The sidebar's object list of the image the sidebar is in is still loading the image:
-        /// its recent objects show once the list has loaded it, so that none opens before the
-        /// list could open it, and `imageListLoadingProgress` says how far the list got.
-        case waitingForImageList
+    /// What the start page lists, most recent first, following the sidebar: the engine's recent
+    /// images while the sidebar is at its image list, the recent objects of the image the sidebar is
+    /// in once it is in one — none while the page waits for the sidebar's object list of that image
+    /// (`.waitingForImageList`). The first `defaultRecentRowCount` until Show All.
+    @RxObserved public private(set) var recentItems: [ContentStartPageItemCellViewModel] = []
 
-        public var items: [ContentStartPageItemCellViewModel] {
-            guard case .items(let items) = self else { return [] }
-            return items
-        }
-    }
-
-    /// What the start page lists, following the sidebar: the engine's recent images while the
-    /// sidebar is at its image list, the recent objects of the image the sidebar is in once it is
-    /// in one — or, while the sidebar's list of that image is still loading it, the wait for it.
-    @RxObserved public private(set) var recentList: RecentListContent = .items([])
-
-    /// The recent items `recentList` shows; none while it waits.
-    public var recentItems: [ContentStartPageItemCellViewModel] {
-        recentList.items
-    }
-
-    /// How far the sidebar's object list of its image got, which the page shows in place of the
-    /// recent objects while `recentList` waits for it.
+    /// How far the sidebar's object list of its image got, which the page shows while it waits for
+    /// the list (`.waitingForImageList`).
     @RxObserved public private(set) var imageListLoadingProgress: ImageIndexingProgress = .preparing
 
     /// The recent list's title: `recentImagesTitle` or `recentObjectsTitle`, after the list on show.
@@ -126,7 +118,7 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
     /// Every recent item of the list the sidebar picks, most recent first.
     private var allRecentItems: [ContentStartPageItemCellViewModel] = []
 
-    /// Whether the list the sidebar picks waits for the sidebar's object list of its image.
+    /// Whether the page waits for the sidebar's object list of the image the sidebar is in.
     private var isWaitingForImageList = false
 
     /// Whether Show All is on. It stays on while the list changes, as Xcode's `@State` does, and
@@ -156,7 +148,11 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
             }
             .distinctUntilChanged()
             .observeOnMainScheduler()
-            .bind(to: $placeholder)
+            .subscribeOnNext { [weak self] filePlaceholder in
+                guard let self else { return }
+                self.filePlaceholder = filePlaceholder
+                updatePlaceholder()
+            }
             .disposed(by: rx.disposeBag)
         followRecentItems()
         followImageListLoadingProgress()
@@ -282,19 +278,19 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
             if title != recentItemsTitle {
                 recentItemsTitle = title
             }
+            // The list before the page: a wait that ends shows the page with its list in place.
             updateShownRecentItems()
+            updatePlaceholder()
         }
         .disposed(by: rx.disposeBag)
     }
 
-    /// Shows the recent items Show All lets through, and the button that says which — or the wait
-    /// for the sidebar's object list, without a button.
+    /// Shows the recent items Show All lets through, and the button that says which.
     private func updateShownRecentItems() {
         let canShowMore = allRecentItems.count > Self.defaultRecentRowCount
         let shownItems = canShowMore && !isShowingAllRecentItems ? Array(allRecentItems.prefix(Self.defaultRecentRowCount)) : allRecentItems
-        let shownList: RecentListContent = isWaitingForImageList ? .waitingForImageList : .items(shownItems)
-        if shownList != recentList {
-            recentList = shownList
+        if shownItems != recentItems {
+            recentItems = shownItems
         }
         let button: ShowAllButton = canShowMore ? (isShowingAllRecentItems ? .showLess : .showAll) : .hidden
         if button != showAllButton {
@@ -302,8 +298,23 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
         }
     }
 
-    /// Whether the recent objects of the image at `imagePath` wait for the sidebar's object list of
-    /// it: `true` while the list has not settled (`DocumentState.sidebarImageListLoad`), through the
+    /// Shows what the page is: the window's file being read, the wait for the sidebar's object
+    /// list, or the start page, in that order.
+    private func updatePlaceholder() {
+        let shownPlaceholder: Placeholder = if filePlaceholder != .noSelection {
+            filePlaceholder
+        } else if isWaitingForImageList {
+            .waitingForImageList
+        } else {
+            .noSelection
+        }
+        if shownPlaceholder != placeholder {
+            placeholder = shownPlaceholder
+        }
+    }
+
+    /// Whether the page waits for the sidebar's object list of the image at `imagePath`, in place
+    /// of the image's recent objects: `true` while the list has not settled (`DocumentState.sidebarImageListLoad`), through the
     /// shared loading timing, one wait at a time, each to its end — a list that loads quickly makes
     /// the page wait without showing it, and a wait that shows stays up long enough not to blink.
     /// Until the first answer comes nothing does, so what the page showed stays until then. A
@@ -493,12 +504,9 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
 
     public struct Output {
         public let placeholder: Driver<Placeholder>
-        /// The recent items, or the wait for the sidebar's object list in their place.
-        public let recentList: Driver<RecentListContent>
-        /// The items `recentList` shows, for the table's rows; none while it waits.
         public let recentItems: Driver<[ContentStartPageItemCellViewModel]>
-        /// How far the sidebar's object list got, for the progress view shown while `recentList`
-        /// waits.
+        /// How far the sidebar's object list got, for the progress shown while the page waits for
+        /// it (`.waitingForImageList`).
         public let imageListLoadingProgress: Driver<ImageIndexingProgress>
         public let recentItemsTitle: Driver<String>
         public let showAllButton: Driver<ShowAllButton>
@@ -571,8 +579,7 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
 
         return Output(
             placeholder: $placeholder.asDriver(),
-            recentList: $recentList.asDriver(),
-            recentItems: $recentList.asDriver().map(\.items).distinctUntilChanged(),
+            recentItems: $recentItems.asDriver(),
             imageListLoadingProgress: $imageListLoadingProgress.asDriver(),
             recentItemsTitle: $recentItemsTitle.asDriver(),
             showAllButton: $showAllButton.asDriver(),
