@@ -46,6 +46,12 @@ final class ContentPlaceholderViewController: BaseViewController<ContentPlacehol
 
     private let (recentItemsScrollView, recentItemsTableView): (ScrollView, RecentItemsTableView) = RecentItemsTableView.scrollableTableView()
 
+    /// In place of the recent objects while the sidebar's object list of its image is still
+    /// loading it: the list's own progress, as the sidebar shows it.
+    private let imageListLoadingView = ImageIndexingProgressView().then {
+        $0.isHidden = true
+    }
+
     // MARK: - Search Results
 
     /// The results of the Open Quickly field, floating over the recent items just under the
@@ -100,6 +106,7 @@ final class ContentPlaceholderViewController: BaseViewController<ContentPlacehol
             recentItemsTitleLabel
             showAllButton
             recentItemsScrollView
+            imageListLoadingView
             searchResultsPlatterView
         }
         searchResultsPlatterView.contentView = searchResultsScrollView
@@ -137,6 +144,11 @@ final class ContentPlaceholderViewController: BaseViewController<ContentPlacehol
             make.leading.equalTo(searchField).inset(Metrics.sectionHorizontalInset + Metrics.listLeadingInset)
             make.trailing.equalTo(searchField).inset(Metrics.sectionHorizontalInset)
             make.bottom.equalToSuperview()
+        }
+
+        // Where the recent objects would be.
+        imageListLoadingView.snp.makeConstraints { make in
+            make.edges.equalTo(recentItemsScrollView)
         }
 
         recentItemsScrollView.do {
@@ -290,8 +302,6 @@ final class ContentPlaceholderViewController: BaseViewController<ContentPlacehol
         output.recentItems.driveOnNext { [weak self] recentItems in
             guard let self else { return }
             shownRecentItems = recentItems
-            recentItemsTitleLabel.isHidden = recentItems.isEmpty
-            recentItemsScrollView.isHidden = recentItems.isEmpty
             // The selection follows its object, wherever the new list puts it; an object the list
             // let go of — Show Less hides it — leaves the focused list on its first row, so that
             // Return still has something to open.
@@ -303,6 +313,28 @@ final class ContentPlaceholderViewController: BaseViewController<ContentPlacehol
                 recentItemsTableView.deselectAll(nil)
                 recentItemsTableView.selectFirstRowIfFocusedWithoutSelection()
             }
+        }
+        .disposed(by: rx.disposeBag)
+
+        // The title stays over the wait: it names what is coming.
+        output.recentList.driveOnNext { [weak self] recentList in
+            guard let self else { return }
+            switch recentList {
+            case .items(let recentItems):
+                recentItemsTitleLabel.isHidden = recentItems.isEmpty
+                recentItemsScrollView.isHidden = recentItems.isEmpty
+                imageListLoadingView.isHidden = true
+            case .waitingForImageList:
+                recentItemsTitleLabel.isHidden = false
+                recentItemsScrollView.isHidden = true
+                imageListLoadingView.isHidden = false
+            }
+        }
+        .disposed(by: rx.disposeBag)
+
+        output.imageListLoadingProgress.driveOnNext { [weak self] progress in
+            guard let self else { return }
+            imageListLoadingView.show(fraction: progress.fraction, description: progress.description, itemCount: progress.itemCount)
         }
         .disposed(by: rx.disposeBag)
 

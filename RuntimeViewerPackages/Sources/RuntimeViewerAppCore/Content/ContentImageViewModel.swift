@@ -51,32 +51,6 @@ public final class ContentImageViewModel: ViewModel<ContentRoute> {
         public let count: Int
     }
 
-    /// How far the indexing has come, as the sidebar's loading view shows it.
-    public struct IndexingProgress: Equatable, Sendable {
-        public let fraction: Double
-
-        public let description: String
-
-        /// "120/3400", or empty while the phase counts nothing.
-        public let itemCount: String
-
-        public static let preparing = IndexingProgress(fraction: 0, description: "Preparing...", itemCount: "")
-
-        public init(fraction: Double, description: String, itemCount: String) {
-            self.fraction = fraction
-            self.description = description
-            self.itemCount = itemCount
-        }
-
-        init(_ progress: RuntimeObjectsLoadingProgress) {
-            self.init(
-                fraction: progress.overallFraction,
-                description: progress.phase.displayDescription,
-                itemCount: progress.totalCount > 0 ? "\(progress.currentCount)/\(progress.totalCount)" : ""
-            )
-        }
-    }
-
     public let imagePath: String
 
     public let imageName: String
@@ -85,7 +59,7 @@ public final class ContentImageViewModel: ViewModel<ContentRoute> {
 
     /// The progress of the indexing under way, for the progress view `.indexing` shows; it says
     /// nothing in any other state.
-    @RxObserved public private(set) var indexingProgress: IndexingProgress = .preparing
+    @RxObserved public private(set) var indexingProgress: ImageIndexingProgress = .preparing
 
     private let retryRelay = PublishRelay<Void>()
 
@@ -133,7 +107,7 @@ public final class ContentImageViewModel: ViewModel<ContentRoute> {
                     let objects = try await resolvedIndexer(imagePath) { [weak self] progress in
                         await MainActor.run { [weak self] in
                             guard let self else { return }
-                            indexingProgress = IndexingProgress(progress)
+                            indexingProgress = ImageIndexingProgress(progress)
                         }
                     }
                     return .indexed(Summary(objects: objects))
@@ -158,7 +132,7 @@ public final class ContentImageViewModel: ViewModel<ContentRoute> {
 
     public struct Output {
         public let state: Driver<State>
-        public let indexingProgress: Driver<IndexingProgress>
+        public let indexingProgress: Driver<ImageIndexingProgress>
     }
 
     public func transform(_ input: Input) -> Output {

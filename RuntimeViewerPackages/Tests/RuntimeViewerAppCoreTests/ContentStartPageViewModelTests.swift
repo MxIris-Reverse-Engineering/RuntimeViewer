@@ -60,9 +60,11 @@ struct ContentStartPageViewModelTests {
 
     private let imageTree = Fixtures.imageTree(rootName: "Others", imagePaths: [Fixtures.sampleImagePath, "/usr/lib/libOther.dylib"])
 
-    /// Takes the sidebar of `environment` into the image at `imagePath`.
+    /// Takes the sidebar of `environment` into the image at `imagePath`, its object list loaded: the
+    /// recent objects wait for that list until then (`DocumentState.sidebarImageListLoad`).
     private func enterImage(at imagePath: String = Fixtures.sampleImagePath, in environment: ViewModelTestEnvironment) throws {
         environment.documentState.selectionRouter.trigger(.switchImage(try #require(imageTree.leaf(forImagePath: imagePath))))
+        environment.documentState.makeSidebarImageListLoadReporter(forImageAt: imagePath).report(.settled)
     }
 
     // MARK: - Levels

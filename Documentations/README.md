@@ -112,6 +112,7 @@
 
 按时间倒序。
 
+- [image 还在索引，书签页和起始页的条目就能点开](ResolvedIssues/2026-11-22-bookmarks-and-start-page-open-objects-while-indexing.md)（2026-11-22）—— 侧栏对象列表在显示索引进度时，同一个 image 的书签页和起始页的 Recent Objects 已列出条目、能双击打开：两处都从本地存储读，不经过引擎，也不知道列表加载到了哪一步。对象列表改为把自己的阶段报给 `DocumentState.sidebarImageListLoad`（`.switchImage` 先置为等待，只听最后一个列表），书签页在列表加载完之前显示同一块进度页并转发列表的进度，起始页的最近列表改成一个状态值，等待时换成同款进度视图、经共用的 loading 时序。`SidebarImageListLoadWaitTests` 两条修复前红、修复后绿。
 - [Mac Catalyst 类的 Hierarchy 把父类 `NSObject` 显示成 AppKit 里的 `NSObject` 协议](ResolvedIssues/2026-11-20-borrowed-superclass-resolved-as-protocol.md)（2026-11-20）—— 0081 之后借用方不索引借来的系统镜像，父类只剩名字，交给归属 engine 按名字解析；归属 engine 取第一棵名字对得上的树，不分类和协议，没索引 libobjc 时只对得上别的镜像带的协议副本。关系节点加了可选的 `typeKind`，跨 engine 按名字和种类解析；父类链在归属 engine 没索引定义镜像时按需索引。Find 的 Ancestor Types 同样修好。
 - [不带版本号运行 UpdateSourceEditorScript.sh，把 pin 从 27.2.0-alpha.1 退回 26.6.6](ResolvedIssues/2026-11-12-update-source-editor-moved-the-pin-back.md)（2026-11-12）—— 脚本不带版本号时取 GitHub 的 Latest 发布，Latest 不含预发布版，于是从 27 线的预发布版退回 26.6 线；比钉的版本旧也照退。改为在钉的版本所在的线（主版本号相同）里取最新的发布、含预发布版，不带版本号时绝不往回退；`version_is_after` 改按语义化版本比较，正式版排在它的预发布版之后。
 

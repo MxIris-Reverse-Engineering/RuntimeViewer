@@ -22,7 +22,41 @@ public final class SidebarRuntimeObjectBookmarkViewModel: SidebarRuntimeObjectVi
     override func buildRuntimeObjects() async throws -> [RuntimeObject] {
         currentImageObjectBookmarks.map { $0.object }
     }
-    
+
+    /// The bookmarks, once the sidebar's object list has loaded the image: while the list shows its
+    /// loading page this page shows it too, with the list's progress, so that no bookmark of the
+    /// image opens before the list could open it (`DocumentState.sidebarImageListLoad`). Without a
+    /// list on the image — the document has none, as in a test — the bookmarks show at once.
+    override func buildRuntimeObjectsStream() -> AsyncThrowingStream<RuntimeObjectsLoadingEvent, Error> {
+        AsyncThrowingStream { continuation in
+            let imagePath = imagePath
+            // Set up before subscribing: the document's report replays at once, and a list that
+            // has settled already ends the stream in the middle of the subscription.
+            let subscription = SingleAssignmentDisposable()
+            continuation.onTermination = { _ in
+                subscription.dispose()
+            }
+            subscription.setDisposable(
+                documentState.$sidebarImageListLoad.asObservable()
+                    .map { load -> SidebarImageListLoad.Phase in
+                        guard let load, load.imagePath == imagePath else { return .settled }
+                        return load.phase
+                    }
+                    .subscribeOnNextMainActor { [weak self] phase in
+                        switch phase {
+                        case .loading(let progress):
+                            if let progress {
+                                continuation.yield(.progress(progress))
+                            }
+                        case .settled:
+                            continuation.yield(.completed(self?.currentImageObjectBookmarks.map(\.object) ?? []))
+                            continuation.finish()
+                        }
+                    }
+            )
+        }
+    }
+
     private var currentImageObjectBookmarks: [RuntimeObjectBookmark] {
         set {
             var dict = appDefaults.objectBookmarksByScopeAndImagePath

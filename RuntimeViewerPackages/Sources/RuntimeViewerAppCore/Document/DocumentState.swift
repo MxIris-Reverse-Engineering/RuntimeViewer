@@ -216,6 +216,44 @@ public final class DocumentState {
     @RxObserved
     public fileprivate(set) var currentImageNode: RuntimeImageNode?
 
+    /// Where the sidebar's object list of `currentImageNode` stands, as the
+    /// list reports it (`makeSidebarImageListLoadReporter(forImageAt:)`); `nil`
+    /// at the image-list root. The `.switchImage` route that moves the sidebar
+    /// into an image puts `.loading(nil)` in place for it before
+    /// `currentImageNode` changes, so whatever follows the image sees it
+    /// waiting from the start, before the list is even made. The image's
+    /// bookmarks page and the start page's recent objects follow it: they show
+    /// the list's loading page while it is not `.settled`.
+    @RxObserved
+    public private(set) var sidebarImageListLoad: SidebarImageListLoad?
+
+    /// The one reporter heard: the one made last for `currentImageNode`.
+    private weak var sidebarImageListLoadReporter: SidebarImageListLoadReporter?
+
+    /// The right to report where the sidebar's object list of the image at
+    /// `imagePath` stands, for the list made for it. Making one silences every
+    /// reporter made before it; one made for an image the sidebar is not in is
+    /// never heard.
+    public func makeSidebarImageListLoadReporter(forImageAt imagePath: String) -> SidebarImageListLoadReporter {
+        let reporter = SidebarImageListLoadReporter(imagePath: imagePath, documentState: self)
+        if currentImageNode?.path == imagePath {
+            sidebarImageListLoadReporter = reporter
+        }
+        return reporter
+    }
+
+    func receiveSidebarImageListLoad(_ phase: SidebarImageListLoad.Phase, from reporter: SidebarImageListLoadReporter) {
+        guard reporter === sidebarImageListLoadReporter, currentImageNode?.path == reporter.imagePath else { return }
+        sidebarImageListLoad = SidebarImageListLoad(imagePath: reporter.imagePath, phase: phase)
+    }
+
+    /// Starts the wait for the sidebar's object list of `node` over, ahead of
+    /// `currentImageNode` moving to it: no list has reported on it yet.
+    fileprivate func resetSidebarImageListLoad(for node: RuntimeImageNode?) {
+        sidebarImageListLoadReporter = nil
+        sidebarImageListLoad = node.map { SidebarImageListLoad(imagePath: $0.path, phase: .loading(nil)) }
+    }
+
     /// The editor area: its panes, each pane's tabs, each tab's history, how
     /// the panes are arranged and which one has the focus (proposal
     /// `editor-panes`). One value, so that no reader sees a layout and
@@ -501,6 +539,7 @@ private final class SelectionRouter: Router {
             } else {
                 documentState.putSessionInPlaceAgain()
             }
+            documentState.resetSidebarImageListLoad(for: nil)
             documentState.currentImageNode = nil
             // Everything open belonged to the engine left behind: start over
             // with one empty pane.
@@ -509,6 +548,7 @@ private final class SelectionRouter: Router {
             // Only the sidebar moves; the editor area keeps every object open,
             // whichever image it belongs to.
             guard documentState.currentImageNode != node else { return }
+            documentState.resetSidebarImageListLoad(for: node)
             documentState.currentImageNode = node
         case .open(let object, let destination, let highlightRequest, let interfaceLanguage):
             let entry = NavigationEntry(object: object, interfaceLanguage: interfaceLanguage)

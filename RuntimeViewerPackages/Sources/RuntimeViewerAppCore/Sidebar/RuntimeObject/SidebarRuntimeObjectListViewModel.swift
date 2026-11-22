@@ -21,6 +21,42 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
 
     override var isSorted: Bool { true }
 
+    /// Tells the document where this list stands, for the image's bookmarks page and the start
+    /// page's recent objects (`DocumentState.sidebarImageListLoad`).
+    private let loadReporter: SidebarImageListLoadReporter
+
+    public override init(imageNode: RuntimeImageNode, documentState: DocumentState, router: any Router<SidebarRuntimeObjectRoute>) {
+        self.loadReporter = documentState.makeSidebarImageListLoadReporter(forImageAt: imageNode.path)
+        super.init(imageNode: imageNode, documentState: documentState, router: router)
+        reportLoadStateChanges()
+    }
+
+    /// Reports the list's loading page as it comes and goes: waiting while the list has not decided
+    /// what to show or shows its loading page, settled once it shows anything else. The first
+    /// reload runs in a task of its own, so it starts after this subscription.
+    private func reportLoadStateChanges() {
+        $loadState.asObservable()
+            .map { loadState -> Bool in
+                switch loadState {
+                case .unknown, .loading: false
+                case .loaded, .notLoaded, .loadError: true
+                }
+            }
+            .distinctUntilChanged()
+            .subscribeOnNextMainActor { [weak self] isSettled in
+                guard let self else { return }
+                loadReporter.report(isSettled ? .settled : .loading(nil))
+            }
+            .disposed(by: rx.disposeBag)
+    }
+
+    /// Reports the progress of the build behind the loading page. A reload of a list kept on
+    /// screen builds too, and reports nothing: the list is not loading as far as the user sees.
+    private func reportLoadingProgress(_ progress: RuntimeObjectsLoadingProgress) {
+        guard loadState == .loading else { return }
+        loadReporter.report(.loading(progress))
+    }
+
     public static func findCell(
         for object: RuntimeObject,
         in nodes: [SidebarRuntimeObjectCellViewModel]
@@ -163,10 +199,16 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
                 }
                 let runtimeEngine = runtimeEngine
                 let imagePath = imagePath
+                let reportLoadingProgress: @Sendable (RuntimeObjectsLoadingProgress) async -> Void = { [weak self] progress in
+                    await MainActor.run { [weak self] in
+                        self?.reportLoadingProgress(progress)
+                    }
+                }
                 let streamObjects: @Sendable (_ reportProgress: @escaping @Sendable (RuntimeObjectsLoadingProgress) async -> Void) async throws -> Void = { reportProgress in
                     for try await event in await runtimeEngine.objectsWithProgress(in: imagePath, includesCPlusPlusObjects: true) {
                         if case .progress(let progress) = event {
                             await reportProgress(progress)
+                            await reportLoadingProgress(progress)
                         }
                         continuation.yield(event)
                     }
