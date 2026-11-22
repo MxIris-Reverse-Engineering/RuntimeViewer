@@ -7,7 +7,8 @@ import RuntimeViewerApplication
 /// An editor pane with nothing open: the start page — Xcode 27.2's initial editor, an Open Quickly
 /// field over the engine's recent images, or the recent objects of the image the sidebar is in
 /// (proposal `editor-start-page`) — or, while the window's file is still being read, a spinner that
-/// says so.
+/// says so, and while the sidebar's object list of its image is still loading it, that list's
+/// progress alone.
 final class ContentPlaceholderViewController: BaseViewController<ContentPlaceholderViewModel> {
     // MARK: - Relays
 
@@ -46,12 +47,6 @@ final class ContentPlaceholderViewController: BaseViewController<ContentPlacehol
 
     private let (recentItemsScrollView, recentItemsTableView): (ScrollView, RecentItemsTableView) = RecentItemsTableView.scrollableTableView()
 
-    /// In place of the recent objects while the sidebar's object list of its image is still
-    /// loading it: the list's own progress, as the sidebar shows it.
-    private let imageListLoadingView = ImageIndexingProgressView().then {
-        $0.isHidden = true
-    }
-
     // MARK: - Search Results
 
     /// The results of the Open Quickly field, floating over the recent items just under the
@@ -89,6 +84,14 @@ final class ContentPlaceholderViewController: BaseViewController<ContentPlacehol
         readingLabel
     }
 
+    // MARK: - Waiting for the Sidebar's Object List
+
+    /// In place of the whole page while the sidebar's object list of its image is still loading
+    /// it: the list's own progress, as the sidebar and the image page show it.
+    private let imageListLoadingView = ImageIndexingProgressView().then {
+        $0.isHidden = true
+    }
+
     override var containerViewUsingSafeArea: Bool { true }
 
     // MARK: - Lifecycle
@@ -99,6 +102,7 @@ final class ContentPlaceholderViewController: BaseViewController<ContentPlacehol
         containerView.hierarchy {
             startPageView
             readingStackView
+            imageListLoadingView
         }
 
         startPageView.hierarchy {
@@ -106,7 +110,6 @@ final class ContentPlaceholderViewController: BaseViewController<ContentPlacehol
             recentItemsTitleLabel
             showAllButton
             recentItemsScrollView
-            imageListLoadingView
             searchResultsPlatterView
         }
         searchResultsPlatterView.contentView = searchResultsScrollView
@@ -117,6 +120,10 @@ final class ContentPlaceholderViewController: BaseViewController<ContentPlacehol
 
         readingStackView.snp.makeConstraints { make in
             make.center.equalTo(containerView)
+        }
+
+        imageListLoadingView.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
         }
 
         // One centred column, 200 to 700 points wide, 32 points from either side of the page.
@@ -144,11 +151,6 @@ final class ContentPlaceholderViewController: BaseViewController<ContentPlacehol
             make.leading.equalTo(searchField).inset(Metrics.sectionHorizontalInset + Metrics.listLeadingInset)
             make.trailing.equalTo(searchField).inset(Metrics.sectionHorizontalInset)
             make.bottom.equalToSuperview()
-        }
-
-        // Where the recent objects would be.
-        imageListLoadingView.snp.makeConstraints { make in
-            make.edges.equalTo(recentItemsScrollView)
         }
 
         recentItemsScrollView.do {
@@ -267,12 +269,20 @@ final class ContentPlaceholderViewController: BaseViewController<ContentPlacehol
                 startPageView.isHidden = false
                 readingStackView.isHidden = true
                 readingIndicator.stopAnimation(nil)
+                imageListLoadingView.isHidden = true
             case .readingFile(let name):
                 resignFocus(within: startPageView)
                 startPageView.isHidden = true
                 readingStackView.isHidden = false
                 readingLabel.stringValue = "Reading “\(name)”…"
                 readingIndicator.startAnimation(nil)
+                imageListLoadingView.isHidden = true
+            case .waitingForImageList:
+                resignFocus(within: startPageView)
+                startPageView.isHidden = true
+                readingStackView.isHidden = true
+                readingIndicator.stopAnimation(nil)
+                imageListLoadingView.isHidden = false
             }
         }
         .disposed(by: rx.disposeBag)
@@ -302,6 +312,8 @@ final class ContentPlaceholderViewController: BaseViewController<ContentPlacehol
         output.recentItems.driveOnNext { [weak self] recentItems in
             guard let self else { return }
             shownRecentItems = recentItems
+            recentItemsTitleLabel.isHidden = recentItems.isEmpty
+            recentItemsScrollView.isHidden = recentItems.isEmpty
             // The selection follows its object, wherever the new list puts it; an object the list
             // let go of — Show Less hides it — leaves the focused list on its first row, so that
             // Return still has something to open.
@@ -312,22 +324,6 @@ final class ContentPlaceholderViewController: BaseViewController<ContentPlacehol
             } else {
                 recentItemsTableView.deselectAll(nil)
                 recentItemsTableView.selectFirstRowIfFocusedWithoutSelection()
-            }
-        }
-        .disposed(by: rx.disposeBag)
-
-        // The title stays over the wait: it names what is coming.
-        output.recentList.driveOnNext { [weak self] recentList in
-            guard let self else { return }
-            switch recentList {
-            case .items(let recentItems):
-                recentItemsTitleLabel.isHidden = recentItems.isEmpty
-                recentItemsScrollView.isHidden = recentItems.isEmpty
-                imageListLoadingView.isHidden = true
-            case .waitingForImageList:
-                recentItemsTitleLabel.isHidden = false
-                recentItemsScrollView.isHidden = true
-                imageListLoadingView.isHidden = false
             }
         }
         .disposed(by: rx.disposeBag)
