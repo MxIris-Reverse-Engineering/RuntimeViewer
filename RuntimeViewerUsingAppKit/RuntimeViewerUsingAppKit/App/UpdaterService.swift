@@ -81,7 +81,7 @@ final class UpdaterService: NSObject {
         updaterClient.setCurrentVersionDisplay(UpdaterClient.defaultVersionDisplay())
         updaterClient.setLastCheckDate(updater.lastUpdateCheckDate)
         updaterClient.setIsSessionInProgress(updater.sessionInProgress)
-        updaterClient.setLastCheckError(nil)
+        updaterClient.setLastCheckResult(nil)
         updaterClient.checkForUpdates = { [weak controller] in
             controller?.checkForUpdates(nil)
         }
@@ -155,10 +155,12 @@ extension UpdaterService: SPUUpdaterDelegate {
     }
 
     nonisolated func updater(_ updater: SPUUpdater, didAbortWithError error: Error) {
-        let message = error.localizedDescription
-        #log(.error, "Sparkle updater aborted: \(message, privacy: .public)")
+        let result = Self.checkResult(for: error)
+        if case .failed(let message) = result {
+            #log(.error, "Sparkle updater aborted: \(message, privacy: .public)")
+        }
         Task { @MainActor [weak self] in
-            self?.updaterClient.setLastCheckError(error)
+            self?.updaterClient.setLastCheckResult(result)
             self?.updaterClient.setIsSessionInProgress(false)
         }
     }
@@ -168,12 +170,35 @@ extension UpdaterService: SPUUpdaterDelegate {
         didFinishUpdateCycleFor updateCheck: SPUUpdateCheck,
         error: Error?
     ) {
+        let result = Self.checkResult(for: error)
         Task { @MainActor [weak self, weak updater] in
             guard let self, let updater else { return }
             self.updaterClient.setLastCheckDate(updater.lastUpdateCheckDate)
             self.updaterClient.setIsSessionInProgress(updater.sessionInProgress)
-            self.updaterClient.setLastCheckError(error)
+            self.updaterClient.setLastCheckResult(result)
         }
+    }
+
+    /// How a check that ended with `error` reads on the Updates page.
+    ///
+    /// Sparkle reports a check that found no newer release as an error, and an installation the user
+    /// cancelled or put off too; like Sparkle's own log, these are no failure. `nil` — nothing to show —
+    /// is also a check that found an update, which Sparkle's own window takes the user through.
+    private nonisolated static func checkResult(for error: Error?) -> UpdaterClient.CheckResult? {
+        guard let error else { return nil }
+        let bridgedError = error as NSError
+        if bridgedError.domain == SUSparkleErrorDomain,
+           let sparkleError = Int32(exactly: bridgedError.code).flatMap(SUError.init(rawValue:)) {
+            switch sparkleError {
+            case .noUpdateError:
+                return .upToDate
+            case .installationCanceledError, .installationAuthorizeLaterError:
+                return nil
+            default:
+                break
+            }
+        }
+        return .failed(message: error.localizedDescription)
     }
 }
 

@@ -9,10 +9,20 @@ import Observation
 @Observable
 @MainActor
 public final class UpdaterClient {
+    /// How the last update check of this session ended, as the Updates page shows it.
+    ///
+    /// A check that found an update has no result here: Sparkle's own window takes the user through it.
+    public enum CheckResult: Equatable, Sendable {
+        /// The check found no newer release.
+        case upToDate
+        /// The check failed, for the reason in `message`.
+        case failed(message: String)
+    }
+
     public private(set) var currentVersionDisplay: String
     public private(set) var lastCheckDate: Date?
     public private(set) var isSessionInProgress: Bool
-    public private(set) var lastCheckError: Error?
+    public private(set) var lastCheckResult: CheckResult?
 
     public var checkForUpdates: @MainActor () -> Void
 
@@ -20,13 +30,13 @@ public final class UpdaterClient {
         currentVersionDisplay: String = UpdaterClient.defaultVersionDisplay(),
         lastCheckDate: Date? = nil,
         isSessionInProgress: Bool = false,
-        lastCheckError: Error? = nil,
+        lastCheckResult: CheckResult? = nil,
         checkForUpdates: @escaping @MainActor () -> Void = {}
     ) {
         self.currentVersionDisplay = currentVersionDisplay
         self.lastCheckDate = lastCheckDate
         self.isSessionInProgress = isSessionInProgress
-        self.lastCheckError = lastCheckError
+        self.lastCheckResult = lastCheckResult
         self.checkForUpdates = checkForUpdates
     }
 
@@ -42,8 +52,8 @@ public final class UpdaterClient {
         isSessionInProgress = value
     }
 
-    public func setLastCheckError(_ value: Error?) {
-        lastCheckError = value
+    public func setLastCheckResult(_ value: CheckResult?) {
+        lastCheckResult = value
     }
 
     // Nonisolated so it can be invoked from default-argument context (which

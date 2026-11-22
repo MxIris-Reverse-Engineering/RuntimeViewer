@@ -23,12 +23,26 @@ struct UpdateSettingsView: View {
                 LabeledContent("Current Version", value: updaterClient.currentVersionDisplay)
                 LabeledContent("Last Check",
                                value: UpdaterClient.lastCheckDisplay(for: updaterClient.lastCheckDate, relativeTo: now))
-                if let error = updaterClient.lastCheckError {
-                    LabeledContent("Last Check Error") {
-                        Text(error.localizedDescription)
-                            .foregroundStyle(.red)
-                            .textSelection(.enabled)
-                            .multilineTextAlignment(.trailing)
+                if let result = updaterClient.lastCheckResult {
+                    LabeledContent("Result") {
+                        switch result {
+                        case .upToDate:
+                            Label {
+                                Text("Up to date")
+                            } icon: {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(.green)
+                            }
+                        case .failed(let message):
+                            Label {
+                                Text(message)
+                                    .textSelection(.enabled)
+                                    .multilineTextAlignment(.trailing)
+                            } icon: {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundStyle(.orange)
+                            }
+                        }
                     }
                 }
                 HStack {
