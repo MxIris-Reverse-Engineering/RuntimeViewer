@@ -116,6 +116,11 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
             $0.addTabViewItem(NSTabViewItem(view: imageUnknownView, loadState: .unknown))
         }
 
+        // A reload whose list changed — the engine reloads after every batch of background
+        // indexing — leaves the selection on the row's object rather than on its index: the view
+        // model keeps the cells of the objects it still lists, so the outline finds the item again.
+        outlineView.preservesSelectedItemAcrossReloads = true
+
         imageLoadedView.filterModeItem.do {
             $0.selectedChoice = appDefaults.filterMode
             // The view model filters again when the mode changes.

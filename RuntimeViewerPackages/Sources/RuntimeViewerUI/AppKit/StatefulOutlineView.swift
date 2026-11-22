@@ -20,8 +20,8 @@ open class StatefulOutlineView: OutlineView {
     /// *index*, so a reload that inserts rows above the selection moves the highlight onto another
     /// item. Needs items whose `==` is their identity, so the item that replaces the selected one
     /// finds its row; the selection goes when no row has it any more. The list is not scrolled to
-    /// it: the user's place stays where it was. Off by default — the sidebar restores its own
-    /// selection.
+    /// it: the user's place stays where it was. Off by default; the Report navigator and the
+    /// runtime-object lists, whose view models keep their cells across reloads, turn it on.
     open var preservesSelectedItemAcrossReloads = false
 
     // MARK: - Expansion Autosave Configuration

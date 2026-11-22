@@ -147,14 +147,13 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
                         // synchronously below) and the batch-completion
                         // broadcast (delivered when the background batch
                         // wraps up) would otherwise both run `reloadData`,
-                        // and whichever finished second would clobber the
-                        // first one's `nodes` / `filteredNodes` / `loadState`
-                        // with a freshly-allocated batch of cell viewmodels,
-                        // wiping the user's selection and flashing the
-                        // loading UI. The in-flight reload already reads
-                        // from the same section factory cache the
-                        // background pass populated, so dropping this
-                        // broadcast is information-preserving.
+                        // the second only repeating the first. The in-flight
+                        // reload already reads from the same section factory
+                        // cache the background pass populated, so dropping
+                        // this broadcast is information-preserving. A
+                        // broadcast after the reload is over reloads again;
+                        // `reloadData()` keeps the list's cells, so that
+                        // leaves the selection alone.
                         guard self.currentReloadTask == nil else { return }
                         self.scheduleReload()
                     case .specializationAdded(let parent, let child):
@@ -559,12 +558,19 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
             return
         }
 
+        // A list on screen stays on screen while it reloads: the engine reloads after every batch
+        // of background indexing, and the loading page would take the list — its selection and the
+        // keyboard focus with it — away from the user each time. Only a list with nothing to show
+        // yet shows the loading page.
         try Task.checkCancellation()
-        await MainActor.run {
-            self.loadState = .loading
-            self.loadingProgress = 0
-            self.loadingDescription = "Preparing..."
-            self.loadingItemCount = ""
+        let keepsListOnScreen = loadState == .loaded && !nodes.isEmpty
+        if !keepsListOnScreen {
+            await MainActor.run {
+                self.loadState = .loading
+                self.loadingProgress = 0
+                self.loadingDescription = "Preparing..."
+                self.loadingItemCount = ""
+            }
         }
 
         var runtimeObjects: [RuntimeObject] = []
@@ -597,17 +603,56 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         await MainActor.run {
             self.loadState = .loaded
             self.loadingProgress = 1.0
-            // The filter stays, and `scheduleRefilter()` below applies it to
-            // the new list: the engine reloads after every batch of background
-            // indexing, while the user may be filtering, and the field still
-            // shows the filter.
-            if isSorted {
-                self.nodes = runtimeObjects.sorted().map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0) }
-            } else {
-                self.nodes = runtimeObjects.map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0) }
-            }
+            // The engine reloads after every batch of background indexing,
+            // and such a reload almost always lists what is listed already. A
+            // list kept on screen that did not change publishes nothing, so
+            // the outline is not reloaded under the user's selection; one that
+            // did keeps the cells of the objects it still lists, so the
+            // outline finds the selected row's item again. A reload that went
+            // through the loading page always publishes: what waits for the
+            // list — a reveal — waits for its next value.
+            let loadedRuntimeObjects = isSorted ? runtimeObjects.sorted() : runtimeObjects
+            let reload = cellViewModelsKeepingListedOnes(for: loadedRuntimeObjects)
+            if keepsListOnScreen, reload.isListUnchanged { return }
+            self.nodes = reload.cells
+            // The filter stays, and `scheduleRefilter()` applies it to the new
+            // list: the user may be filtering while indexing goes on, and the
+            // field still shows the filter.
             scheduleRefilter()
         }
+    }
+
+    /// The cells for a reload's objects, in its order: the cell already
+    /// listed for an object — its `StableID` the same — kept and given the
+    /// reloaded object, and a new cell for an object not listed before.
+    ///
+    /// `isListUnchanged` when that is the list as it stands: every object
+    /// listed already, in the same place and with the same content. A cell is
+    /// kept once at most, so two objects of one key never share a row.
+    private func cellViewModelsKeepingListedOnes(for runtimeObjects: [RuntimeObject]) -> (cells: [SidebarRuntimeObjectCellViewModel], isListUnchanged: Bool) {
+        var listedCellsByStableID = Dictionary(
+            nodes.map { ($0.stableID, $0) },
+            uniquingKeysWith: { firstCell, _ in firstCell }
+        )
+        var isListUnchanged = runtimeObjects.count == nodes.count
+        var reloadedCells: [SidebarRuntimeObjectCellViewModel] = []
+        reloadedCells.reserveCapacity(runtimeObjects.count)
+        for (index, runtimeObject) in runtimeObjects.enumerated() {
+            let stableID = SidebarRuntimeObjectCellViewModel.StableID(objectKey: runtimeObject.key, parentFingerprint: 0)
+            guard let listedCell = listedCellsByStableID.removeValue(forKey: stableID) else {
+                isListUnchanged = false
+                reloadedCells.append(SidebarRuntimeObjectCellViewModel(runtimeObject: runtimeObject))
+                continue
+            }
+            if isListUnchanged, nodes[index] !== listedCell || !listedCell.runtimeObject.hasSameContent(as: runtimeObject) {
+                isListUnchanged = false
+            }
+            // Rebuilds the cell's rows below it only when its content changed,
+            // keeping their cells as well.
+            listedCell.runtimeObject = runtimeObject
+            reloadedCells.append(listedCell)
+        }
+        return (reloadedCells, isListUnchanged)
     }
 
     /// Single entry point for every filter trigger (initial load, search

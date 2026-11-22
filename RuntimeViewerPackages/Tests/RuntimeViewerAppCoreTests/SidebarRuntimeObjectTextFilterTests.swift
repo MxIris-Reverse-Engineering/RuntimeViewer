@@ -238,19 +238,19 @@ struct SidebarRuntimeObjectTextFilterTests {
             }
             #expect(filtered, "got \(names(of: viewModel.filteredNodes))")
 
-            let nodesBeforeReload = viewModel.nodes
+            // A reload that lists nothing new publishes nothing, so this one lists one object
+            // more — which the filter hides — and the test waits until the list holds it.
+            let hiddenByTheFilter = Fixtures.runtimeObject(name: "NSWindowController")
+            viewModel.seededRuntimeObjects = Self.fixtureRuntimeObjects + [hiddenByTheFilter]
             viewModel.scheduleReload()
-            // A reload makes new cells; wait until the list on show is made of them.
-            let showsReloadedCells = await pollUntil(timeout: .seconds(30)) {
+            let showsReloadedList = await pollUntil(timeout: .seconds(30)) {
                 let reloadedNodes = viewModel.nodes
-                guard let firstReloadedNode = reloadedNodes.first,
-                      !nodesBeforeReload.contains(where: { $0 === firstReloadedNode })
-                else { return false }
+                guard reloadedNodes.contains(where: { $0.runtimeObject == hiddenByTheFilter }) else { return false }
                 return !viewModel.filteredNodes.isEmpty && viewModel.filteredNodes.allSatisfy { filteredNode in
                     reloadedNodes.contains { $0 === filteredNode }
                 }
             }
-            #expect(showsReloadedCells)
+            #expect(showsReloadedList)
             #expect(names(of: viewModel.filteredNodes) == ["NSView", "NSViewController"])
             #expect(viewModel.filter == filter)
             #expect(viewModel.isFiltering)
@@ -259,8 +259,9 @@ struct SidebarRuntimeObjectTextFilterTests {
 }
 
 /// Serves a fixed object list so the filter, not the engine's view of the host process, decides what the suite sees.
+/// A test may change the list before it reloads.
 private final class TextFilterFixtureSidebarViewModel: SidebarRuntimeObjectViewModel {
-    private let seededRuntimeObjects: [RuntimeObject]
+    var seededRuntimeObjects: [RuntimeObject]
 
     init(
         seededRuntimeObjects: [RuntimeObject],
