@@ -12,8 +12,8 @@
 #   ./ArchiveScript.sh --help
 #
 # Run without --update-appcast / --upload-to-github / --commit-push for a
-# local build that only produces the signed, notarized zip. The default
-# configuration is Release; pass --configuration Debug (or any other
+# local build that only produces the signed, notarized zip and its dSYMs. The
+# default configuration is Release; pass --configuration Debug (or any other
 # configuration name defined in the workspace) for local validation. Pass
 # --update-packages to refresh SwiftPM pins before archiving. Pass
 # --local-deps to build against local dependency checkouts. Pass
@@ -493,6 +493,56 @@ MAC_ZIP="$PROJECT_DIR/RuntimeViewer-macOS.zip"
 run rm -f "$MAC_ZIP"
 run /usr/bin/ditto -c -k --keepParent "$APP_PATH" "$MAC_ZIP"
 
+# A crash report names the frames of the app's own executable by image offset
+# only: archiving strips its symbols. The archive's dSYMs are the one way back to
+# function names and lines, and a dSYM serves only the build it came from
+# (matched by UUID), so a release that does not keep them can never be
+# symbolicated. They go out as an asset of their own, beside the app. The
+# archive also holds the dSYMs of the macro plugins, which run inside the
+# compiler and never ship, so only the dSYMs that match a binary in the app go.
+log "Packaging macOS dSYMs zip"
+DSYMS_PATH="$MAIN_ARCHIVE/dSYMs"
+DSYM_STAGING_PARENT="$BUILD_PATH/ShippedDSYMs"
+DSYM_STAGING="$DSYM_STAGING_PARENT/dSYMs"
+DSYM_ZIP="$PROJECT_DIR/RuntimeViewer-macOS-dSYMs.zip"
+run rm -f "$DSYM_ZIP"
+run rm -rf "$DSYM_STAGING_PARENT"
+if ! $DRY_RUN && ! compgen -G "$DSYMS_PATH/*.dSYM" >/dev/null; then
+    $PUBLISHING && fail "archive holds no dSYMs at $DSYMS_PATH; refusing to publish a release whose crash reports cannot be symbolicated"
+    log "warning: archive holds no dSYMs (configuration $CONFIGURATION); no dSYMs zip"
+    DSYM_ZIP=""
+else
+    if ! $DRY_RUN; then
+        # dwarfdump stops at the first argument that is not a Mach-O file, so
+        # it reads one file per call.
+        SHIPPED_UUIDS=$( { find "$APP_PATH" -type f -print0 | xargs -0 -n 1 dwarfdump --uuid 2>/dev/null || true; } \
+            | awk '$1 == "UUID:" { print $2 }' | sort -u)
+        mkdir -p "$DSYM_STAGING"
+        for dsym in "$DSYMS_PATH"/*.dSYM; do
+            for dsym_uuid in $(dwarfdump --uuid "$dsym" | awk '{ print $2 }'); do
+                if grep -qx "$dsym_uuid" <<<"$SHIPPED_UUIDS"; then
+                    /usr/bin/ditto "$dsym" "$DSYM_STAGING/${dsym##*/}"
+                    break
+                fi
+            done
+        done
+
+        # Every architecture of the executable needs its dSYM: a dSYM that
+        # matches no UUID of the shipped binary symbolicates nothing.
+        MAIN_EXECUTABLE_NAME=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$APP_PATH/Contents/Info.plist")
+        EXECUTABLE_UUIDS=$(dwarfdump --uuid "$APP_PATH/Contents/MacOS/$MAIN_EXECUTABLE_NAME" | awk '{ print $2 }')
+        [[ -n "$EXECUTABLE_UUIDS" ]] || fail "could not read the UUIDs of $MAIN_EXECUTABLE_NAME"
+        STAGED_UUIDS=$( { dwarfdump --uuid "$DSYM_STAGING"/*.dSYM 2>/dev/null || true; } | awk '{ print $2 }')
+        for executable_uuid in $EXECUTABLE_UUIDS; do
+            grep -qx "$executable_uuid" <<<"$STAGED_UUIDS" \
+                || fail "no dSYM in $DSYMS_PATH matches $MAIN_EXECUTABLE_NAME (UUID $executable_uuid)"
+        done
+        log "dsyms ok: $(compgen -G "$DSYM_STAGING/*.dSYM" | wc -l | tr -d ' ') of $(compgen -G "$DSYMS_PATH/*.dSYM" | wc -l | tr -d ' ') archive dSYMs match a binary in the app; $MAIN_EXECUTABLE_NAME covered"
+    fi
+    run /usr/bin/ditto -c -k --keepParent "$DSYM_STAGING" "$DSYM_ZIP"
+    $KEEP_INTERMEDIATE || run rm -rf "$DSYM_STAGING_PARENT"
+fi
+
 if $UPDATE_APPCAST; then
     STAGING="$PROJECT_DIR/.release-staging"
     run rm -rf "$STAGING"
@@ -537,11 +587,13 @@ if $UPLOAD_TO_GITHUB; then
         GH_ARGS+=(--generate-notes)
     fi
     GH_ARGS+=("$MAC_ZIP")
+    [[ -n "$DSYM_ZIP" ]] && GH_ARGS+=("$DSYM_ZIP")
     [[ -n "$IOS_SIM_ZIP" ]] && GH_ARGS+=("$IOS_SIM_ZIP")
 
     if ! $DRY_RUN && gh release view "$VERSION_TAG" >/dev/null 2>&1; then
         log "Release $VERSION_TAG exists; uploading assets with --clobber"
         ASSETS=("$MAC_ZIP")
+        [[ -n "$DSYM_ZIP" ]] && ASSETS+=("$DSYM_ZIP")
         [[ -n "$IOS_SIM_ZIP" ]] && ASSETS+=("$IOS_SIM_ZIP")
         run gh release upload "$VERSION_TAG" --clobber "${ASSETS[@]}"
     else
@@ -600,6 +652,9 @@ fi
 
 log "Done. Outputs:"
 log "  macOS zip:           $MAC_ZIP"
+if [[ -n "$DSYM_ZIP" ]]; then
+    log "  macOS dSYMs zip:     $DSYM_ZIP"
+fi
 if [[ -n "$IOS_SIM_ZIP" ]]; then
     log "  iOS Simulator zip:   $IOS_SIM_ZIP"
 fi

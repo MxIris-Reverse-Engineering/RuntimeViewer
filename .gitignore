@@ -31,6 +31,7 @@ RuntimeViewer.xcworkspace/xcshareddata/swiftpm
 
 # Release artifacts ArchiveScript.sh writes to the repository root
 RuntimeViewer-macOS.zip
+RuntimeViewer-macOS-dSYMs.zip
 RuntimeViewer-iOS-Simulator.zip
 .worktrees/
 

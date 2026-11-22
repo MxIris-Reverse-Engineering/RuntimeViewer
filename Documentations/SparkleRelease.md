@@ -111,8 +111,10 @@ cutting (e.g. `v2.0.0-RC.4`, `v2.0.0`, `v2.1.0`).
 ```
 
 Drop `--upload-to-github` and `--commit-push` (and optionally `--update-appcast`)
-for a local dry-run that only produces the signed, notarized zip under
-`Products/Archives/`. Useful flags for iteration:
+for a local dry-run that only produces the signed, notarized
+`RuntimeViewer-macOS.zip` and its `RuntimeViewer-macOS-dSYMs.zip` at the
+repository root (the archive itself is under `Products/Archives/`). Useful flags
+for iteration:
 
 - `--channel beta` — force a pre-release channel (otherwise inferred).
 - `--skip-notarization` — skip the Apple notarization round-trip (dry-run only;
@@ -332,6 +334,40 @@ Ed25519 implementation (CryptoKit's `Curve25519.Signing.PublicKey` over the raw
 archive bytes is enough). This is the check that catches a signing key that has
 drifted from the one baked into the build.
 
+## Symbolicating a crash report
+
+Every release after v3.0.0-beta.10 carries `RuntimeViewer-macOS-dSYMs.zip`
+beside the app: the dSYMs of every binary in the app that the archive built —
+the executable, the service plugin, the XPC services, the Catalyst helper, the
+helper daemon, the command-line tool, the injection payloads and the frameworks
+built here. The archive's other dSYMs, those of the macro plugins, are left out:
+they run inside the compiler and never ship. `ArchiveScript.sh` refuses to
+publish when no dSYM matches the app's executable.
+
+Archiving strips the app's executable, so without its dSYM a crash report shows
+the frames of everything linked into it (the whole application layer) only as
+`RuntimeViewer + <offset>`. The service plugin keeps its symbol table: the
+frames of the processes it runs in (My Mac, files, Mac Catalyst, Load
+Frameworks) come with function names, but no file or line. **Releases up to and
+including v3.0.0-beta.10 kept no dSYMs**, and a rebuild of their tag does not
+reproduce their UUIDs; frames in their executable can only be located by
+reverse engineering the released binary.
+
+A dSYM serves only the build it came from. Compare the UUID the report lists for
+the image (`Binary Images`, or `usedImages` in an `.ips` file) with the dSYM's,
+then resolve the addresses with the image's load address from the same report:
+
+```bash
+gh release download <tag> --pattern RuntimeViewer-macOS-dSYMs.zip --dir /tmp/rv-dsyms
+ditto -x -k /tmp/rv-dsyms/RuntimeViewer-macOS-dSYMs.zip /tmp/rv-dsyms
+dwarfdump --uuid /tmp/rv-dsyms/dSYMs/RuntimeViewer.app.dSYM
+atos -o /tmp/rv-dsyms/dSYMs/RuntimeViewer.app.dSYM -arch arm64 -l <load address> <address>...
+```
+
+Use the dSYM of the image the frame is in (`RuntimeViewerServicePlugin.bundle.dSYM`
+for the plugin, and so on) and the report's architecture (`x86_64` on an Intel
+Mac).
+
 ## Where things live
 
 - Feed URL: `https://mxiris-reverse-engineering.github.io/RuntimeViewer/appcast.xml`
@@ -343,6 +379,8 @@ drifted from the one baked into the build.
 - Feed URL declaration: `Info.plist` key `SUFeedURL` (hardcoded because
   xcconfig's `//` comment rule mangles URLs).
 - Release notes: `Changelogs/<tag>.md`.
+- Symbols for crash reports: `RuntimeViewer-macOS-dSYMs.zip` on each GitHub
+  Release after v3.0.0-beta.10 (see *Symbolicating a crash report*).
 - CI workflow: `.github/workflows/release.yml`.
 - Release driver: `ArchiveScript.sh`.
 - Outstanding integration follow-ups:

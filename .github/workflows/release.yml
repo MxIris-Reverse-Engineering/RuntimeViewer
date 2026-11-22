@@ -177,6 +177,7 @@ jobs:
           name: release-artifacts
           path: |
             RuntimeViewer-macOS.zip
+            RuntimeViewer-macOS-dSYMs.zip
             RuntimeViewer-iOS-Simulator.zip
 
       - name: Upload xcodebuild logs on failure
