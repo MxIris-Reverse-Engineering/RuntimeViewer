@@ -102,6 +102,7 @@ let sourceDependencyTargetNames = [
     "SwiftTypeNameResolution",
     "SwiftSectionKit",
     "SwiftSectionMacros",
+    "SwiftSectionTestingMacros",
     "SwiftSectionFixtureSupport",
     "SwiftSectionTestingSupport",
     "SwiftSectionTestingSupportC",

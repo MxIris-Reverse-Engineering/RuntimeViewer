@@ -2,7 +2,7 @@
 
 - **面向**: 同时改本仓库和 MachO 那几个上游库、要在 App 里直接编进未推送改动的人
 - **对应提案**: [0078](../Evolutions/0078-local-dependencies-workspace.md)
-- **最后更新**: 2026-11-09
+- **最后更新**: 2026-11-23
 
 `RuntimeViewer-Local.xcworkspace` 的内容与 `RuntimeViewer-Debug.xcworkspace` 相同，另外多了七个上游库的本地检出：
 MachOKit、MachOKitExtensions、MachOObjCSection、MachOSwiftSection、swift-demangling、swift-semantic-string、
@@ -45,7 +45,7 @@ workspace 里这七条的路径写成 `../MachOKit` 这样，相对 workspace �
 | `swift-semantic-string` | `swift-semantic-string/.worktrees/swift-semantic-string` |
 | `swift-type-indexing` | `swift-type-indexing`（仓库根，它没有常驻 worktree） |
 
-- `.worktrees/` 不进仓库，链接每台机器各建一次。两台 Mac Studio 在 2026-11-08 都已建好。新机器上照表在仓库根执行
+- `.worktrees/` 不进仓库，链接每台机器各建一次。两台 Mac Studio 在 2026-11-08 都已建好，`swift-type-indexing` 那条在 2026-11-23 补上（它的仓库要先克隆到 `MxIris-Reverse-Engineering/swift-type-indexing`）。新机器上照表在仓库根执行
   `ln -s <指向的绝对路径> .worktrees/<链接名>`。
 - 本仓库的任何 worktree（`.worktrees/RuntimeViewer-<用途>`）都经同一组链接找到这七个库，同一个 workspace 文件不用改。
 - **包按目录名认**：Xcode 拿路径最后一段的小写当包的身份。要改用某个库的功能 worktree，把对应的链接改指过去
