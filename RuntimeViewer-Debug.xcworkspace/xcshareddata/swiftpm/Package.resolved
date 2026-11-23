@@ -176,8 +176,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection",
       "state" : {
-        "branch" : "next",
-        "revision" : "d0027febda53e1957ec9d12fe75eef6ee4a84881"
+        "branch" : "feature/swift-type-indexing-package",
+        "revision" : "b8a0a899c3630f7d3688c87f0d396a26e35a21da"
       }
     },
     {
@@ -185,8 +185,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
-        "branch" : "next",
-        "revision" : "7e9845ae4dcf744218b9fb95d5609cfe3bc97724"
+        "branch" : "feature/swift-type-indexing-package",
+        "revision" : "57db0f90d92ee063c650c5e8ad0b061a9500fb66"
       }
     },
     {
@@ -347,8 +347,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-DeveloperTool/swift-apinotes",
       "state" : {
-        "revision" : "e762ac739f71adf83ed2e05f40211c96cd91f6c5",
-        "version" : "0.2.0"
+        "revision" : "6f08a01bb548ca3106b8fee2ca67f6e495249263",
+        "version" : "0.3.0"
       }
     },
     {
@@ -700,6 +700,15 @@
       "state" : {
         "revision" : "640e5755b5826f4437eaeedd366fd776737db62c",
         "version" : "1.9.0"
+      }
+    },
+    {
+      "identity" : "swift-type-indexing",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/MxIris-Reverse-Engineering/swift-type-indexing",
+      "state" : {
+        "revision" : "cb78954c67caa6b4b4168d26039e6a40146ff5c2",
+        "version" : "0.1.0"
       }
     },
     {
