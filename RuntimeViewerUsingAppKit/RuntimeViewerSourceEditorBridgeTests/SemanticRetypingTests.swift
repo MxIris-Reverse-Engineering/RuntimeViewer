@@ -97,6 +97,43 @@ struct SemanticRetypingTests {
         let typeNameToken = try #require(tokens.first { $0.columns.contains(typeNameColumn) })
         #expect(typeNameToken.type == .identifier(SourceModelIdentifierKind.class(.project)))
     }
+
+    /// An SDK macro above an Objective-C class — `NS_REFINED_FOR_SWIFT`, as an SDK header's API
+    /// notes have RuntimeViewer print it — takes the system macro type from its semantic run, the
+    /// key Xcode colours an SDK header's macros with. Objective-C's grammar knows the name only to
+    /// skip it (Xcode's `KnownMacros.plist`, typed `xcode.syntax.plain`), so without the run it is
+    /// plain text; and the run must not stop the `@interface` line below from being parsed.
+    @Test
+    func anObjectiveCSDKMacroTakesTheSystemMacroTypeFromItsSemanticRun() throws {
+        let source = """
+        NS_REFINED_FOR_SWIFT
+        @interface UICellConfigurationState : UIViewConfigurationState
+        @end
+        """
+        let harness = try SourceEditorTestHarness()
+        let text = source as NSString
+        let macroRange = text.range(of: "NS_REFINED_FOR_SWIFT")
+        let interfaceLineRange = text.lineRange(for: text.range(of: "@interface"))
+        let keywordColumn = text.range(of: "@interface").location - interfaceLineRange.location
+
+        harness.setSource(
+            source,
+            languageIdentifier: "objc",
+            semanticRanges: [macroRange],
+            semanticNodeTypeNames: [Self.systemMacroNodeTypeName]
+        )
+        harness.layout()
+
+        let macroToken = try #require(harness.syntaxTokens(onLine: 0).first { $0.columns.contains(0) })
+        #expect(macroToken.type == .identifier(SourceModelIdentifierKind.macro(.external)))
+
+        let keywordToken = try #require(harness.syntaxTokens(onLine: 1).first { $0.columns.contains(keywordColumn) })
+        #expect(keywordToken.type == .keyword(nil))
+    }
+
+    /// What the app assigns to every macro semantic; see
+    /// `SourceEditorThemeConversion.syntaxColorKey(for:)`.
+    private static let systemMacroNodeTypeName = "xcode.syntax.identifier.macro.system"
 }
 
 #endif

@@ -181,7 +181,10 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/swift-semantic-string",
-                branch: "next"
+                // TEMPORARY, as MachOObjCSection's above: the feature branch carries
+                // `SemanticType.macro`, which MachOObjCSection's feature branch prints and
+                // which that branch pins too; the wrap-up puts `branch: "next"` back.
+                branch: "feature/swift-type-indexing-package"
             ),
         ),
         .package(

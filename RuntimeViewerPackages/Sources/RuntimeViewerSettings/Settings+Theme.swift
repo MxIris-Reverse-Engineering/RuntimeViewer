@@ -80,6 +80,14 @@ extension Settings.Theme {
         public var comment: Settings.Theme.Style
         public var number: Settings.Theme.Style
         public var error: Settings.Theme.Style
+
+        /// Preprocessor macros in an Objective-C header — `NS_SWIFT_NAME`,
+        /// `NS_REFINED_FOR_SWIFT` — which Xcode colours apart from keywords.
+        ///
+        /// Carries a default for the reason `currentLineHighlight` does: presets saved before
+        /// this slot existed must keep decoding. The default is Xcode's own macro colour pair.
+        @Default(Settings.Theme.Style.xcodeMacro)
+        public var macro: Settings.Theme.Style
     }
 
     /// A color slot: a light + dark color plus optional font traits. The trait
@@ -186,11 +194,21 @@ extension Settings.Theme.Preset {
             light: .rgb(0.01564520039, 0.2087542713, 1),
             dark: .rgb(1, 0.9160019755, 0.5006220341)
         ),
-        error: .solid(.rgb(0.831372549, 0.1019607843, 0.1019607843))
+        error: .solid(.rgb(0.831372549, 0.1019607843, 0.1019607843)),
+        macro: .xcodeMacro
     )
 }
 
 extension Settings.Theme.Style {
+    /// Xcode's preprocessor-macro colours, used as the default for presets that predate the slot:
+    /// `xcode.syntax.identifier.macro.system` in Xcode's Default (Light) and Default (Dark)
+    /// themes, the key Xcode colours an SDK header's `NS_SWIFT_NAME` and `NS_REFINED_FOR_SWIFT`
+    /// with. Regular weight, as Xcode sets it, unlike the bold keywords.
+    public static let xcodeMacro = Settings.Theme.Style.adaptive(
+        light: .rgb(0.391471, 0.220311, 0.124457),
+        dark: .rgb(0.991311, 0.560764, 0.246107)
+    )
+
     /// Xcode's own current-line fill, used as the default for presets that predate the slot.
     ///
     /// Both values sit a hair off their matching background rather than being a distinct
