@@ -47,6 +47,8 @@ final class GenerationOptionsViewController: BaseViewController<GenerationOption
             .checkbox(title: "Add Property Accessor Address Comments", keyPath: \.objcHeaderOptions.addPropertyAccessorAddressComments),
             .checkbox(title: "Add Method IMP Address Comments", keyPath: \.objcHeaderOptions.addMethodIMPAddressComments),
             .checkbox(title: "Print Exported Declarations Only", keyPath: \.objcHeaderOptions.printExportedDeclarationsOnly),
+            // The SDK's NS_SWIFT_NAME / NS_REFINED_FOR_SWIFT (proposal swift-type-indexing-package).
+            .checkbox(title: "Mark Swift Names From SDK", keyPath: \.marksSwiftNamesFromAPINotes),
         ]),
         Section(title: "Swift", items: [
             .checkbox(title: "Print Stripped Symbol Description", keyPath: \.swiftInterfaceOptions.printStrippedSymbolicItem),
@@ -58,6 +60,8 @@ final class GenerationOptionsViewController: BaseViewController<GenerationOption
             .checkbox(title: "Print Type Layout", keyPath: \.swiftInterfaceOptions.printTypeLayout),
             .checkbox(title: "Print Enum Layout", keyPath: \.swiftInterfaceOptions.printEnumLayout),
             .checkbox(title: "Synthesize Opaque Type", keyPath: \.swiftInterfaceOptions.synthesizeOpaqueType),
+            // `__C.X` under its module and Swift name, from the SDK (proposal swift-type-indexing-package).
+            .checkbox(title: "Resolve Imported Type Names", keyPath: \.swiftInterfaceOptions.resolvesImportedTypeNames),
             .checkbox(title: "Infers ObjC Overrides From Selector Names", keyPath: \.swiftInterfaceOptions.infersObjCOverridesFromSelectorNames),
             .checkbox(title: "Print Exported Declarations Only", keyPath: \.swiftInterfaceOptions.printExportedDeclarationsOnly),
             .checkbox(title: "Expand Macros", keyPath: \.swiftInterfaceOptions.expandsMacros),

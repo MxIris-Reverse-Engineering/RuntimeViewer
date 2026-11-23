@@ -36,12 +36,17 @@ extension RuntimeEngine {
         var swiftCount = 0
         var cPlusPlusCount = 0
         let total = allObjects.count
+        // An export keeps its text: it waits for the serving process's type
+        // index rather than writing the `__C.` names it would print while the
+        // index is still being built (proposal swift-type-indexing-package).
+        var exportGenerationOptions = configuration.generationOptions
+        exportGenerationOptions.waitsForTypeIndex = true
 
         for (index, object) in allObjects.enumerated() {
             try Task.checkCancellation()
             reporter.send(.objectStarted(object, current: index + 1, total: total))
             do {
-                guard let runtimeInterface = try await interface(for: object, options: configuration.generationOptions) else {
+                guard let runtimeInterface = try await interface(for: object, options: exportGenerationOptions) else {
                     throw RuntimeExportError.interfaceGenerationFailed(object)
                 }
                 // Printed as empty: everything in it is left out by Print

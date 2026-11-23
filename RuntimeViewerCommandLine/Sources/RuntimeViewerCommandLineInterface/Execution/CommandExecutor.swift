@@ -585,15 +585,22 @@ public actor CommandExecutor {
         return interface.interfaceString.string
     }
 
+    /// Every choice waits for the serving process's type index before
+    /// printing: a command prints once, so it prints the names the index
+    /// resolves rather than the `__C.` ones it would print while the index is
+    /// still being built (proposal swift-type-indexing-package).
     private func generationOptions(for choice: GenerationOptionsChoice) async -> RuntimeObjectInterface.GenerationOptions {
+        var options: RuntimeObjectInterface.GenerationOptions
         switch choice {
         case .default:
-            return RuntimeObjectInterface.GenerationOptions()
+            options = RuntimeObjectInterface.GenerationOptions()
         case .full:
-            return .mcp
+            options = .mcp
         case .application:
-            return await applicationOptionsReader.readGenerationOptions()
+            options = await applicationOptionsReader.readGenerationOptions()
         }
+        options.waitsForTypeIndex = true
+        return options
     }
 }
 

@@ -52,8 +52,11 @@ final class RuntimeDerivedDataController {
         measurementTask?.cancel()
         derivedDataClient.setAllocatedByteCount(nil)
         measurementTask = Task { [weak self] in
+            // With the type index's module-interface cache beside it, which
+            // Delete Derived Data removes too (`RuntimeTypeIndexLocation`).
             let byteCount = await Task.detached(priority: .utility) {
                 RuntimeDerivedDataMaintenance.allocatedByteCount(at: location)
+                    + RuntimeTypeIndexLocation.allocatedByteCount(at: RuntimeTypeIndexLocation.cacheDirectoryURL(for: location))
             }.value
             guard let self, !Task.isCancelled else { return }
             derivedDataClient.setAllocatedByteCount(byteCount)
@@ -82,13 +85,14 @@ final class RuntimeDerivedDataController {
         guard let location else { return }
         let alert = NSAlert()
         alert.messageText = "Delete Derived Data?"
-        alert.informativeText = "Runtime Viewer keeps the searchable interfaces of the system's images here, so that a launch on the same system with the same build reads them instead of printing them again. Deleting removes all of them; what is searchable now stays searchable, and the interfaces are printed again the next time they are needed."
+        alert.informativeText = "Runtime Viewer keeps the searchable interfaces of the system's images here, so that a launch on the same system with the same build reads them instead of printing them again, and the SDK module index that resolves imported type names. Deleting removes all of them; what is searchable now stays searchable, and both are made again the next time they are needed."
         alert.addButton(withTitle: "Delete")
         alert.addButton(withTitle: "Cancel")
         alert.buttons.first?.hasDestructiveAction = true
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         do {
             try RuntimeDerivedDataMaintenance.deleteAll(at: location)
+            try RuntimeTypeIndexLocation.deleteAll(at: RuntimeTypeIndexLocation.cacheDirectoryURL(for: location))
         } catch {
             NSAlert(error: error).runModal()
         }

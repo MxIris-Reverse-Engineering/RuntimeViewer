@@ -224,14 +224,27 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         // (cancellation is cooperative), so an `unowned self` here aborts in
         // `swift_unknownObjectUnownedLoadStrong` whenever the ViewModel is
         // rebound away (tab switch / close) mid-generation.
+        // A batch of the serving process's SDK type index finished: the engine
+        // dropped its printed interfaces, and the document's interface cache
+        // flushes on the same broadcast, so a refetch shows the names it
+        // resolves now (`RuntimeDataChange.typeNamesResolved`; proposal
+        // swift-type-indexing-package). Counted, so each batch is a new value.
+        let typeNameResolutionCount = documentState.$runtimeEngineSession.asObservable()
+            .flatMapLatest { session in session.engine.dataChangePublisher.asObservable() }
+            .filter { change in
+                if case .typeNamesResolved = change { true } else { false }
+            }
+            .scan(0) { count, _ in count + 1 }
+            .startWith(0)
         let interfaceStream = Observable
             .combineLatest(
                 $runtimeObject,
                 appDefaults.$options.distinctUntilChanged(),
                 transformerObservable.distinctUntilChanged(),
-                marksCommentStructureObservable.distinctUntilChanged()
+                marksCommentStructureObservable.distinctUntilChanged(),
+                typeNameResolutionCount
             )
-            .flatMapLatest { [_commonLoading = self._commonLoading] runtimeObject, options, transformer, marksCommentStructure -> Observable<FetchedInterface?> in
+            .flatMapLatest { [_commonLoading = self._commonLoading] runtimeObject, options, transformer, marksCommentStructure, _ -> Observable<FetchedInterface?> in
                 var mergedOptions = options
                 mergedOptions.transformer = transformer
                 mergedOptions.marksCommentStructure = marksCommentStructure
