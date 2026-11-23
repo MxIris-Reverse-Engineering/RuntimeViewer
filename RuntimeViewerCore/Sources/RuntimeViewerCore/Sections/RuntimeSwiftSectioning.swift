@@ -5,6 +5,12 @@ import ObjCDeclarationRendering
 protocol RuntimeSwiftSectioning: Actor {
     nonisolated var imagePath: String { get }
 
+    /// Asks the process's SDK type index (`RuntimeTypeIndex`) for this image's
+    /// platform and the modules it links, and returns the batch that finishes
+    /// with them; `nil` where the index does not run.
+    @discardableResult
+    func requestTypeIndex() -> Task<Void, Never>?
+
     func allObjects() async throws -> [RuntimeObject]
 
     /// The interface of `object` printed with `options`. Configuring the printer and printing

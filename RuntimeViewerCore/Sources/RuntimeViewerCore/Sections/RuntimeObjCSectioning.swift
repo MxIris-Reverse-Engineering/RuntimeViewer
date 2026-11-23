@@ -15,6 +15,11 @@ import ObjCDeclarationRendering
 protocol RuntimeObjCSectioning: Actor {
     nonisolated var imagePath: String { get }
 
+    /// The SDK platform the type index reads for this image, by its raw value
+    /// (`RuntimeTypeNames.platformName(of:)`); `nil` for an image naming no
+    /// platform an SDK covers.
+    nonisolated var typeIndexPlatformName: String? { get }
+
     func allObjects() async throws -> [RuntimeObject]
 
     /// `swiftImportNotes` are what the image's Swift side shows a class's header to say about

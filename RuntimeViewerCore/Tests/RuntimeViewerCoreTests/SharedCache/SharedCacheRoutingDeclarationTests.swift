@@ -60,6 +60,7 @@ struct SharedCacheRoutingDeclarationTests {
         Declaration(RuntimeEngine.LoadImageWithProgressCommand(path: imagePath), .subjectImageOwner),
         Declaration(RuntimeEngine.LoadImageForBackgroundIndexingCommand(path: imagePath), .subjectImageOwner),
         Declaration(RuntimeEngine.ReloadDataCommand(isReloadImageNodes: false), .servingEngine),
+        Declaration(RuntimeEngine.TypeIndexStatusCommand(), .servingEngine),
         // The dependency walk reads the images the serving process loaded.
         Declaration(RuntimeEngine.CanOpenImageCommand(path: imagePath), .servingEngine),
         Declaration(RuntimeEngine.RpathsCommand(path: imagePath), .servingEngine),

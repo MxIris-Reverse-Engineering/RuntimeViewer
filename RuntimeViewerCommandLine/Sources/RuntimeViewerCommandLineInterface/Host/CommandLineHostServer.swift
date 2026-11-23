@@ -1,6 +1,7 @@
 import Darwin
 import Foundation
 import FoundationToolbox
+import RuntimeViewerCore
 
 /// The resident process that owns the engines and answers commands.
 ///
@@ -103,6 +104,13 @@ public actor CommandLineHostServer {
     /// the app taking over, reaches this point inside that window.
     public func start() async throws {
         precondition(listeningFileDescriptor < 0, "start() called twice")
+        // The standalone host prints for its in-process engines, so it resolves
+        // their `__C` types with the SDK (`RuntimeTypeNames`; proposal
+        // swift-type-indexing-package). The app hosting the tool forwards to its
+        // services, which do.
+        if configuration.kind == .standalone {
+            RuntimeTypeNames.enableInThisProcess()
+        }
         let paths = configuration.paths
         try paths.prepareDirectory()
 

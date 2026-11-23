@@ -19,6 +19,11 @@ import OrderedCollections
 import Semantic
 import Semaphore
 import MetaCodable
+#if os(macOS)
+import ObjCTypeIndexing
+import SwiftTypeNameResolution
+import TypeIndexing
+#endif
 
 @Loggable(.private)
 actor RuntimeSwiftSection<Reading: RuntimeImageReading>: RuntimeSwiftSectioning {
@@ -121,6 +126,24 @@ actor RuntimeSwiftSection<Reading: RuntimeImageReading>: RuntimeSwiftSectioning 
     private(set) var printerConfigurationUpdateCount = 0
 
     private(set) var opaqueTypeResolverRegistrationCount = 0
+
+    /// The SDK platform the type index reads for this image, by its raw value
+    /// (`RuntimeTypeNames.platformName(of:)`); `nil` for an image naming no
+    /// platform an SDK covers.
+    private nonisolated let typeIndexPlatformName: String?
+
+    /// The install paths of the images this one links, whose SDK modules the
+    /// type index indexes for it.
+    private nonisolated let linkedImagePaths: [String]
+
+    /// The type index generation the type-name resolver registered on
+    /// `printer` stands for; `nil` while none is registered. A newer
+    /// generation re-registers it and drops the printed interfaces, which
+    /// carry the names the old one resolved.
+    private var registeredTypeNameResolverGeneration: Int?
+
+    /// The same for `corpusPrinter`, which is rebuilt for a new generation.
+    private var corpusPrinterTypeNameResolverGeneration: Int?
 
     private var interfaceDefinitionNameByObject: [RuntimeObjectKey: InterfaceDefinitionName] = [:]
 
@@ -232,6 +255,8 @@ actor RuntimeSwiftSection<Reading: RuntimeImageReading>: RuntimeSwiftSectioning 
         // Reads the indexer's names on its first request, long after `prepare()`.
         self.privateDiscriminatorSourceFileIndex = Reading.makePrivateDiscriminatorSourceFileIndex(indexer: indexer.upstream)
         self.printer = .init(configuration: .init(), eventHandlers: [], in: machO)
+        self.typeIndexPlatformName = RuntimeTypeNames.platformName(of: machO)
+        self.linkedImagePaths = machO.dependencies.map(\.dylib.name)
         // `prepare()` runs the upstream extraction and then builds the
         // relationship reverse tables — that work now lives in
         // `RuntimeSwiftInterfaceIndexer`, not inline here.
@@ -1873,6 +1898,12 @@ extension RuntimeSwiftSection {
     /// cache, so an interface with a structure and one without never stand in
     /// for each other.
     func updateConfiguration(for options: RuntimeObjectInterface.GenerationOptions) async throws {
+        if options.swiftInterfaceOptions.resolvesImportedTypeNames {
+            let typeIndexBatch = requestTypeIndex()
+            if options.waitsForTypeIndex {
+                await typeIndexBatch?.value
+            }
+        }
         try await updateConfiguration(
             using: options.swiftInterfaceOptions,
             transformer: options.transformer.swift,
@@ -1927,17 +1958,73 @@ extension RuntimeSwiftSection {
         }
 
         // The printer keeps every resolver it is given and asks each in turn,
-        // so the opaque type resolver is registered when the option turns on
-        // and dropped when it turns off — never once per update, which
-        // stacked a copy for every interface printed.
-        if options.resolvesOpaqueTypes, !isOpaqueTypeResolverRegistered {
-            printer.addTypeNameResolver(SwiftInterfaceBuilderOpaqueTypeProvider(machO: machO))
-            isOpaqueTypeResolverRegistered = true
-            opaqueTypeResolverRegistrationCount += 1
-        } else if !options.resolvesOpaqueTypes, isOpaqueTypeResolverRegistered {
+        // and can only drop them all at once. So the list is rebuilt whole
+        // when what it should hold changes — the opaque type resolver when
+        // its option turns on or off, the type-name resolver when its option
+        // does or the type index finishes a batch — and left alone otherwise:
+        // registering once per update stacked a copy for every interface
+        // printed, and dropping all for the opaque option took the type-name
+        // resolver with it.
+        let typeNameResolution = await currentTypeNameResolution(isEnabled: options.resolvesImportedTypeNames)
+        let typeNameResolverGeneration = typeNameResolution?.generation
+        if options.resolvesOpaqueTypes != isOpaqueTypeResolverRegistered || typeNameResolverGeneration != registeredTypeNameResolverGeneration {
             printer.removeAllTypeNameResolvers()
-            isOpaqueTypeResolverRegistered = false
+            if options.resolvesOpaqueTypes {
+                printer.addTypeNameResolver(SwiftInterfaceBuilderOpaqueTypeProvider(machO: machO))
+                opaqueTypeResolverRegistrationCount += 1
+            }
+            if let typeNameResolution {
+                printer.addTypeNameResolver(typeNameResolution.resolver)
+            }
+            isOpaqueTypeResolverRegistered = options.resolvesOpaqueTypes
+            if typeNameResolverGeneration != registeredTypeNameResolverGeneration {
+                registeredTypeNameResolverGeneration = typeNameResolverGeneration
+                #log(.debug, "Type-name resolution changed, clearing interface cache")
+                interfaceByObject.removeAll()
+                importedInterfaceByObject.removeAll()
+            }
         }
+    }
+
+    // MARK: - Type Names
+
+    /// Asks the process's type index for this image's platform, the modules
+    /// it links and its own Objective-C metadata, and returns the batch that
+    /// finishes with them. `nil` where the index does not run.
+    @discardableResult
+    func requestTypeIndex() -> Task<Void, Never>? {
+        #if os(macOS)
+        guard #available(macOS 13.0, *),
+              let typeIndexPlatformName,
+              let platform = SDKPlatform(rawValue: typeIndexPlatformName)
+        else { return nil }
+        let request = RuntimeTypeIndexRequest(
+            platform: platform,
+            moduleNames: Set(linkedImagePaths.map(TypeDatabase.moduleName(forImagePath:))),
+            metadataSources: [ObjCDeclaredTypeNames(machO: machO, imagePath: imagePath)]
+        )
+        let requestedBatch = Task { await RuntimeTypeIndex.process.request(request) }
+        return Task { await requestedBatch.value?.value }
+        #else
+        return nil
+        #endif
+    }
+
+    /// The type-name resolver to register, and the generation it stands for;
+    /// `nil` when `isEnabled` is off, or the type index has nothing for this
+    /// image's platform yet.
+    private func currentTypeNameResolution(isEnabled: Bool) async -> (resolver: any TypeNameResolving, generation: Int)? {
+        #if os(macOS)
+        guard isEnabled,
+              #available(macOS 13.0, *),
+              let typeIndexPlatformName,
+              let platform = SDKPlatform(rawValue: typeIndexPlatformName),
+              let resolution = await RuntimeTypeIndex.process.resolution(for: platform)
+        else { return nil }
+        return (resolution.resolver, resolution.generation)
+        #else
+        return nil
+        #endif
     }
 
     // MARK: - Print Configuration Building
@@ -2298,8 +2385,9 @@ extension RuntimeSwiftSection {
 
     /// What a family's corpus prints take from the section's state: each
     /// object's definitions, or why it has none, and the printer.
-    private func corpusPrintingInputs(for family: [RuntimeObject], transformer: Transformer.SwiftConfiguration) -> (definitions: [Result<[PrintedDefinition], any Swift.Error>], printer: SwiftDeclarationPrinter<MachO>) {
-        (family.map { object in Result { try printedDefinitions(for: object) } }, corpusPrinter(for: transformer))
+    private func corpusPrintingInputs(for family: [RuntimeObject], transformer: Transformer.SwiftConfiguration) async -> (definitions: [Result<[PrintedDefinition], any Swift.Error>], printer: SwiftDeclarationPrinter<MachO>) {
+        let typeNameResolution = await currentTypeNameResolution(isEnabled: true)
+        return (family.map { object in Result { try printedDefinitions(for: object) } }, corpusPrinter(for: transformer, typeNameResolution: typeNameResolution))
     }
 
     /// A printer that marks optional content instead of letting the options
@@ -2310,8 +2398,14 @@ extension RuntimeSwiftSection {
     /// marked, and a search with `synthesizeOpaqueType` off projects them
     /// away. The member order is the fixed by-category one — a reordering is
     /// not something a region can express.
-    private func corpusPrinter(for transformer: Transformer.SwiftConfiguration) -> SwiftDeclarationPrinter<MachO> {
-        if let corpusPrinter, corpusPrinterTransformer == transformer {
+    ///
+    /// The type-name resolver is registered too, when the type index has
+    /// something for this image's platform: the corpus is printed with the
+    /// resolved names the display shows, and the corpus store keeps a corpus
+    /// with them apart from one without (`RuntimeInterfaceCorpusSnapshot`).
+    /// A new type index generation rebuilds the printer.
+    private func corpusPrinter(for transformer: Transformer.SwiftConfiguration, typeNameResolution: (resolver: any TypeNameResolving, generation: Int)?) -> SwiftDeclarationPrinter<MachO> {
+        if let corpusPrinter, corpusPrinterTransformer == transformer, corpusPrinterTypeNameResolverGeneration == typeNameResolution?.generation {
             return corpusPrinter
         }
         let printer = SwiftDeclarationPrinter<MachO>(configuration: .init(), eventHandlers: [], in: machO)
@@ -2326,9 +2420,13 @@ extension RuntimeSwiftSection {
         configuration.memberSortOrder = .byCategory
         printer.updateConfiguration(configuration)
         printer.addTypeNameResolver(SwiftInterfaceBuilderOpaqueTypeProvider(machO: machO))
+        if let typeNameResolution {
+            printer.addTypeNameResolver(typeNameResolution.resolver)
+        }
         Self.installExportFilterScope(on: printer, from: indexer)
         corpusPrinter = printer
         corpusPrinterTransformer = transformer
+        corpusPrinterTypeNameResolverGeneration = typeNameResolution?.generation
         return printer
     }
 

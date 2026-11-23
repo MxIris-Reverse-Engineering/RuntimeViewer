@@ -242,6 +242,10 @@ public actor RuntimeEngine {
     /// cross-talking.
     private var progressRoutes: [String: @Sendable (Data) async -> Void] = [:]
 
+    /// The token of this engine's listener on the process's type index, once
+    /// a print asked the index for something (`startObservingTypeIndex()`).
+    var typeIndexListenerToken: UUID?
+
     /// The root `canonicalImagePath(_:)` applies: this process's own, until a
     /// client connection learns the serving process's.
     nonisolated let servingDyldRootPath = RuntimeEngineDyldRootPath(ProcessInfo.processInfo.environment["DYLD_ROOT_PATH"])
@@ -953,10 +957,18 @@ public actor RuntimeEngine {
     /// `swift-first-imported-declarations`). A header without the macro is still the header, so a
     /// failure to read them prints it without. The Find corpus prints a class with the same notes
     /// (`InterfaceCorpusPrinting`), which it must for its highlights to land.
+    ///
+    /// With `marksSwiftNamesFromAPINotes`, the notes the SDK's API notes give the class, protocol or
+    /// category join them (`sdkSwiftImportNotes(for:typeIndexPlatformName:waits:)`; proposal
+    /// `swift-type-indexing-package` in MachOSwiftSection), the SDK's winning where both say a name.
     private func objcHeaderInterface(of object: RuntimeObject, in objcSection: any RuntimeObjCSectioning, options: RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface {
         var swiftImportNotes = ObjCSwiftImportNotes()
         if case .objc(.type(.class)) = object.kind, let swiftSection = await swiftSectionFactory.existingSection(for: objcSection.imagePath) {
             swiftImportNotes = (try? await swiftSection.objcSwiftImportNotes(for: object)) ?? ObjCSwiftImportNotes()
+        }
+        if options.marksSwiftNamesFromAPINotes {
+            let sdkNotes = await sdkSwiftImportNotes(for: object, typeIndexPlatformName: objcSection.typeIndexPlatformName, waits: options.waitsForTypeIndex)
+            swiftImportNotes = swiftImportNotes.merging(sdkNotes)
         }
         return try await objcSection.interface(for: object, using: options.objcHeaderOptions, transformer: options.transformer.objc, marksCommentStructure: options.marksCommentStructure, swiftImportNotes: swiftImportNotes)
     }

@@ -30,6 +30,8 @@ actor RuntimeObjCSection<Reading: RuntimeImageReading>: RuntimeObjCSectioning {
 
     nonisolated let imagePath: String
 
+    nonisolated let typeIndexPlatformName: String?
+
     private let machO: MachO
 
     private let factory: RuntimeObjCSectionFactory<Reading>
@@ -82,6 +84,7 @@ actor RuntimeObjCSection<Reading: RuntimeImageReading>: RuntimeObjCSectioning {
     init(imagePath: String, machO: MachO, factory: RuntimeObjCSectionFactory<Reading>, progressContinuation: LoadingEventContinuation? = nil) async throws {
         #log(.info, "Initializing ObjC section for image: \(imagePath, privacy: .public)")
         self.machO = machO
+        self.typeIndexPlatformName = RuntimeTypeNames.platformName(of: machO)
         self.imagePath = imagePath
         self.factory = factory
         self.objcIndexer = RuntimeObjCInterfaceIndexer<Reading>(

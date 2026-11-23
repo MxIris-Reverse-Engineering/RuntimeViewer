@@ -112,6 +112,10 @@ extension RuntimeEngine.CommandName {
     /// `reloadData(isReloadImageNodes:)` forwarded to the process that
     /// owns the images, so a client engine never reads its own dyld state.
     static let reloadData = Self("reloadData")
+    /// `typeIndexStatus()`: where the serving process's SDK type index stands.
+    /// A question about the serving process itself, so it stays with the
+    /// engine it was sent to.
+    static let typeIndexStatus = Self("typeIndexStatus")
     /// The Find navigator's commands; see `RuntimeEngine+Search.swift`.
     static let buildInterfaceCorpus = Self("buildInterfaceCorpus")
     static let prioritizeInterfaceCorpus = Self("prioritizeInterfaceCorpus")

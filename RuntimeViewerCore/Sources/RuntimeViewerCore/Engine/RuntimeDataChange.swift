@@ -22,4 +22,12 @@ public enum RuntimeDataChange: Codable, Sendable, Hashable {
     /// as a new specialized descendant without rebuilding the rest of the
     /// tree.
     case specializationAdded(parent: RuntimeObject, child: RuntimeObject)
+
+    /// The serving process's SDK type index finished a batch for the SDK platform
+    /// `platformName` (`macosx`, `maccatalyst`, …): interfaces of that platform's images now
+    /// print more of their `__C` types under their module and Swift name, and Objective-C headers
+    /// carry more of the SDK's Swift naming. The engine has already dropped what it printed
+    /// before; consumers refetch what they show. Only a serving process with a type index
+    /// (a Mac's services and the command-line host) sends it.
+    case typeNamesResolved(platformName: String)
 }

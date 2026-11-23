@@ -288,12 +288,16 @@ extension RuntimeEngine: RuntimeInterfaceCorpusBuilding {
             guard hasSwiftObjects else { return nil }
             return try await swiftSectionFactory.makeUncachedSection(for: imagePath)
         }
-        return InterfaceCorpusPrinting(objcSection: objcSection, cachedSwiftSection: cachedSwiftSection, uncachedSwiftSection: uncachedSwiftSection)
+        return InterfaceCorpusPrinting(engine: self, objcSection: objcSection, cachedSwiftSection: cachedSwiftSection, uncachedSwiftSection: uncachedSwiftSection)
     }
 
     /// What one build lists and prints an image with; see
     /// `corpusPrinting(forImageAt:)`.
     private final class InterfaceCorpusPrinting: RuntimeInterfaceCorpusPrinting {
+        /// For the type index the prints wait for and the SDK's Objective-C
+        /// notes (`RuntimeEngine+TypeNames`). Weak: the engine owns the build.
+        private weak let engine: RuntimeEngine?
+
         private let objcSection: any RuntimeObjCSectioning
 
         private let cachedSwiftSection: any RuntimeSwiftSectioning
@@ -303,7 +307,8 @@ extension RuntimeEngine: RuntimeInterfaceCorpusBuilding {
         /// that cannot be found any more.
         private let uncachedSwiftSection: Task<(any RuntimeSwiftSectioning)?, any Swift.Error>
 
-        init(objcSection: any RuntimeObjCSectioning, cachedSwiftSection: any RuntimeSwiftSectioning, uncachedSwiftSection: Task<(any RuntimeSwiftSectioning)?, any Swift.Error>) {
+        init(engine: RuntimeEngine, objcSection: any RuntimeObjCSectioning, cachedSwiftSection: any RuntimeSwiftSectioning, uncachedSwiftSection: Task<(any RuntimeSwiftSectioning)?, any Swift.Error>) {
+            self.engine = engine
             self.objcSection = objcSection
             self.cachedSwiftSection = cachedSwiftSection
             self.uncachedSwiftSection = uncachedSwiftSection
@@ -341,6 +346,10 @@ extension RuntimeEngine: RuntimeInterfaceCorpusBuilding {
                 guard let swiftSection else {
                     return family.map { _ in .empty }
                 }
+                // The corpus keeps its text: it is printed with the names the
+                // type index resolves for the image, not the `__C.` ones it
+                // would print while the index is still being built.
+                await engine?.waitForTypeIndex(of: swiftSection)
                 return try await swiftSection.corpusPrints(of: family, transformer: transformer)
             case .cPlusPlus:
                 return family.map { _ in .empty }
@@ -352,7 +361,10 @@ extension RuntimeEngine: RuntimeInterfaceCorpusBuilding {
                     do {
                         // The notes the display prints a class's header with
                         // (`RuntimeEngine.objcHeaderInterface(of:in:options:)`).
-                        let swiftImportNotes = (try? await cachedSwiftSection.objcSwiftImportNotes(for: object)) ?? ObjCSwiftImportNotes()
+                        // With the SDK's, as the display merges them.
+                        let inferredNotes = (try? await cachedSwiftSection.objcSwiftImportNotes(for: object)) ?? ObjCSwiftImportNotes()
+                        let sdkNotes = await engine?.sdkSwiftImportNotes(for: object, typeIndexPlatformName: objcSection.typeIndexPlatformName, waits: true) ?? ObjCSwiftImportNotes()
+                        let swiftImportNotes = inferredNotes.merging(sdkNotes)
                         if let objectPrint = try await objcSection.corpusPrint(for: object, transformer: transformer, swiftImportNotes: swiftImportNotes) {
                             outcomes.append(.printed(objectPrint))
                         } else {

@@ -36,6 +36,23 @@ extension RuntimeObjectInterface {
         @Default(false)
         public var marksAttachedMacros: Bool
 
+        /// Mark in an Objective-C header the `NS_SWIFT_NAME(...)` and `NS_REFINED_FOR_SWIFT` the SDK's
+        /// API notes give the class, protocol or category and its members, read from the SDK of the Mac
+        /// serving the engine (swift-type-indexing). A top-level option rather than one of
+        /// `objcHeaderOptions`, which are MachOObjCSection's: it only decides whether the engine hands
+        /// the builder these notes. On in settings saved before it existed.
+        @Default(true)
+        public var marksSwiftNamesFromAPINotes: Bool
+
+        /// Wait, before printing, until the serving Mac's type index has what the image needs, so the
+        /// text never carries `__C.` names the index would resolve a moment later. For the callers that
+        /// print once and keep the text — MCP, the command-line tool, interface export, the Find
+        /// corpus; the content pane leaves it off and shows the resolved names when they arrive
+        /// (`RuntimeDataChange.typeNamesResolved`). Waiting happens only the first time an SDK
+        /// module's interface is generated. A peer that predates it ignores the key.
+        @Default(false)
+        public var waitsForTypeIndex: Bool
+
         /// The language to write the interface in: `nil` for the object's own; `.swift` asks for an
         /// Objective-C class, category or protocol as Swift imports it (Generated Interface).
         ///
@@ -77,7 +94,10 @@ extension RuntimeObjectInterface {
                 // An LLM client searches the text a declaration at a time; one broken over
                 // several lines no longer matches a search for it whole.
                 breaksLongTypes: false
-            )
+            ),
+            // An LLM client reads the text once: it waits for the resolved names rather than
+            // getting `__C.` ones the index resolves a moment later.
+            waitsForTypeIndex: true
         )
     }
 }

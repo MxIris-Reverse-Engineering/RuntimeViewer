@@ -143,7 +143,10 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection",
-                branch: "next"
+                // TEMPORARY: the feature branch of proposal swift-type-indexing-package
+                // (MachOSwiftSection's Documentations/Evolutions) until it is merged into
+                // next; its wrap-up puts `branch: "next"` back.
+                branch: "feature/swift-type-indexing-package"
             ),
         ),
         .package(
@@ -153,7 +156,22 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
-                branch: "next"
+                // TEMPORARY, as MachOObjCSection's above.
+                branch: "feature/swift-type-indexing-package"
+            ),
+        ),
+        // Resolves `__C` types to their module and Swift name, and gives the Objective-C
+        // headers the SDK's NS_SWIFT_NAME / NS_REFINED_FOR_SWIFT, from the SDK of the
+        // active developer directory (proposal swift-type-indexing-package). Its sources
+        // are all macOS-only. 0.1.0 is its first release.
+        .package(
+            local: .package(
+                path: "../../swift-type-indexing",
+                isRelative: true,
+            ),
+            remote: .package(
+                url: "https://github.com/MxIris-Reverse-Engineering/swift-type-indexing",
+                from: "0.1.0"
             ),
         ),
         .package(
@@ -293,6 +311,9 @@ let package = Package(
                 .product(name: "SwiftSpecialization", package: "MachOSwiftSection"),
                 .product(name: "SwiftInterface", package: "MachOSwiftSection"),
                 .product(name: "SwiftPrivateDiscriminators", package: "MachOSwiftSection"),
+                .product(name: "TypeIndexing", package: "swift-type-indexing", condition: .when(platforms: [.macOS])),
+                .product(name: "ObjCTypeIndexing", package: "MachOObjCSection", condition: .when(platforms: [.macOS])),
+                .product(name: "SwiftTypeNameResolution", package: "MachOSwiftSection", condition: .when(platforms: [.macOS])),
                 .product(name: "MetaCodable", package: "MetaCodable"),
                 .product(name: "Semaphore", package: "Semaphore"),
                 .product(name: "DequeModule", package: "swift-collections"),

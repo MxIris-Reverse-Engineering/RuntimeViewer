@@ -19,6 +19,7 @@ extension RuntimeEngine {
         registrar.registerProgress(LoadImageWithProgressCommand.self)
         registrar.register(LoadImageForBackgroundIndexingCommand.self)
         registrar.register(ReloadDataCommand.self)
+        registrar.register(TypeIndexStatusCommand.self)
         registrar.register(CanOpenImageCommand.self)
         registrar.register(RpathsCommand.self)
         registrar.register(DependenciesCommand.self)

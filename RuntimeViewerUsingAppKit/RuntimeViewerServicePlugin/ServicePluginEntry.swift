@@ -69,6 +69,9 @@ final class ServicePluginEntry: NSObject, ServicePlugin {
         // these commands existed.
         RuntimeInjection.install()
         RuntimeCrossReferences.install()
+        // Resolves the `__C` types this process prints with the SDK (proposal
+        // swift-type-indexing-package); `RuntimeTypeNames`.
+        RuntimeTypeNames.enableInThisProcess()
 
         let runtimeEngine = RuntimeEngine(source: .macCatalystServer)
         self.runtimeEngine = runtimeEngine
@@ -92,6 +95,9 @@ final class ServicePluginEntry: NSObject, ServicePlugin {
         // Before the engine is built, for the reason given in `launchCatalystHelper()`.
         RuntimeInjection.install()
         RuntimeCrossReferences.install()
+        // Resolves the `__C` types this process prints with the SDK (proposal
+        // swift-type-indexing-package); `RuntimeTypeNames`.
+        RuntimeTypeNames.enableInThisProcess()
         // The service keeps derived data for the Mac Catalyst engine, as the
         // local service does for "My Mac"; the helper application, which
         // serves the standalone command-line host, does not.
@@ -124,6 +130,9 @@ final class ServicePluginEntry: NSObject, ServicePlugin {
         // process, which is where the app's "My Mac" engine runs.
         RuntimeInjection.install()
         RuntimeCrossReferences.install()
+        // Resolves the `__C` types this process prints with the SDK (proposal
+        // swift-type-indexing-package); `RuntimeTypeNames`.
+        RuntimeTypeNames.enableInThisProcess()
         // Derived data — the Find corpora of the shared cache's images, kept on
         // disk under the app's caches — is read and written only by the
         // processes that serve the app's engines, so it is turned on here,
@@ -142,6 +151,9 @@ final class ServicePluginEntry: NSObject, ServicePlugin {
         // mapped into this process for the scan to read.
         RuntimeInjection.install()
         RuntimeCrossReferences.install()
+        // Resolves the `__C` types this process prints with the SDK (proposal
+        // swift-type-indexing-package); `RuntimeTypeNames`.
+        RuntimeTypeNames.enableInThisProcess()
 
         let listener: RuntimeXPCServiceListenerConnection
         do {
@@ -181,6 +193,9 @@ final class ServicePluginEntry: NSObject, ServicePlugin {
         // cross-reference scan reads them like any other loaded image.
         RuntimeInjection.install()
         RuntimeCrossReferences.install()
+        // Resolves the `__C` types this process prints with the SDK (proposal
+        // swift-type-indexing-package); `RuntimeTypeNames`.
+        RuntimeTypeNames.enableInThisProcess()
 
         let listener: RuntimeXPCServiceListenerConnection
         do {

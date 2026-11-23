@@ -26,8 +26,11 @@ enum RuntimeInterfaceCorpusSnapshot {
     /// day is another file.
     static let memberOrderName = "ByCategory"
 
+    /// The transformer, the member order and whether, and with which SDK, the
+    /// process resolves imported type names (`RuntimeTypeNamesCorpusVariant`):
+    /// a corpus printed with `__C.` names is no corpus with resolved ones.
     static func variant(for transformer: Transformer.Configuration) -> String {
-        "\(transformer.derivedDataDigest)-\(memberOrderName)"
+        "\(transformer.derivedDataDigest)-\(memberOrderName)-\(RuntimeTypeNamesCorpusVariant.component)"
     }
 
     enum Section: UInt32, CaseIterable {

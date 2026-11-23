@@ -88,6 +88,15 @@ public struct SwiftGenerationOptions: Sendable, Equatable, Hashable {
     @Default(100)
     public var maximumLineWidth: Int
 
+    /// Print the C and Objective-C types a mangling spells `__C.X` under their module and their Swift
+    /// name — `UIKit.UITraitCollection`, `UIKit.__UICellConfigurationState` — read from the SDK of the
+    /// Mac serving the engine (swift-type-indexing; proposal `swift-type-indexing-package` in
+    /// MachOSwiftSection). Does nothing where that Mac has no SDK for the image's platform, or before
+    /// its type index is built: such types keep printing as `__C.X`. On in settings saved before it
+    /// existed.
+    @Default(true)
+    public var resolvesImportedTypeNames: Bool
+
     public static let `default` = Self()
 }
 

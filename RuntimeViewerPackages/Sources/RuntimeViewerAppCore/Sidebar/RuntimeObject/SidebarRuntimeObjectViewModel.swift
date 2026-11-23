@@ -159,6 +159,10 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
                     case .specializationAdded(let parent, let child):
                         guard parent.imagePath == self.imagePath else { return }
                         self.applySpecializationAdded(parent: parent, child: child)
+                    case .typeNamesResolved:
+                        // The object list names objects by their own names, which the
+                        // type index does not change; only printed interfaces do.
+                        break
                     }
                 }
             }

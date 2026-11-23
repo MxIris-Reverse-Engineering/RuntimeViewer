@@ -108,6 +108,16 @@ extension RuntimeEngine {
         }
     }
 
+    /// Where the serving process's SDK type index stands (`RuntimeTypeIndex`).
+    /// About the serving process itself: no subject image, so an engine
+    /// borrowing shared cache images answers it as the one it was sent to.
+    struct TypeIndexStatusCommand: RuntimeEngineCommand {
+        static var commandName: String { CommandName.typeIndexStatus.commandName }
+        func perform(on engine: RuntimeEngine) async throws -> RuntimeTypeIndexStatus {
+            await engine.localTypeIndexStatus()
+        }
+    }
+
     struct ReloadDataCommand: RuntimeEngineCommand {
         let isReloadImageNodes: Bool
         static var commandName: String { CommandName.reloadData.commandName }
