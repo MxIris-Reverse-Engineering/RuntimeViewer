@@ -82,14 +82,15 @@ actor RuntimeTypeIndex {
         let platform = request.platform
         let typeDatabase = state.typeDatabase
         let previousBatch = state.lastBatch
+        // Isolated to this actor, as the method that makes it.
         let batch = Task {
             await previousBatch?.value
             do {
                 try await typeDatabase.index(dependencies: newSources, moduleFilter: { newModuleNames.contains($0) })
             } catch {
-                await self.logBatchFailure(platform: platform, error: error)
+                logBatchFailure(platform: platform, error: error)
             }
-            await self.finishBatch(of: platform)
+            finishBatch(of: platform)
         }
         state.lastBatch = batch
         statesByPlatform[platform] = state
