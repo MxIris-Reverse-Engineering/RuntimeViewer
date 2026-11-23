@@ -225,15 +225,24 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         // `swift_unknownObjectUnownedLoadStrong` whenever the ViewModel is
         // rebound away (tab switch / close) mid-generation.
         // A batch of the serving process's SDK type index finished: the engine
-        // dropped its printed interfaces, and the document's interface cache
-        // flushes on the same broadcast, so a refetch shows the names it
+        // dropped its printed interfaces, so a refetch shows the names it
         // resolves now (`RuntimeDataChange.typeNamesResolved`; proposal
-        // swift-type-indexing-package). Counted, so each batch is a new value.
+        // swift-type-indexing-package). The document's interface cache
+        // flushes on the same broadcast, but on a schedule of its own: flush
+        // it here too, on the main actor before the refetch reads it, so the
+        // refetch never gets an interface printed before the batch. Counted,
+        // so each batch is a new value.
         let typeNameResolutionCount = documentState.$runtimeEngineSession.asObservable()
             .flatMapLatest { session in session.engine.dataChangePublisher.asObservable() }
             .filter { change in
                 if case .typeNamesResolved = change { true } else { false }
             }
+            .observe(on: MainScheduler.instance)
+            .do(onNext: { [interfaceCache] _ in
+                MainActor.assumeIsolated {
+                    interfaceCache.invalidateAll()
+                }
+            })
             .scan(0) { count, _ in count + 1 }
             .startWith(0)
         let interfaceStream = Observable

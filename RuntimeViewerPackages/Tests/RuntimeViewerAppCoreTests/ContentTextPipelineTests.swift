@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 import Dependencies
 import RxSwift
-import RuntimeViewerCore
+@testable import RuntimeViewerCore
 @testable import RuntimeViewerSettings
 import RuntimeViewerArchitectures
 import Semantic
@@ -257,6 +257,59 @@ struct ContentTextPipelineTests {
 
         withExtendedLifetime(firstMockRouter) {}
         withExtendedLifetime(secondMockRouter) {}
+    }
+
+    // MARK: - A finished batch of the type index refetches
+
+    /// The serving process's SDK type index finishes a batch and the engine
+    /// broadcasts `.typeNamesResolved`: the engine dropped what it printed
+    /// with `__C.` names, so the pane fetches its object again (proposal
+    /// `swift-type-indexing-package` in MachOSwiftSection).
+    @Test("a finished batch of the type index refetches the interface on screen")
+    func typeNamesResolvedRefetchesTheInterface() async throws {
+        // The broadcast goes out on the shared local engine, whose other
+        // listeners (another suite's interface cache) it would disturb.
+        try await withSharedLocalEngineLock {
+            try await runTypeNamesResolvedRefetchesTheInterface()
+        }
+    }
+
+    private func runTypeNamesResolvedRefetchesTheInterface() async throws {
+        let fetchRecorder = InterfaceFetchRecorder()
+        let documentState = withLiveDependencyContext { DocumentState() }
+        let mockRouter = MockRouter<ContentRoute>()
+        let viewModel = withLiveDependencyContext {
+            ContentTextViewModel(
+                runtimeObject: makeRuntimeObject(),
+                documentState: documentState,
+                router: mockRouter,
+                interfaceProvider: { runtimeObject, _ in
+                    let fetchNumber = fetchRecorder.fetchCount + 1
+                    _ = fetchRecorder.recordFetch()
+                    return RuntimeObjectInterface(object: runtimeObject, interfaceString: "class ContentPipelineFixture\(fetchNumber) {}")
+                }
+            )
+        }
+        let firstPrepared = try await pollUntil(timeout: .seconds(10)) {
+            viewModel.interface != nil
+        }
+        #expect(firstPrepared, "the interface never reached the view model")
+        let firstInterface = try #require(viewModel.interface)
+        #expect(fetchRecorder.fetchCount == 1)
+
+        documentState.runtimeEngine.dataChangeSubject.send(.typeNamesResolved(platformName: "macosx"))
+        let refetched = try await pollUntil(timeout: .seconds(10)) {
+            viewModel.interface.map { $0.id != firstInterface.id } ?? false
+        }
+        #expect(refetched, "the broadcast did not refetch the interface")
+        #expect(fetchRecorder.fetchCount == 2)
+
+        // Another kind of change leaves the pane alone.
+        documentState.runtimeEngine.dataChangeSubject.send(.fullReload(isReloadImageNodes: false))
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(fetchRecorder.fetchCount == 2)
+
+        withExtendedLifetime(mockRouter) {}
     }
 
     // MARK: - An interface Print Exported Declarations Only empties
