@@ -174,12 +174,16 @@ struct SwiftExportedDeclarationsTests {
     /// adopting a protocol nothing rules on stays. The fixtures are the
     /// categories `SwiftDeclaredObjCProtocolListTests` declares.
     @Test("a category adopting only a private @objc protocol prints nothing, one adopting another protocol prints as before", arguments: [
-        ("ISO8601DateFormatter", "SwiftDeclaredObjCProtocolPrivateFixture", true),
+        ("EnergyFormatter", "SwiftDeclaredObjCProtocolPrivateFixture", true),
         ("ByteCountFormatter", "SwiftDeclaredObjCProtocolCategoryFixture", false),
     ])
     func categoryConformanceFollowsItsProtocols(className: String, protocolName: String, printsNothing: Bool) async throws {
         let (engine, objects) = try await Self.sharedBundle.value
-        let entry = try #require(objects.first { $0.kind == .swift(.conformance(.class)) && $0.displayName.contains(className) }, "no conformance entry for \(className)")
+        let entries = objects.filter { $0.kind == .swift(.conformance(.class)) && $0.displayName.contains(className) }
+        let entry = try #require(entries.first, "no conformance entry for \(className)")
+        // One entry holds every conformance of the class in the image; another
+        // library's conformance of the same class would stay in it.
+        #expect(entries.count == 1)
 
         let everything = try #require(try await engine.interface(for: entry, options: Self.options(exportedOnly: false))).interfaceString
         let exportedOnly = try #require(try await engine.interface(for: entry, options: Self.options(exportedOnly: true))).interfaceString

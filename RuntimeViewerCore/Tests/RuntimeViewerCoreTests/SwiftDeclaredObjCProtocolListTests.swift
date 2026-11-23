@@ -67,8 +67,11 @@ private final class SwiftDeclaredObjCProtocolPrivateAdopterFixture: NSObject, Sw
 
 /// A category of a Foundation class adopting only the private protocol:
 /// Print Exported Declarations Only leaves its conformance out
-/// (`SwiftExportedDeclarationsTests`).
-extension ISO8601DateFormatter: SwiftDeclaredObjCProtocolPrivateFixture {
+/// (`SwiftExportedDeclarationsTests`). The class must be one no library
+/// linked into the test bundle extends, since the image lists a class's
+/// conformances as one entry: MetaCodable's HelperCoders, which arrives with
+/// swift-type-indexing, makes `ISO8601DateFormatter` a `DateFormatConverter`.
+extension EnergyFormatter: SwiftDeclaredObjCProtocolPrivateFixture {
     func privateRequirementFixture() {}
 }
 
