@@ -30,4 +30,5 @@ public enum SystemSymbol: String, CaseIterable, Sendable {
     case powerCircle = "power.circle"
     case exclamationmarkCircle = "exclamationmark.circle"
     case archivebox
+    case shippingbox
 }

@@ -39,12 +39,13 @@ let localPackageTargetNames = [
     "RuntimeViewerCommandLineInterface",
 ]
 
-// The library and macro targets of four third-party packages that change often alongside this
-// repository — MachOKitExtensions, MachOObjCSection, MachOSwiftSection and swift-semantic-string —
+// The library and macro targets of five third-party packages that change often alongside this
+// repository — MachOKitExtensions, MachOObjCSection, MachOSwiftSection, swift-semantic-string and
+// swift-type-indexing —
 // which the profile keeps as source as well, so moving one of their pins never sends the binary cache
 // to be warmed again, and their sources stay in the workspace. No other third-party package depends
 // on them, so the rest of the cache is unaffected. Names match every package's targets alike, so
-// `./TuistScript.sh check` (SOURCE_DEPENDENCIES there) also keeps this list in step with the four
+// `./TuistScript.sh check` (SOURCE_DEPENDENCIES there) also keeps this list in step with the five
 // packages' manifests and reports a name another dependency's target shares.
 let sourceDependencyTargetNames = [
     // MachOKitExtensions
@@ -75,6 +76,7 @@ let sourceDependencyTargetNames = [
     "ObjCOutputTransformer",
     "ObjCDiffing",
     "ObjCInterface",
+    "ObjCTypeIndexing",
     // MachOSwiftSection
     "Utilities",
     "SwiftOutputTransformer",
@@ -97,7 +99,7 @@ let sourceDependencyTargetNames = [
     "SwiftPrinting",
     "SwiftSpecialization",
     "SwiftInterface",
-    "TypeIndexing",
+    "SwiftTypeNameResolution",
     "SwiftSectionKit",
     "SwiftSectionMacros",
     "SwiftSectionFixtureSupport",
@@ -106,6 +108,9 @@ let sourceDependencyTargetNames = [
     // swift-semantic-string
     "Semantic",
     "OutputTransformer",
+    // swift-type-indexing, which MachOSwiftSection's TypeIndexing target moved to
+    // (proposal swift-type-indexing-package)
+    "TypeIndexing",
 ]
 
 // No fullHandle: the binary cache stays on this machine and nothing is uploaded.

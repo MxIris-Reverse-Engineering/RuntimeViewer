@@ -69,6 +69,7 @@ struct ToolbarActivityStateTests {
         (kind: ReportCategory.backgroundIndexing, text: "Indexing │ 0 of 1 image"),
         (kind: .searchableInterfaces, text: "Building Searchable Interfaces │ 0 of 1 image"),
         (kind: .crossReferences, text: "Preparing Cross References │ 0 of 1 image"),
+        (kind: .importedTypeNames, text: "Indexing Imported Type Names │ 0 of 1 batch"),
     ])
     func runningTitles(kind: ReportCategory, text: String) {
         let report = ActivityReport(kind: kind, startDate: Self.start, totalCount: 1, fractionCompleted: 0)
@@ -106,6 +107,7 @@ struct ToolbarActivityStateTests {
         (kind: ReportCategory.backgroundIndexing, outcome: ActivityReport.Outcome.succeeded, text: "Indexing Succeeded"),
         (kind: .searchableInterfaces, outcome: .succeeded, text: "Searchable Interfaces Built"),
         (kind: .crossReferences, outcome: .succeeded, text: "Cross References Prepared"),
+        (kind: .importedTypeNames, outcome: .succeeded, text: "Imported Type Names Indexed"),
         (kind: .backgroundIndexing, outcome: .failed, text: "Indexing Failed"),
         (kind: .crossReferences, outcome: .cancelled, text: "Cross References Cancelled"),
     ])

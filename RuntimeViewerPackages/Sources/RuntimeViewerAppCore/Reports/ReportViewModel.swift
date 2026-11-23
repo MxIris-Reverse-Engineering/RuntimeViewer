@@ -9,8 +9,9 @@ import RuntimeViewerSettings
 #endif
 
 /// The Report navigator page: the background indexer's batches, the Find navigator's corpus
-/// builds, the cross references prepared ahead of its queries and the images the user loaded
-/// (Manual Loading, proposal `editor-jump-bar`), as Xcode's Report navigator lists builds and
+/// builds, the cross references prepared ahead of its queries, the SDK type index of the engine's
+/// serving process (Imported Type Names) and the images the user loaded (Manual Loading, proposal
+/// `editor-jump-bar`), as Xcode's Report navigator lists builds and
 /// runs — one outline, each kind of work a first-level row, the newest work first, a spinner on
 /// whatever is still running.
 ///
@@ -159,6 +160,8 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
                         groupWork.backgroundWork.corpusCoordinator.refreshCoverage()
                         // A query prepares images too, and the limit drops them, without a word.
                         groupWork.backgroundWork.crossReferencePreparationCoordinator.refreshPreparedByteCount()
+                        // The module-interface cache grows on disk between two batches too.
+                        groupWork.backgroundWork.typeIndexCoordinator.refresh()
                     }
                 }
             }
@@ -179,7 +182,9 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
                 backgroundWork.crossReferencePreparationCoordinator.cancelPreparation(of: imagePath)
             case .engineGroup, .borrowed, .category, .turnedOff, .unsupportedByEngine, .indexingItem, .finishedCorpusBuild, .restoredCorpora, .restoredCorpus, .finishedCrossReferencePreparation,
                  // The engine cannot stop a load once it has begun.
-                 .manualLoad, .finishedManualLoad:
+                 .manualLoad, .finishedManualLoad,
+                 // The serving process indexes SDK modules on its own; there is nothing to withdraw.
+                 .typeIndexPlatform:
                 break
             }
         }
@@ -211,7 +216,10 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
                 target.backgroundWork.corpusCoordinator.ejectCorpora()
             case .category(.crossReferences):
                 target.backgroundWork.crossReferencePreparationCoordinator.ejectPreparations()
-            case .engineGroup, .borrowed, .category(.backgroundIndexing), .category(.manualLoading), .turnedOff, .unsupportedByEngine, .indexingBatch, .indexingItem, .corpusBuild, .finishedCorpusBuild, .restoredCorpora, .restoredCorpus, .crossReferencePreparation, .finishedCrossReferencePreparation, .manualLoad, .finishedManualLoad:
+            case .engineGroup, .borrowed, .category(.backgroundIndexing), .category(.manualLoading), .turnedOff, .unsupportedByEngine, .indexingBatch, .indexingItem, .corpusBuild, .finishedCorpusBuild, .restoredCorpora, .restoredCorpus, .crossReferencePreparation, .finishedCrossReferencePreparation, .manualLoad, .finishedManualLoad,
+                 // The type index's cache is on disk and shared by every process of the
+                 // application: nothing here ejects it.
+                 .category(.importedTypeNames), .typeIndexPlatform:
                 break
             }
         }
@@ -365,7 +373,7 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
 enum ReportOutline {
     // MARK: - One engine's work
 
-    /// The four kinds of one engine's work, as the engine's own Report lists them, each rebuilt
+    /// The five kinds of one engine's work, as the engine's own Report lists them, each rebuilt
     /// from its own inputs only: a corpus build's progress leaves the indexing rows alone.
     @MainActor
     static func categoryNodes(
@@ -445,6 +453,14 @@ enum ReportOutline {
                 )
             }
         }
+        let importedTypeNamesCategory = backgroundWork.typeIndexCoordinator.$status.asObservable()
+            .distinctUntilChanged()
+            .observe(on: MainScheduler.instance)
+            .map { status in
+                MainActor.assumeIsolated {
+                    treeBuilder.importedTypeNamesCategory(status: status)
+                }
+            }
         let manualImageLoadCoordinator = backgroundWork.manualImageLoadCoordinator
         let manualLoadingCategory = Observable.combineLatest(
             manualImageLoadCoordinator.$activeLoadsByImagePath.asObservable(),
@@ -456,8 +472,8 @@ enum ReportOutline {
                 treeBuilder.manualLoadingCategory(activeLoads: activeLoads, finishedLoads: finishedLoads)
             }
         }
-        return Observable.combineLatest(indexingCategory, corpusCategory, crossReferenceCategory, manualLoadingCategory) { indexingCategory, corpusCategory, crossReferenceCategory, manualLoadingCategory in
-            [indexingCategory, corpusCategory, crossReferenceCategory, manualLoadingCategory].compactMap { $0 }
+        return Observable.combineLatest(indexingCategory, corpusCategory, crossReferenceCategory, importedTypeNamesCategory, manualLoadingCategory) { indexingCategory, corpusCategory, crossReferenceCategory, importedTypeNamesCategory, manualLoadingCategory in
+            [indexingCategory, corpusCategory, crossReferenceCategory, importedTypeNamesCategory, manualLoadingCategory].compactMap { $0 }
         }
     }
 
@@ -713,6 +729,85 @@ enum ReportOutline {
         cellViewModel.update(icon: icon(forImagePath: finishedPreparation.imagePath), iconColor: iconColor(forImagePath: finishedPreparation.imagePath), title: FindScope.imageName(of: finishedPreparation.imagePath), detail: detail, status: status, toolTip: toolTip)
     }
 
+    /// The Imported Type Names category's own row: what the module-interface cache takes on disk,
+    /// beside the title. The cache is shared by every process of the application and outlives
+    /// them, so the row has no Eject button.
+    static func configureImportedTypeNamesCategoryRow(_ cellViewModel: ReportCellViewModel, cacheByteCount: Int64) {
+        let hasCache = cacheByteCount > 0
+        cellViewModel.update(
+            icon: importedTypeNamesIcon,
+            title: "Imported Type Names",
+            detail: hasCache ? ByteCountFormatter.string(fromByteCount: cacheByteCount, countStyle: .file) : "",
+            toolTip: hasCache ? "The SDK module interfaces cached on disk, shared by every process of RuntimeViewer. They resolve the __C type names of printed interfaces." : nil
+        )
+    }
+
+    /// One SDK platform of the engine's type index: how far its batches are, how many modules it
+    /// has, or why the serving Mac cannot index it.
+    static func configure(_ cellViewModel: ReportCellViewModel, forTypeIndexPlatform platformStatus: RuntimeTypeIndexStatus.PlatformStatus) {
+        let detail: String
+        let status: ReportRowStatus
+        let icon: IconDescriptor
+        let isInProgress: Bool
+        switch platformStatus.phase {
+        case .building(let finishedBatchCount, let queuedBatchCount):
+            detail = "Indexing… \(finishedBatchCount) of \(queuedBatchCount) \(queuedBatchCount == 1 ? "batch" : "batches")"
+            status = .running
+            icon = importedTypeNamesIcon
+            isInProgress = true
+        case .ready:
+            let moduleCount = platformStatus.indexedModuleCount
+            detail = "Ready, \(moduleCount) \(moduleCount == 1 ? "module" : "modules")"
+            status = .none
+            icon = importedTypeNamesIcon
+            isInProgress = false
+        case .unavailable(.sdkNotInstalled):
+            detail = "No SDK for this platform"
+            status = .none
+            icon = unsupportedIcon
+            isInProgress = false
+        case .unavailable(.noDeveloperDirectory):
+            detail = "No developer directory (install Xcode or the Command Line Tools)"
+            status = .none
+            icon = unsupportedIcon
+            isInProgress = false
+        }
+        let toolTip = platformStatus.sdkVersion.map { "\(platformDisplayName(of: platformStatus.platformName)) SDK \($0)" }
+        cellViewModel.update(icon: icon, title: typeIndexPlatformTitle(of: platformStatus), detail: detail, status: status, toolTip: toolTip, isInProgress: isInProgress)
+    }
+
+    /// `macOS 27.2`: the platform's name and the SDK's version, without its build.
+    static func typeIndexPlatformTitle(of platformStatus: RuntimeTypeIndexStatus.PlatformStatus) -> String {
+        let platformName = platformDisplayName(of: platformStatus.platformName)
+        guard let sdkVersion = platformStatus.sdkVersion,
+              let version = sdkVersion.split(separator: "-", maxSplits: 1).first,
+              !version.isEmpty
+        else { return platformName }
+        return "\(platformName) \(version)"
+    }
+
+    /// The name a person knows an SDK platform by, from its `xcrun --sdk` style name.
+    static func platformDisplayName(of platformName: String) -> String {
+        switch platformName {
+        case "macosx":
+            "macOS"
+        case "maccatalyst":
+            "Mac Catalyst"
+        case "iphoneos":
+            "iOS"
+        case "iphonesimulator":
+            "iOS Simulator"
+        case "appletvos":
+            "tvOS"
+        case "watchos":
+            "watchOS"
+        case "xros":
+            "visionOS"
+        default:
+            platformName.capitalized
+        }
+    }
+
     // MARK: - Filtering
 
     /// The filter bar: a row stays when its title satisfies every term of the filter
@@ -815,6 +910,8 @@ enum ReportOutline {
     static let crossReferenceIcon: IconDescriptor = .systemSymbol(.arrowTriangleBranch)
 
     static let manualLoadingIcon: IconDescriptor = .systemSymbol(.trayAndArrowDown)
+
+    static let importedTypeNamesIcon: IconDescriptor = .systemSymbol(.shippingbox)
 
     static let turnedOffIcon: IconDescriptor = .systemSymbol(.powerCircle)
 

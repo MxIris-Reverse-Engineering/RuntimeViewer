@@ -5,8 +5,9 @@ import RuntimeViewerArchitectures
 import Dependencies
 import DependenciesMacros
 
-/// One engine's background work — its background indexing, its interface corpus and its prepared
-/// cross references — shared by every document on the engine.
+/// One engine's background work — its background indexing, its interface corpus, its prepared
+/// cross references and its serving process's SDK type index — shared by every document on the
+/// engine.
 ///
 /// The documents on an engine always shared its indexing manager and its corpus store, but each
 /// kept coordinators of its own: each dispatched the Always Index rows and asked for every corpus
@@ -38,12 +39,17 @@ package final class RuntimeEngineBackgroundWork {
     /// The engine's prepared cross references, kept like `indexingCoordinator`.
     let crossReferencePreparationCoordinator: CrossReferencePreparationCoordinator
 
+    /// Where the SDK type index of the engine's serving process stands — the index that resolves
+    /// `__C.` type names — for the Report's Imported Type Names.
+    let typeIndexCoordinator: TypeIndexCoordinator
+
     /// The images the engine's documents loaded at the user's request, for the Report's Manual
     /// Loading (proposal `editor-jump-bar`).
     let manualImageLoadCoordinator: ManualImageLoadCoordinator
 
     /// Whether any of the work is in progress — an indexing batch, a corpus queued or being
-    /// printed, cross references queued or being prepared, an image the user is loading — for every
+    /// printed, cross references queued or being prepared, a type index batch queued in the
+    /// engine's serving process, an image the user is loading — for every
     /// document on the engine: what their Report navigator tabs mark, and what `processActivity`
     /// follows.
     let isWorkInProgress: Driver<Bool>
@@ -75,7 +81,7 @@ package final class RuntimeEngineBackgroundWork {
     /// The last document left; see `close()`.
     private(set) var isClosed = false
 
-    /// Work for the first document joining or borrowing from `engine`: its three coordinators come
+    /// Work for the first document joining or borrowing from `engine`: its coordinators come
     /// into being with it, and the activity that keeps the app out of App Nap begins following the
     /// work. The engine's background indexing starts with the first document *on* the engine
     /// (`RuntimeEngineBackgroundWorkRegistry.join(_:as:)`), not with one that only borrows from it:
@@ -86,27 +92,31 @@ package final class RuntimeEngineBackgroundWork {
         let indexingCoordinator = RuntimeBackgroundIndexingCoordinator(engine: engine)
         let corpusCoordinator = FindCorpusCoordinator(engine: engine)
         let crossReferencePreparationCoordinator = CrossReferencePreparationCoordinator(engine: engine)
+        let typeIndexCoordinator = TypeIndexCoordinator(engine: engine)
         let manualImageLoadCoordinator = ManualImageLoadCoordinator()
         let isWorkInProgress = Driver.combineLatest(
             indexingCoordinator.hasActiveBatchObservable.asDriver(onErrorJustReturn: false),
             corpusCoordinator.hasActiveBuild,
             crossReferencePreparationCoordinator.hasActivePreparation,
+            typeIndexCoordinator.hasActiveIndexing,
             manualImageLoadCoordinator.hasActiveLoad
-        ) { hasActiveBatch, hasActiveBuild, hasActivePreparation, hasActiveLoad in
-            hasActiveBatch || hasActiveBuild || hasActivePreparation || hasActiveLoad
+        ) { hasActiveBatch, hasActiveBuild, hasActivePreparation, hasActiveTypeIndexing, hasActiveLoad in
+            hasActiveBatch || hasActiveBuild || hasActivePreparation || hasActiveTypeIndexing || hasActiveLoad
         }
         .distinctUntilChanged()
         self.engine = engine
         self.indexingCoordinator = indexingCoordinator
         self.corpusCoordinator = corpusCoordinator
         self.crossReferencePreparationCoordinator = crossReferencePreparationCoordinator
+        self.typeIndexCoordinator = typeIndexCoordinator
         self.manualImageLoadCoordinator = manualImageLoadCoordinator
         self.isWorkInProgress = isWorkInProgress
         processActivity = BackgroundWorkProcessActivity(isWorkInProgress: isWorkInProgress, scheduler: processActivityScheduler)
         activityReporter = RuntimeEngineActivityReporter(
             indexingCoordinator: indexingCoordinator,
             corpusCoordinator: corpusCoordinator,
-            crossReferencePreparationCoordinator: crossReferencePreparationCoordinator
+            crossReferencePreparationCoordinator: crossReferencePreparationCoordinator,
+            typeIndexCoordinator: typeIndexCoordinator
         )
         // The Always Index images are read from derived data as their rows
         // are dispatched, searchable before the batches index them — so the
@@ -132,6 +142,7 @@ package final class RuntimeEngineBackgroundWork {
         indexingCoordinator.close()
         corpusCoordinator.close()
         crossReferencePreparationCoordinator.close()
+        typeIndexCoordinator.close()
         manualImageLoadCoordinator.close()
         processActivity.close()
     }

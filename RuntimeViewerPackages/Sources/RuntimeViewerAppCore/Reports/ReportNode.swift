@@ -13,6 +13,9 @@ public enum ReportCategory: Hashable, Sendable, CaseIterable {
     case searchableInterfaces
     /// The cross references prepared ahead of Call Hierarchy and Type References.
     case crossReferences
+    /// The SDK type index of the engine's serving process, which resolves the `__C` type names of
+    /// printed interfaces, one row per SDK platform.
+    case importedTypeNames
     /// The images the user loaded or had indexed — Load now, an image the sidebar or a jump bar
     /// opened before it was indexed, Load Frameworks…, a Find result in an image not indexed yet
     /// (proposal `editor-jump-bar`). Not background work: the toolbar's activity display does not
@@ -62,6 +65,8 @@ public enum ReportNodeIdentifier: Hashable, Sendable {
     case manualLoad(imagePath: String)
     /// A load of the user's that ended, one row per ending.
     case finishedManualLoad(UUID)
+    /// The SDK type index of one platform, by its `xcrun --sdk` style name (`macosx`).
+    case typeIndexPlatform(platformName: String)
 }
 
 extension ReportNodeIdentifier {
@@ -80,6 +85,8 @@ extension ReportNodeIdentifier {
             .searchableInterfaces
         case .crossReferencePreparation, .finishedCrossReferencePreparation:
             .crossReferences
+        case .typeIndexPlatform:
+            .importedTypeNames
         case .manualLoad, .finishedManualLoad:
             .manualLoading
         }

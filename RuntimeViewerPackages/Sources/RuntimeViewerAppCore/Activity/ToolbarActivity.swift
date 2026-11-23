@@ -115,7 +115,7 @@ enum ActivityText {
         guard report.totalCount > 0 else {
             return [ToolbarActivity.Segment(title, priority: 1)]
         }
-        let noun = report.totalCount == 1 ? "image" : "images"
+        let noun = itemNoun(of: report.kind, count: report.totalCount)
         return [
             ToolbarActivity.Segment(title, priority: 2, separator: .primary),
             ToolbarActivity.Segment("\(report.finishedCount) of \(report.totalCount) \(noun)", priority: 1),
@@ -139,6 +139,8 @@ enum ActivityText {
             "Building Searchable Interfaces"
         case .crossReferences:
             "Preparing Cross References"
+        case .importedTypeNames:
+            "Indexing Imported Type Names"
         // The reporter tracks no manual loads; the words are there for when it does.
         case .manualLoading:
             "Loading"
@@ -153,8 +155,20 @@ enum ActivityText {
             "Searchable Interfaces"
         case .crossReferences:
             "Cross References"
+        case .importedTypeNames:
+            "Imported Type Names"
         case .manualLoading:
             "Manual Loading"
+        }
+    }
+
+    /// What a run of `kind` counts: images, or the type index's batches.
+    static func itemNoun(of kind: ReportCategory, count: Int) -> String {
+        switch kind {
+        case .importedTypeNames:
+            count == 1 ? "batch" : "batches"
+        case .backgroundIndexing, .searchableInterfaces, .crossReferences, .manualLoading:
+            count == 1 ? "image" : "images"
         }
     }
 
@@ -166,6 +180,8 @@ enum ActivityText {
             "Built"
         case (.succeeded, .crossReferences):
             "Prepared"
+        case (.succeeded, .importedTypeNames):
+            "Indexed"
         case (.succeeded, .manualLoading):
             "Loaded"
         case (.failed, _):

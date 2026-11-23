@@ -20,6 +20,9 @@
       location = "group:../swift-semantic-string">
    </FileRef>
    <FileRef
+      location = "group:../swift-type-indexing">
+   </FileRef>
+   <FileRef
       location = "group:RuntimeViewerCore">
    </FileRef>
    <FileRef

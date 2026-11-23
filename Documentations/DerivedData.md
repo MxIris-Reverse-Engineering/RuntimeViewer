@@ -105,6 +105,12 @@ Debug、Debug-arm64e、Release 的 bundle id 不同，各有一处。
   （`opaque type symbolic reference 0x…`，见 `RuntimeInterfaceCorpusSnapshot.printsProcessAddresses`）。下次启动
   地址就变了。
 - 改 Transformer 产生新的变体。新变体写盘时，同一镜像旧变体的文件被删掉，所以每个镜像只留一份语料。
+- **类型名是否解析也进变体**：进程打开了 SDK 类型索引（`RuntimeTypeNames.enableInThisProcess()`）时，变体带
+  `TypeNames-<macOS SDK 版本-build>`，否则带 `UnresolvedTypeNames`（`RuntimeTypeNamesCorpusVariant`）——印着 `__C.` 名字的语料
+  与印着解析后名字的不能互相顶替，SDK 换了版本也重印。语料打印前先等这个镜像的类型索引就绪。
+- **类型索引自己的缓存不在这里**：它按 SDK 版本、不按共享缓存分目录，放在 DerivedData 旁边的
+  `~/Library/Caches/<bundle id>/TypeIndex`（`RuntimeTypeIndexLocation`），不经 `RuntimeDerivedDataStore`、不受这里的清理管；
+  Delete Derived Data 一并量它、删它。
 
 ## 六、语料仓库里，读取在哪一步
 

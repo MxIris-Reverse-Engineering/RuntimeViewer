@@ -13,5 +13,10 @@ How to build and run these suites: the root `AGENTS.md`, *Testing*.
   entry points; once on, it stays on for the whole test process, and every engine made afterwards would
   read and write the real location. An engine under test gets a store of its own through
   `RuntimeEngine.useDerivedDataStore(_:)`, a corpus store through its `derivedData:` parameter.
+- **Never call `RuntimeTypeNames.enableInThisProcess()` in a test either.** It turns on the SDK type index,
+  which would read the installed SDK, run sourcekitd for minutes and write the application's
+  `~/Library/Caches/<bundle identifier>/TypeIndex` (or the command-line tool's). A test process prints
+  `__C.` names; what the index resolves is tested in swift-type-indexing and MachOSwiftSection.
 
-Background: `Documentations/Evolutions/0061-derived-data.md`.
+Background: `Documentations/Evolutions/0061-derived-data.md`; for the type index, MachOSwiftSection's proposal
+`swift-type-indexing-package`.

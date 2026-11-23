@@ -1177,6 +1177,19 @@ extension RuntimeEngine {
         return try await command.perform(on: self)
     }
 
+    /// `dispatchToServingProcess(_:)` that stops waiting for the serving peer
+    /// after `timeout` seconds, for a question a peer built before it never
+    /// answers: over XPC a command the peer has no handler for is dropped,
+    /// not answered. The timeout is the connection's own, so the wait ends
+    /// whether or not the transport honours cancellation.
+    func dispatchToServingProcess<Command: RuntimeEngineCommand>(_ command: Command, timeout: TimeInterval) async throws -> Command.Response {
+        if forwardsRequests {
+            guard let connection else { throw RequestError.senderConnectionIsLose }
+            return try await connection.sendMessage(name: Command.commandName, request: command, timeout: timeout)
+        }
+        return try await command.perform(on: self)
+    }
+
     /// Progress-request overload of `dispatch(_:)` with no progress listener.
     /// Exists so plain call sites stay wire-correct: a progress request must
     /// always ship the `RuntimeEngineProgressEnvelope` (here with a `nil`

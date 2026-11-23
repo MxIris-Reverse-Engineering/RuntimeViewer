@@ -40,8 +40,8 @@ warns once all instruction files together pass 150,000 characters.
 `RuntimeViewer-Distribution.xcworkspace` (release archives) hold this repository's four packages, its
 projects and the precompiled swift-syntax, and take every other package at the version their committed
 `Package.resolved` pins. **`RuntimeViewer-Local.xcworkspace` adds the local checkouts of MachOKit,
-MachOKitExtensions, MachOObjCSection, MachOSwiftSection, swift-demangling and swift-semantic-string**
-(the links of those names in the `.worktrees/` beside this checkout), which replace those six packages
+MachOKitExtensions, MachOObjCSection, MachOSwiftSection, swift-demangling, swift-semantic-string and
+swift-type-indexing** (the links of those names in the `.worktrees/` beside this checkout), which replace those seven packages
 everywhere in the graph: open it to build changes in them before they are pushed, and the Debug workspace
 to build against the pins; a project is open in one workspace at a time. Do not switch some manifests'
 local candidates on instead — the libraries' manifests still name the same packages by URL, and SwiftPM
@@ -197,8 +197,8 @@ project file, which outranks the xcconfig and which the Tuist project below does
 Tuist generates it from `Tuist.swift`, `Workspace.swift`, `Tuist/Package.swift` and
 `RuntimeViewerUsingAppKit/Project.swift`; it builds the same targets from the same sources and the
 same xcconfig files, with the four local packages as source and the third-party dependencies taken
-from Tuist's local binary cache — all but MachOKitExtensions, MachOObjCSection, MachOSwiftSection
-and swift-semantic-string, which change often alongside this repository and are built from source
+from Tuist's local binary cache — all but MachOKitExtensions, MachOObjCSection, MachOSwiftSection,
+swift-semantic-string and swift-type-indexing, which change often alongside this repository and are built from source
 too. **Releases, CI, `RunScript.sh`, `ArchiveScript.sh` and every
 other script use the native projects only**, and the generated files are gitignored.
 
@@ -215,7 +215,7 @@ open RuntimeViewer-Tuist.xcworkspace
   included, which `Tuist.swift` and `Tuist/ProjectDescriptionHelpers/LocalPackages.swift` repeat — and
   `./TuistScript.sh check` passes before it is committed; `check --build` also builds both workspaces
   and compares the two apps.
-- **`Tuist.swift` also lists every target of those four third-party packages**
+- **`Tuist.swift` also lists every target of those five third-party packages**
   (`sourceDependencyTargetNames`; the packages are `SOURCE_DEPENDENCIES` in `TuistScript.sh`). A pin
   move that adds or renames a target of theirs fails `check` until the list follows; a target left
   out goes into the binary cache.
@@ -264,6 +264,14 @@ sidebar's text-token filter fields need — a comparison type's `valuePrefix` / 
 token whose comparison the field does not offer, and the delegate's `filterTokenField(_:editingStringFor:)` —
 and `NSNavigationPopoverController`, which the runtime source picker's list is; `0.19.0` stops a window that
 showed a navigation popover from never being freed, and filters a long list in one quickly.
+swift-type-indexing is declared `from: "0.1.0"` in `RuntimeViewerCore`, macOS only, with MachOObjCSection's
+`ObjCTypeIndexing` and MachOSwiftSection's `SwiftTypeNameResolution`: its first release, the SDK type index that
+resolves a Swift interface's `__C.X` types to their module and Swift name and gives an Objective-C header the
+SDK's `NS_SWIFT_NAME` / `NS_REFINED_FOR_SWIFT` (MachOSwiftSection's proposal `swift-type-indexing-package`). It
+runs only in a process that calls `RuntimeTypeNames.enableInThisProcess()` — the four XPC services, the Catalyst
+helper and the standalone command-line host — and keeps its cache beside the derived data
+(`~/Library/Caches/<bundle identifier>/TypeIndex`). Its `0.1.0` needs swift-apinotes `0.3.0`, the first release
+whose Objective-C members are public.
 MachOKitExtensions is declared `from: "3.3.0"` in `RuntimeViewerCore`, the first release that says where
 a C++ signature spells each named type (`CPlusPlusSymbolName.parameterTypeReferences`), which the C++
 interface prints as class names, and that files an Objective-C method's static locals under a function

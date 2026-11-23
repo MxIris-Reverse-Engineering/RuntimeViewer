@@ -253,6 +253,30 @@ final class ReportTreeBuilder {
         return categoryNode
     }
 
+    /// The Imported Type Names category, or `nil` when it has nothing to show: one row per SDK
+    /// platform the engine's serving process has a type index for, or could not index, in the order
+    /// the status lists them. An engine whose process has no type index answers no platform, and
+    /// the category is left out. The category row shows what the module-interface cache takes on
+    /// disk; nothing in it can be cancelled or ejected.
+    func importedTypeNamesCategory(status: RuntimeTypeIndexStatus) -> ReportNode? {
+        var usedIdentifiers: Set<ReportNodeIdentifier> = []
+        var children: [ReportNode] = []
+        for platformStatus in status.platforms {
+            children.append(makeNode(.typeIndexPlatform(platformName: platformStatus.platformName), usedIdentifiers: &usedIdentifiers) {
+                ReportOutline.configure($0, forTypeIndexPlatform: platformStatus)
+            })
+        }
+
+        var categoryNode: ReportNode?
+        if !children.isEmpty {
+            categoryNode = makeNode(.category(.importedTypeNames), children: children, usedIdentifiers: &usedIdentifiers) {
+                ReportOutline.configureImportedTypeNamesCategoryRow($0, cacheByteCount: status.cacheByteCount)
+            }
+        }
+        dropCellViewModels(of: .importedTypeNames, except: usedIdentifiers)
+        return categoryNode
+    }
+
     // MARK: - Nodes
 
     private func makeBatchNode(

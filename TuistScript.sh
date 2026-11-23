@@ -79,7 +79,7 @@ TUIST_PACKAGE_RESOLVED="Tuist/Package.resolved"
 LOCAL_PACKAGES=("RuntimeViewerCore" "RuntimeViewerPackages" "RuntimeViewerMCP" "RuntimeViewerCommandLine")
 # The third-party packages, by checkout directory, whose targets the cache profile keeps as source
 # (sourceDependencyTargetNames in Tuist.swift); `check` compares that list with their manifests.
-SOURCE_DEPENDENCIES=("MachOKitExtensions" "MachOObjCSection" "MachOSwiftSection" "swift-semantic-string")
+SOURCE_DEPENDENCIES=("MachOKitExtensions" "MachOObjCSection" "MachOSwiftSection" "swift-semantic-string" "swift-type-indexing")
 # The configuration the workspace Xcode opens is generated for.
 RESTING_CONFIGURATION="Debug"
 # The local dependency mode: the workspace whose members beside the checkout (`group:../<name>`) are

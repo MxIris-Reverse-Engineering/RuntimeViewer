@@ -215,6 +215,11 @@ helper daemon 的机器上手动跑：
 
 ## 已知的坑
 
+- **`__C` 类型的第一次解析要等**：宿主机有对应 SDK 时，接口里的 `__C.X` 印成真实模块与 Swift 名，ObjC 头文件标出 SDK 的
+  `NS_SWIFT_NAME` / `NS_REFINED_FOR_SWIFT`（SDK 类型索引，见 MachOSwiftSection 的提案 `swift-type-indexing-package`）。
+  命令行总是等索引就绪再打印：某个 SDK 模块第一次用到时要生成它的接口，UIKit 约两分钟，之后有缓存。没有 SDK 的
+  （只装 Command Line Tools 时的 iOS 镜像、设备、注入的进程）照旧印 `__C.`。
+
 - **socket 路径有 104 字节上限**（`sockaddr_un`）。默认目录在多数机器上 80 多字节；用户名很长时
   会报 `Socket path is longer than 103 bytes`，用 `RUNTIME_VIEWER_CLI_HOST_DIRECTORY` 指到短一点
   的目录（例如 `/tmp/rvcli`）。

@@ -162,6 +162,15 @@ property a plain `var` — and the members the macro generated are left out: the
 `members` prints `ADDRESS`, `KIND`, `NAME` and `SYMBOL` for each member; `--member` is a
 case-insensitive substring filter on the name.
 
+**Imported types print under their module and Swift name.** Where the serving Mac has the
+image's SDK — Xcode, or the Command Line Tools for macOS and Mac Catalyst images — a Swift
+interface prints `__C.UITraitCollection` as `UIKit.UITraitCollection` and a type the SDK renames
+under its Swift name (`UIKit.__UICellConfigurationState`, `PencilKit.PKDrawingReference`), and an
+Objective-C header carries the SDK's `NS_SWIFT_NAME(...)` / `NS_REFINED_FOR_SWIFT`. The first time
+an SDK module is needed, the command waits while its interface is generated — about two minutes for
+UIKit, cached after. Without the SDK (an iOS image with only the Command Line Tools, a device, an
+injected process) `__C.` names stay.
+
 **Addresses are unslid virtual addresses** — what a disassembler shows for the image on disk or
 in the dyld shared cache. They are valid in a database built from the same build, which for a
 shared-cache image means a cache with the same UUID, and in no other.

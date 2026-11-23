@@ -68,20 +68,11 @@ extension RuntimeEngine {
     /// not answered, so an answer that has not come in two seconds reads as
     /// "no index" rather than holding the caller.
     public func typeIndexStatus() async -> RuntimeTypeIndexStatus {
-        guard forwardsRequests else {
-            return await localTypeIndexStatus()
-        }
-        return await withTaskGroup(of: RuntimeTypeIndexStatus?.self) { group in
-            group.addTask { try? await self.dispatch(TypeIndexStatusCommand()) }
-            group.addTask {
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
-                return nil
-            }
-            let firstAnswer = await group.next() ?? nil
-            group.cancelAll()
-            return firstAnswer ?? .empty
-        }
+        (try? await dispatchToServingProcess(TypeIndexStatusCommand(), timeout: Self.typeIndexStatusTimeout)) ?? .empty
     }
+
+    /// How long `typeIndexStatus()` waits for the serving peer.
+    static let typeIndexStatusTimeout: TimeInterval = 2
 
     /// The local arm of `typeIndexStatus()`: this process's own index.
     func localTypeIndexStatus() async -> RuntimeTypeIndexStatus {

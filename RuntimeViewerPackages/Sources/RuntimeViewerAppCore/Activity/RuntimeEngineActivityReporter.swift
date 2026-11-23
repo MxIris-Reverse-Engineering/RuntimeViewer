@@ -2,7 +2,7 @@ import Foundation
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
-/// Works out an engine's activity reports — one run per kind of background work — from its three
+/// Works out an engine's activity reports — one run per kind of background work — from its
 /// coordinators, once for every document on the engine: part of `RuntimeEngineBackgroundWork`.
 ///
 /// Each kind's work is read at most every `inputSamplingInterval`: the coordinators change many
@@ -22,6 +22,8 @@ package final class RuntimeEngineActivityReporter {
 
     private var crossReferenceTracker = ActivityRunTracker(kind: .crossReferences)
 
+    private var typeIndexTracker = ActivityRunTracker(kind: .importedTypeNames)
+
     /// The batches the indexing run under way has had. A batch that finishes leaves the coordinator's
     /// batches for its history, where its last states are read from.
     private var indexingRunBatchIdentifiers: Set<RuntimeIndexingBatchID> = []
@@ -34,6 +36,7 @@ package final class RuntimeEngineActivityReporter {
         indexingCoordinator: RuntimeBackgroundIndexingCoordinator,
         corpusCoordinator: FindCorpusCoordinator,
         crossReferencePreparationCoordinator: CrossReferencePreparationCoordinator,
+        typeIndexCoordinator: TypeIndexCoordinator,
         scheduler: SchedulerType = MainScheduler.instance,
         now: @escaping () -> Date = Date.init
     ) {
@@ -68,6 +71,14 @@ package final class RuntimeEngineActivityReporter {
             .subscribeOnNextMainActor { [weak self] preparationStates in
                 guard let self else { return }
                 updateCrossReferences(with: preparationStates)
+            }
+            .disposed(by: disposeBag)
+
+        typeIndexCoordinator.$status.asObservable()
+            .throttle(Self.inputSamplingInterval, latest: true, scheduler: scheduler)
+            .subscribeOnNextMainActor { [weak self] status in
+                guard let self else { return }
+                updateTypeIndex(with: status)
             }
             .disposed(by: disposeBag)
     }
@@ -178,11 +189,44 @@ package final class RuntimeEngineActivityReporter {
         }
     }
 
+    // MARK: - Imported type names
+
+    /// The type index's batches as work items, one per batch the serving process queued, by
+    /// platform: the batches it finished have succeeded, the first one it has not is running and the
+    /// rest wait — the process runs a platform's batches one after another. The counts only grow
+    /// while the process lives, so a batch keeps its identifier from one status to the next.
+    private func updateTypeIndex(with status: RuntimeTypeIndexStatus) {
+        var items: [ActivityWorkItem] = []
+        for platformStatus in status.platforms {
+            // A platform that is ready, or cannot be indexed, reports no batch: the batches of the
+            // run under way it no longer reports count as done (`ActivityWorkItem.State.ended`).
+            guard case .building(let finishedBatchCount, let queuedBatchCount) = platformStatus.phase else { continue }
+            for batchIndex in 0 ..< max(queuedBatchCount, finishedBatchCount) {
+                let identifier = Self.typeIndexItemIdentifier(of: platformStatus.platformName, batchIndex: batchIndex)
+                let state: ActivityWorkItem.State = if batchIndex < finishedBatchCount {
+                    .succeeded
+                } else if batchIndex == finishedBatchCount {
+                    .running(fractionCompleted: nil)
+                } else {
+                    .waiting
+                }
+                guard state.isActive || typeIndexTracker.isInCurrentRun(identifier) else { continue }
+                items.append(ActivityWorkItem(identifier: identifier, state: state))
+            }
+        }
+        let endedReport = typeIndexTracker.update(items: items, now: now())
+        publish(endedReport: endedReport)
+    }
+
+    static func typeIndexItemIdentifier(of platformName: String, batchIndex: Int) -> String {
+        "\(platformName)/\(batchIndex)"
+    }
+
     // MARK: - Publishing
 
     private func publish(endedReport: ActivityReport?) {
         var newSnapshot = snapshot
-        newSnapshot.runningReports = [indexingTracker.currentReport, corpusTracker.currentReport, crossReferenceTracker.currentReport]
+        newSnapshot.runningReports = [indexingTracker.currentReport, corpusTracker.currentReport, crossReferenceTracker.currentReport, typeIndexTracker.currentReport]
             .compactMap { $0 }
             .sorted { $0.startDate > $1.startDate }
         if let endedReport {
