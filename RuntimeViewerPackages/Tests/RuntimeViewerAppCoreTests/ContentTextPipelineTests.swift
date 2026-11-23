@@ -284,9 +284,8 @@ struct ContentTextPipelineTests {
                 documentState: documentState,
                 router: mockRouter,
                 interfaceProvider: { runtimeObject, _ in
-                    let fetchNumber = fetchRecorder.fetchCount + 1
                     _ = fetchRecorder.recordFetch()
-                    return RuntimeObjectInterface(object: runtimeObject, interfaceString: "class ContentPipelineFixture\(fetchNumber) {}")
+                    return RuntimeObjectInterface(object: runtimeObject, interfaceString: "class ContentPipelineFixture {}")
                 }
             )
         }
