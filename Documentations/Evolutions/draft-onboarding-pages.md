@@ -60,7 +60,7 @@ macOS App 接入 swift-onboardingkit（Apple 私有框架 OnBoardingKit 的 Swif
      - 其余（同版本、降级、目录里没有这一版）→ 不弹。
    - `AppDefaults.lastPresentedOnboardingRelease: FeatureRelease?`：点 Continue 时写成当前功能版本。欢迎页也写当前版本，所以新用户不会紧接着再看一次同一版的 What's New。
 4. **`SettingsAccess` 记下这次读设置时有没有找到存储的设置**：`didFindStoredSettingsOnLoad`，`.loaded` 与 `.failed` 为 `true`（文件在，只是读坏了，也算老用户），`.noStoredData` 为 `false`。
-5. **AppUI 把页面画成 OnBoardingKit 的模板**：`OnboardingPage.makeTemplateContainerViewController(onContinue:)` 返回带一个 Continue 按钮的容器；系统上没有 OnBoardingKit（弱链接后类为 nil）时返回 `nil`，调用方就不弹，只记日志。Continue 先把页面从屏幕上拿掉（被 present 的就 `dismiss`，作为 sheet 窗口内容的就 `endSheet`，独立窗口里的就关窗），再调 `onContinue`。
+5. **AppUI 把页面画成 OnBoardingKit 的模板**：`OnboardingPage.makeTemplateContainerViewController(parentWindowSize:onContinue:)` 返回带一个 Continue 按钮的容器。模板视图关掉 `translatesAutoresizingMaskIntoConstraints`，容器按框架给自家 sheet 定的尺寸要求大小（`templateContainerSize(forParentWindowSize:)`：宽 482，高取父窗口的 88%、限制在 546–600，没有父窗口时 546）；两样都不做，页面就是 0 × 0，见详细设计「AppUI」一节。系统上没有 OnBoardingKit（弱链接后类为 nil）时返回 `nil`，调用方就不弹，只记日志。Continue 先把页面从屏幕上拿掉（被 present 的就 `dismiss`，作为 sheet 窗口内容的就 `endSheet`，独立窗口里的就关窗），再调 `onContinue`。
 6. **App 里新增 `OnboardingController`**（`App/`）：
    - `start()`：等设置读完，用 policy 算出这次要弹的页。主窗口已是文档窗口，就挂成它的 sheet；欢迎窗口在屏幕上，就放进一个独立窗口、显示在欢迎窗口前面；两者都没有，就等第一个成为主窗口的文档窗口或成为 key 的欢迎窗口。Continue 时写 `AppDefaults` 的记录。
    - `showWhatsNew()`：Help › What's New in RuntimeViewer 的动作，弹不超过当前版本的最新一页 What's New，不改记录；主窗口是文档窗口就挂成它的 sheet，否则用独立窗口。页面已在屏幕上时不重复弹。
@@ -98,7 +98,7 @@ macOS App 接入 swift-onboardingkit（Apple 私有框架 OnBoardingKit 的 Swif
 | `RuntimeViewerPackages/Tests/RuntimeViewerAppCoreTests/FeatureReleaseTests.swift` | 新增 | 解析与比较 | 第 3 步的测试 | 3 |
 | `RuntimeViewerPackages/Tests/RuntimeViewerAppCoreTests/OnboardingPolicyTests.swift` | 新增 | 每种启动情形 | 第 3 步的测试 | 3 |
 | `RuntimeViewerPackages/Tests/RuntimeViewerAppCoreTests/OnboardingCatalogTests.swift` | 新增 | 目录覆盖当前版本、每页行数、取页规则 | 第 3、8 条 | 3 |
-| `RuntimeViewerPackages/Sources/RuntimeViewerAppUI/App/OnboardingPage+TemplateContainer.swift` | 新增 | `makeTemplateContainerViewController(onContinue:)`、`isPresentable` | 画成 OnBoardingKit 模板 | 4 |
+| `RuntimeViewerPackages/Sources/RuntimeViewerAppUI/App/OnboardingPage+TemplateContainer.swift` | 新增 | `makeTemplateContainerViewController(parentWindowSize:onContinue:)`、`templateContainerSize(forParentWindowSize:)`、`isPresentable` | 画成 OnBoardingKit 模板，定好页面尺寸 | 4 |
 | `RuntimeViewerPackages/Tests/RuntimeViewerAppUITests/OnboardingTemplateContainerTests.swift` | 新增 | 标题、按钮、Continue 的回调 | 第 4 步的测试 | 4 |
 | `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/OnboardingController.swift` · `OnboardingController` | 新增 | `start()`、`showWhatsNew()`、等主窗口、写记录 | 新的启动职责 | 5 |
 | `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/WelcomeController.swift` · `WelcomeController` | 修改 | 新增 `owns(_ window: NSWindow) -> Bool` 与 `isShowingWindow` | 让页面知道欢迎窗口在不在前面 | 5 |
@@ -165,7 +165,7 @@ applicationDidFinishLaunching
                  ├─ welcomeController.isShowingWindow      ─► a window of its own, in front
                  └─ neither ─► wait: a document window becomes main ─► sheet on it
                                     or the Welcome window becomes key ─► a window of its own
-                      page.makeTemplateContainerViewController(onContinue:)
+                      page.makeTemplateContainerViewController(parentWindowSize: sheet parent's size or nil)
                         ├─ nil (no OnBoardingKit) ─► log, done
                         └─ Continue ─► dismiss / endSheet / close
                                     ─► appDefaults.lastPresentedOnboardingRelease = currentRelease
@@ -342,16 +342,26 @@ extension OnboardingPage {
     /// Whether this system has OnBoardingKit, which the package links weakly.
     public static var isPresentable: Bool { NSClassFromString("OBTemplateContainerViewController") != nil }
 
-    /// The page as OnBoardingKit's template in its container, with one Continue button. Continue dismisses
-    /// the container — or closes its window when it was not presented — and then calls `onContinue`.
-    /// `nil` when the system has no OnBoardingKit.
+    /// The size OnBoardingKit gives its own sheets: 482 wide, 88 % of the parent window's height clamped to
+    /// 546–600, or 546 with no parent window.
+    public static func templateContainerSize(forParentWindowSize parentWindowSize: NSSize?) -> NSSize
+
+    /// The page as OnBoardingKit's template in its container, sized by `templateContainerSize`, with one
+    /// Continue button. Continue dismisses the container — or closes its window when it was not
+    /// presented — and then calls `onContinue`. `nil` when the system has no OnBoardingKit.
     @MainActor
-    public func makeTemplateContainerViewController(onContinue: @escaping @MainActor () -> Void) -> NSViewController?
+    public func makeTemplateContainerViewController(parentWindowSize: NSSize?, onContinue: @escaping @MainActor () -> Void) -> NSViewController?
 }
 #endif
 ```
 
 模板用 `OBTemplateView(title:bodyText:systemImage:features:)`，每个 `Feature` 变成 `OBTemplatePartBulletList.Item(_:description:systemImage:)`，按钮文字 `Continue`。
+
+**页面尺寸要 RV 自己给，而且模板视图要关掉自动约束。** 两处都是框架的行为，在 macOS 27.2 的 cache 上用 IDA 反编译、再在测试里逐步打印尺寸查明：
+
+- 模板视图用零尺寸创建，`translatesAutoresizingMaskIntoConstraints` 是默认的 `true`；容器（`setTemplateView:` 里的 `_completelyFillWithView:`）又用约束把它与四边贴死。于是 AppKit 按它的零尺寸生成 `width == 0`、`height == 0` 两条必需约束，把容器连同用它建的窗口或 sheet 一起压成 0 × 0，什么尺寸约束都顶不过。只给尺寸不关开关时，窗口够大，模板仍是 0 × 0，页面里只剩按钮栏。
+- 容器自己不定尺寸：`-[OBTemplateContainerViewController loadView]` 用 `NSZeroRect` 建视图，只约束了按钮栏的高度（63），宽度没有任何约束；模板要到第一次 `viewWillDraw` 才搭子视图，所以在那之前也撑不起尺寸。只关开关不给尺寸时，窗口宽约 300、高为 0。
+- 框架自己的隐私页窗口（`OBPrivacyWindow`）覆写 `setFrame:display:`，把尺寸强制成 `+[OBStyle sheetSizeForParentWindowSize:]` 的结果：宽 482；高取父窗口高度的 88%，限制在 546 到 600 之间；没有父窗口（尺寸为零）时 546。macOS 15.5 与 27.2 上这组数相同（两版 cache 各建了 IDA 库核对）。`OBStyle` 不在 SDK 的 `.tbd` 里，App 调不到，所以 `templateContainerSize(forParentWindowSize:)` 照抄这个公式，交给容器的 `preferredContentSize`（AppKit 换成两条优先级 501 的约束）。`NSWindow(contentViewController:)` 与 `presentAsSheet` 都按它开出窗口；sheet 用文档窗口的尺寸算，独立窗口没有父窗口，取 546。
 
 ### App
 
@@ -482,3 +492,4 @@ extension DependencyValues {
 | 2026-11-24 | 独立窗口不带关闭按钮 | 自审时发现：独立窗口原本带关闭按钮，从那里关掉不会记下版本，下次启动又会弹。与 sheet 一样只留 Continue（回车）一个出口。 |
 | 2026-11-24 | 根 AGENTS.md 不加依赖下限 | 根 `AGENTS.md` 已约 73 KB，超过它自己定的 64 KiB 上限，不再往里加；swift-onboardingkit 下限的理由写在 `RuntimeViewerPackages/Package.swift` 的注释里，使用规则（先查 `isPresentable`、新功能版本同批写 What's New）写进 `RuntimeViewerUsingAppKit/AGENTS.md` 的生命周期控制器清单。「功能版本」登记进术语表。 |
 | 2026-11-24 | 实现完成，待用户看过后收尾 | 验证（都在 macOS 27.2、Xcode 27.2 上）：MacBook 上包级 `swift build --build-tests` 通过；`RuntimeViewerSettingsTests` 75 个全过；`RuntimeViewerAppCoreTests` 1098 个中 4 个失败，三个是既有记录里整包跑必红的（Call Hierarchy 超时、语料构建保持活动、Always Index 换 Engine），第四个 `SidebarImageListLoadWaitTests` 单独重跑通过；`RuntimeViewerAppUITests` 264 个只有既有必红的 `TitleActivityIndicatorTests` 一条失败。新增的五个套件全过。MacBook 显示器睡着时 AppUI 测试会卡死，点亮后重跑。Ultra 上原生 Debug workspace 构建 App、Tuist 的 install / check / warm / 构建、iOS App 构建全部通过，两种 App 里 OnBoardingKit 都是 `LC_LOAD_WEAK_DYLIB`。界面没有目视验收，留给用户。配套文章：不写——「新功能版本同批写 What's New」由测试强制、规则在 `RuntimeViewerUsingAppKit/AGENTS.md`，弱链接的用法在 swift-onboardingkit 的 README，Tuist 的两处绕行在 `TuistDevelopment.md`，没有别的调用方契约或下一任维护者会踩的决策。新术语：「功能版本」已登记进术语表。正式收尾时一并清理 Ultra 与 MacBook 上同名的 worktree `.worktrees/RuntimeViewer-OnboardingPages` 和 agent 构建目录（`/Volumes/DerivedData/Agents.noindex/claude/` 下名字带 `OnboardingPages` 的）。 |
+| 2026-11-24 | 修好 0 × 0 的页面 | 用户看效果时发现页面窗口是 0 × 0。查明两个原因（详细设计「AppUI」一节）：模板视图零尺寸创建、自动约束没关，被按零尺寸钉死；容器自己也不定尺寸。修法是关掉模板视图的 `translatesAutoresizingMaskIntoConstraints`，再照框架给自家隐私页窗口定尺寸的公式（`+[OBStyle sheetSizeForParentWindowSize:]`，15.5 与 27.2 相同）设容器的 `preferredContentSize`；sheet 按文档窗口的高度算，`makeTemplateContainerViewController` 因此多了 `parentWindowSize:` 参数。第一版只给了尺寸、没关开关，测试显示窗口够大但模板仍是 0 × 0，随即改正。AppUI 测试新增尺寸公式的四种情况，以及「用容器建的窗口、弹出的 sheet 是页面尺寸且模板铺满」两条；去掉关开关那一行时这两条变红，已实测。swift-onboardingkit 的 README 示例（`presentAsSheet(controller)`）同样会弹出 0 × 0 的 sheet，库里还没改，是否改库并发 0.1.1 待用户定。 |
