@@ -678,6 +678,7 @@ let package = Package(
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
                 .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
                 .product(name: "AppKitPlus", package: "AppKitPlus-Release", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "OnBoardingKit", package: "swift-onboardingkit", condition: .when(platforms: appkitPlatforms)),
             ],
         ),
 

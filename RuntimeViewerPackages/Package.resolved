@@ -1,5 +1,5 @@
 {
-  "originHash" : "21d6a2621dfe6aceea8ef8269f7408fb46613a3ad1ccc448d4caf54cc9934230",
+  "originHash" : "0ff6f5eb3d67d90ca1fb8bcb05b56362979233b8edb4b3d7ad605a732f89b6b5",
   "pins" : [
     {
       "identity" : "appkitplus-release",
@@ -530,6 +530,15 @@
       "state" : {
         "revision" : "93806cfecae1f198c894ed5585b93aff0e2d1f5a",
         "version" : "0.5.0"
+      }
+    },
+    {
+      "identity" : "swift-onboardingkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Mx-Iris/swift-onboardingkit",
+      "state" : {
+        "revision" : "a27ac9cfb274e637f0bc6e6422edbedd1655ce16",
+        "version" : "0.1.0"
       }
     },
     {
