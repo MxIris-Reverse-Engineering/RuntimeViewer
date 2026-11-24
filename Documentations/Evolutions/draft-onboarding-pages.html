@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Draft - 首次启动欢迎页与更新后的 What's New（接入 swift-onboardingkit）</title>
+<style>
+/* Evolution proposal page, shared style (style A, "Apple documentation").
+   Copy this whole <style> block verbatim. Page-specific rules, if any, go only
+   in the marked block at the end. Must render in WebKit (Safari, Xcode preview,
+   Quick Look): no JavaScript, no external resources. */
+:root {
+  --background: #ffffff; --foreground: #1d1d1f; --secondary: #6e6e73; --separator: #d2d2d7;
+  --panel: #f5f5f7; --code-background: #f2f2f4; --accent: #0071e3;
+  --added: #1f8a4c; --added-fill: #e3f5ea;
+  --changed: #b26a00; --changed-fill: #fdf0db;
+  --removed: #c62828; --removed-fill: #fbe4e4;
+  --moved: #0066cc; --moved-fill: #e5f0fc;
+  --kept: #6e6e73; --kept-fill: #ececef;
+  --token-keyword: #ad3da4; --token-type: #3900a0; --token-string: #c41a16; --token-number: #1c00cf;
+  --token-comment: #707f8c; --token-macro: #643820;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #1c1c1e; --foreground: #f2f2f7; --secondary: #a1a1a6; --separator: #3a3a3c;
+    --panel: #2c2c2e; --code-background: #2a2a2d; --accent: #4ea1ff;
+    --added: #4cd281; --added-fill: #183826;
+    --changed: #ffb340; --changed-fill: #3d2c10;
+    --removed: #ff6b6b; --removed-fill: #3d1a1a;
+    --moved: #5aa9ff; --moved-fill: #142b45;
+    --kept: #b0b0b5; --kept-fill: #333336;
+    --token-keyword: #fc5fa3; --token-type: #d0a8ff; --token-string: #fc6a5d; --token-number: #d0bf69;
+    --token-comment: #7f8c98; --token-macro: #fd8f3f;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--background); color: var(--foreground);
+  font: 15px/1.65 -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased; }
+.page { max-width: 1080px; margin: 0 auto; padding: 28px 24px 72px; }
+.svg-definitions { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+/* Header */
+.eyebrow { margin: 0 0 6px; font-size: 13px; color: var(--secondary); }
+.crumb + .crumb::before { content: " / "; }
+h1 { font-size: 28px; line-height: 1.3; letter-spacing: -0.01em; margin: 0 0 12px; }
+h1 code { font-size: 0.8em; }
+.proposal-number { color: var(--secondary); margin-right: 4px; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 20px; margin: 0; font-size: 13px; color: var(--secondary); }
+.meta div { display: flex; gap: 6px; align-items: baseline; }
+.meta dd { margin: 0; color: var(--foreground); }
+.meta dd code { font-size: 12px; }
+.status { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--kept); background: var(--kept-fill); }
+.status-accepted { color: var(--moved); background: var(--moved-fill); }
+.status-in-progress { color: var(--changed); background: var(--changed-fill); }
+.status-implemented { color: var(--added); background: var(--added-fill); }
+.status-rejected, .status-withdrawn { color: var(--removed); background: var(--removed-fill); }
+
+/* Table of contents */
+.toc { margin: 22px 0 8px; padding: 8px 10px; background: var(--panel); border-radius: 12px; }
+.toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 2px 4px; }
+.toc li { margin: 0; }
+.toc a { display: inline-block; padding: 3px 11px; border-radius: 999px; color: var(--accent); text-decoration: none; font-size: 14px; }
+.toc a:hover { background: var(--background); }
+
+/* Text */
+section { scroll-margin-top: 16px; }
+h2 { font-size: 21px; margin: 40px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--separator); }
+h3 { font-size: 16px; margin: 22px 0 8px; }
+h4 { font-size: 15px; margin: 18px 0 6px; }
+p { margin: 10px 0; }
+a { color: var(--accent); }
+ul, ol { padding-left: 22px; }
+li { margin: 4px 0; }
+blockquote { margin: 12px 0; padding: 2px 14px; border-left: 3px solid var(--separator); color: var(--secondary); }
+hr { border: none; border-top: 1px solid var(--separator); margin: 24px 0; }
+
+/* Code */
+code { font: 0.86em/1.4 ui-monospace, "SF Mono", Menlo, monospace; background: var(--code-background); padding: 1px 5px; border-radius: 5px; }
+pre { background: var(--code-background); border-radius: 10px; padding: 14px 16px; overflow-x: auto; -webkit-overflow-scrolling: touch; font: 12.5px/1.6 ui-monospace, "SF Mono", Menlo, monospace; }
+pre code { font: inherit; background: none; padding: 0; border-radius: 0; }
+.token-keyword { color: var(--token-keyword); font-weight: 600; }
+.token-type { color: var(--token-type); }
+.token-string { color: var(--token-string); }
+.token-number { color: var(--token-number); }
+.token-comment { color: var(--token-comment); }
+.token-macro { color: var(--token-macro); }
+
+/* Callouts */
+.callout { background: var(--panel); border-left: 4px solid var(--accent); border-radius: 10px; padding: 12px 16px; margin: 14px 0; }
+.callout-note { border-left-color: var(--secondary); }
+.callout-warning { border-left-color: var(--changed); }
+.callout-title { margin: 0 0 6px; font-weight: 600; }
+.callout > :last-child { margin-bottom: 0; }
+.callout ol, .callout ul { margin: 6px 0 0; }
+
+/* Diagrams */
+.legend { list-style: none; padding: 0; margin: 8px 0 12px; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--secondary); }
+.legend li { margin: 0; }
+.swatch { display: inline-block; width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid; vertical-align: -2px; margin-right: 6px; }
+.swatch-added { background: var(--added-fill); border-color: var(--added); }
+.swatch-changed { background: var(--changed-fill); border-color: var(--changed); }
+.swatch-removed { background: var(--removed-fill); border-color: var(--removed); border-style: dashed; }
+.swatch-moved { background: var(--moved-fill); border-color: var(--moved); }
+.swatch-kept { background: var(--kept-fill); border-color: var(--kept); }
+.figure { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--separator); border-radius: 12px; padding: 12px; margin: 12px 0; }
+.figure svg { display: block; width: 100%; min-width: 760px; height: auto; }
+.figure-narrow svg { min-width: 0; max-width: 640px; margin: 0 auto; }
+.figure-caption { font-size: 13px; color: var(--secondary); margin-top: 8px; }
+svg text { font: 12px ui-monospace, "SF Mono", Menlo, monospace; fill: var(--foreground); }
+svg .group-label { font-size: 13px; font-weight: 700; }
+svg .caption { font-size: 10.5px; fill: var(--secondary); }
+svg .strike { text-decoration: line-through; }
+svg .group { fill: none; stroke: var(--separator); stroke-width: 1.5; stroke-dasharray: 5 4; }
+svg .box-added { fill: var(--added-fill); stroke: var(--added); stroke-width: 1.5; }
+svg .box-changed { fill: var(--changed-fill); stroke: var(--changed); stroke-width: 1.5; }
+svg .box-removed { fill: var(--removed-fill); stroke: var(--removed); stroke-width: 1.5; stroke-dasharray: 4 3; }
+svg .box-moved { fill: var(--moved-fill); stroke: var(--moved); stroke-width: 1.5; }
+svg .box-kept { fill: var(--kept-fill); stroke: var(--kept); stroke-width: 1.2; }
+svg .arrow { fill: none; stroke: var(--secondary); stroke-width: 1.4; marker-end: url(#arrowhead); }
+svg .arrow-weak { stroke-dasharray: 4 3; }
+svg .arrow-removed { stroke: var(--removed); stroke-dasharray: 4 3; }
+svg .arrowhead { fill: var(--secondary); }
+
+/* Tables */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 10px 0; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { border: 1px solid var(--separator); padding: 7px 9px; text-align: left; vertical-align: top; }
+th { background: var(--panel); font-weight: 600; }
+.numeric { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tag { display: inline-block; white-space: nowrap; padding: 0 7px; border-radius: 5px; font-size: 12px; font-weight: 600; color: var(--kept); background: var(--kept-fill); }
+.tag-added { color: var(--added); background: var(--added-fill); }
+.tag-changed { color: var(--changed); background: var(--changed-fill); }
+.tag-removed { color: var(--removed); background: var(--removed-fill); }
+.tag-moved { color: var(--moved); background: var(--moved-fill); }
+
+/* Collapsible sections */
+details { border: 1px solid var(--separator); border-radius: 12px; margin: 12px 0; overflow: hidden; }
+summary { cursor: pointer; list-style: none; padding: 11px 16px; font-weight: 600; background: var(--panel); }
+summary::-webkit-details-marker { display: none; }
+summary::before { content: "›"; display: inline-block; width: 1em; color: var(--secondary); -webkit-transition: -webkit-transform 0.15s; transition: transform 0.15s; }
+details[open] > summary::before { -webkit-transform: rotate(90deg); transform: rotate(90deg); }
+details[open] > summary { border-bottom: 1px solid var(--separator); }
+.details-body { padding: 4px 16px 12px; }
+
+@media (max-width: 640px) {
+  .page { padding: 20px 16px 56px; }
+  h1 { font-size: 23px; }
+}
+
+/* ===== Page-specific styles (only for elements the shared style lacks, e.g. UI mockups) ===== */
+</style>
+</head>
+<body>
+<svg class="svg-definitions" aria-hidden="true" focusable="false">
+  <defs><marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>
+</svg>
+<div class="page">
+
+<header class="doc-header">
+  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">Draft</span></p>
+  <h1><span class="proposal-number">Draft</span> 首次启动欢迎页与更新后的 What's New（接入 swift-onboardingkit）</h1>
+  <dl class="meta">
+    <div><dt>状态</dt><dd><span class="status status-accepted">Accepted</span></dd></div>
+    <div><dt>最后更新</dt><dd>2026-11-24</dd></div>
+    <div><dt>项目类型</dt><dd>App</dd></div>
+    <div><dt>原文</dt><dd><code>draft-onboarding-pages.md</code></dd></div>
+  </dl>
+</header>
+
+<nav class="toc" aria-label="目录">
+  <ol>
+    <li><a href="#summary">摘要</a></li>
+    <li><a href="#decide">要你定</a></li>
+    <li><a href="#architecture">架构图</a></li>
+    <li><a href="#map">改动地图</a></li>
+    <li><a href="#design">详细设计</a></li>
+    <li><a href="#research">调研</a></li>
+    <li><a href="#alternatives">替代方案</a></li>
+    <li><a href="#impact">影响</a></li>
+    <li><a href="#steps">落地步骤</a></li>
+    <li><a href="#log">决策日志</a></li>
+  </ol>
+</nav>
+
+<main class="content">
+
+<section id="summary">
+  <h2>摘要</h2>
+  <p>macOS App 接入 swift-onboardingkit（Apple 私有框架 OnBoardingKit 的 Swift 封装，App Store、Freeform、Shortcuts 的欢迎页与 "What's New" 页就是它画的），做两种一次性页面：新用户第一次启动时的<strong>欢迎页</strong>，以及升级到新的功能版本（<code>主版本.次版本</code>）后第一次启动时的 <strong>What's New 页</strong>。</p>
+  <p>页面以 sheet 挂在启动后第一个成为主窗口的窗口上（文档窗口或 0105 的欢迎窗口），点 Continue 关闭并记下「已看过这一版」；Help 菜单新增 What's New in RuntimeViewer，随时可再看。「这次启动该弹哪一页」由 RuntimeViewerAppCore 判断（可单测），页面内容是 AppCore 里的值，由 RuntimeViewerAppUI 画成 OnBoardingKit 的模板，App 里一个新的启动控制器负责弹出。</p>
+  <p>swift-onboardingkit 改为公开仓库、改成弱链接私有框架后发布 <code>0.1.0</code>，RV 按 <code>from: "0.1.0"</code> 依赖它，只给 macOS 链接。</p>
+</section>
+
+<section id="decide">
+  <h2>要你定</h2>
+  <div class="callout">
+    <p class="callout-title">批准后即可开工</p>
+    <ol>
+      <li>按这份方案开工吗？</li>
+    </ol>
+  </div>
+  <div class="callout callout-note">
+    <p class="callout-title">没问你就采用的假设（可以推翻）</p>
+    <ul>
+      <li>swift-onboardingkit 发版前改成弱链接：框架将来消失时 App 照常启动，只是不弹页面。</li>
+      <li>新用户按「这次读设置时有没有找到 <code>settings.json</code>」认；从没改过设置的老用户会看到欢迎页而不是 What's New。</li>
+      <li>按功能版本（3.0）弹 What's New，beta 与补丁版不重复弹。</li>
+      <li>页面内容手写在 AppCore 里，取材于 3.0.0 各 beta 的 Changelogs；欢迎页 5 行、3.0 的 What's New 6 行。</li>
+      <li>以 sheet 挂在第一个主窗口（文档窗口或欢迎窗口）上，没有合适窗口时才用独立窗口。</li>
+      <li>目录缺当前版本时测试失败，强制下一个功能版本同批写 What's New。</li>
+    </ul>
+  </div>
+</section>
+
+<section id="architecture">
+  <h2>架构图</h2>
+  <ul class="legend">
+    <li><i class="swatch swatch-added"></i>新增</li>
+    <li><i class="swatch swatch-changed"></i>修改</li>
+    <li><i class="swatch swatch-kept"></i>不变</li>
+  </ul>
+  <div class="figure">
+  <svg viewBox="0 0 1000 470" role="img" aria-label="What changes">
+    <rect class="group" x="10" y="10" width="300" height="150" rx="10"/>
+    <text class="group-label" x="22" y="30">swift-onboardingkit 0.1.0</text>
+    <rect class="box-changed" x="25" y="42" width="270" height="44" rx="6"/><text x="35" y="60">COnBoardingKit</text><text class="caption" x="35" y="77">weak-links OnBoardingKit.framework</text>
+    <rect class="box-kept" x="25" y="94" width="270" height="44" rx="6"/><text x="35" y="112">OnBoardingKit</text><text class="caption" x="35" y="129">Swift layer, unchanged</text>
+
+    <rect class="group" x="330" y="10" width="660" height="310" rx="10"/>
+    <text class="group-label" x="342" y="30">RuntimeViewerPackages</text>
+    <text class="caption" x="345" y="52">RuntimeViewerSettings</text>
+    <rect class="box-changed" x="345" y="60" width="210" height="44" rx="6"/><text x="355" y="78">SettingsAccess</text><text class="caption" x="355" y="95">+ didFindStoredSettingsOnLoad</text>
+    <text class="caption" x="570" y="52">RuntimeViewerAppCore</text>
+    <rect class="box-added" x="570" y="60" width="198" height="34" rx="6"/><text x="580" y="82">FeatureRelease</text>
+    <rect class="box-added" x="777" y="60" width="198" height="34" rx="6"/><text x="787" y="82">OnboardingPage</text>
+    <rect class="box-added" x="570" y="102" width="198" height="34" rx="6"/><text x="580" y="124">OnboardingCatalog</text>
+    <rect class="box-added" x="777" y="102" width="198" height="34" rx="6"/><text x="787" y="124">OnboardingPolicy</text>
+    <rect class="box-changed" x="570" y="144" width="405" height="44" rx="6"/><text x="580" y="162">AppDefaults</text><text class="caption" x="580" y="179">+ lastPresentedOnboardingRelease</text>
+    <rect class="box-changed" x="570" y="196" width="405" height="44" rx="6"/><text x="580" y="214">SystemSymbol</text><text class="caption" x="580" y="231">+ symbol cases for the pages</text>
+    <text class="caption" x="345" y="256">RuntimeViewerAppUI</text>
+    <rect class="box-added" x="345" y="264" width="360" height="44" rx="6"/><text x="355" y="282">OnboardingPage+TemplateContainer</text><text class="caption" x="355" y="299">makeTemplateContainerViewController(onContinue:)</text>
+
+    <rect class="group" x="10" y="345" width="980" height="115" rx="10"/>
+    <rect class="box-added" x="25" y="360" width="230" height="44" rx="6"/><text x="35" y="378">OnboardingController</text><text class="caption" x="35" y="395">start(), showWhatsNew()</text>
+    <rect class="box-changed" x="275" y="360" width="220" height="44" rx="6"/><text x="285" y="378">WelcomeController</text><text class="caption" x="285" y="395">+ owns(_:)</text>
+    <rect class="box-changed" x="515" y="360" width="220" height="44" rx="6"/><text x="525" y="378">AppDelegate</text><text class="caption" x="525" y="395">+ start(), + showWhatsNew(_:)</text>
+    <rect class="box-changed" x="755" y="360" width="220" height="44" rx="6"/><text x="765" y="378">MainMenuController</text><text class="caption" x="765" y="395">+ Help › What's New</text>
+    <text class="group-label" x="22" y="440">RuntimeViewerUsingAppKit (app target)</text>
+
+    <path class="arrow" d="M 345 286 L 160 286 L 160 140"/>
+    <path class="arrow arrow-weak" d="M 705 300 L 984 300 L 984 77 L 977 77"/>
+    <path class="arrow" d="M 140 360 L 140 334 L 525 334 L 525 310"/>
+  </svg>
+  </div>
+  <p class="figure-caption">AppUI 链接 OnBoardingKit（只给 macOS）并画出 AppCore 描述的页面；App 里的 <code>OnboardingController</code> 经 AppUI 弹出页面。AppCore 仍不依赖任何 UI 库。</p>
+
+  <div class="figure">
+  <svg viewBox="0 0 1000 210" role="img" aria-label="Launch flow">
+    <rect class="box-kept" x="10" y="20" width="180" height="44" rx="6"/><text x="20" y="38">didFinishLaunching</text><text class="caption" x="20" y="55">AppDelegate</text>
+    <rect class="box-added" x="210" y="20" width="180" height="44" rx="6"/><text x="220" y="38">start()</text><text class="caption" x="220" y="55">OnboardingController</text>
+    <rect class="box-kept" x="410" y="20" width="180" height="44" rx="6"/><text x="420" y="38">waitUntilLoaded()</text><text class="caption" x="420" y="55">settings are read</text>
+    <rect class="box-added" x="610" y="20" width="180" height="44" rx="6"/><text x="620" y="38">pageForLaunch(...)</text><text class="caption" x="620" y="55">OnboardingPolicy</text>
+    <rect class="box-kept" x="810" y="20" width="180" height="44" rx="6"/><text x="820" y="38">nil</text><text class="caption" x="820" y="55">show nothing</text>
+
+    <rect class="box-added" x="610" y="130" width="180" height="44" rx="6"/><text x="620" y="148">first main window</text><text class="caption" x="620" y="165">document / Welcome</text>
+    <rect class="box-added" x="410" y="130" width="180" height="44" rx="6"/><text x="420" y="148">makeTemplate...()</text><text class="caption" x="420" y="165">nil if no framework</text>
+    <rect class="box-kept" x="210" y="130" width="180" height="44" rx="6"/><text x="220" y="148">presentAsSheet</text><text class="caption" x="220" y="165">on contentViewController</text>
+    <rect class="box-added" x="10" y="130" width="180" height="44" rx="6"/><text x="20" y="148">Continue</text><text class="caption" x="20" y="165">dismiss, record release</text>
+
+    <path class="arrow" d="M 190 42 L 208 42"/>
+    <path class="arrow" d="M 390 42 L 408 42"/>
+    <path class="arrow" d="M 590 42 L 608 42"/>
+    <path class="arrow arrow-weak" d="M 790 42 L 808 42"/>
+    <path class="arrow" d="M 700 64 L 700 128"/>
+    <path class="arrow" d="M 610 152 L 592 152"/>
+    <path class="arrow" d="M 410 152 L 392 152"/>
+    <path class="arrow" d="M 210 152 L 192 152"/>
+    <text class="caption" x="708" y="100">page</text>
+  </svg>
+  </div>
+  <p class="figure-caption">启动时的流程。Help › What's New in RuntimeViewer 走同一个 AppUI 方法，取不超过当前版本的最新一页，不改记录。</p>
+</section>
+
+<section id="map">
+  <h2>改动地图</h2>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>文件 / 类型</th><th>动作</th><th>改什么</th><th>为什么</th><th>步骤</th></tr></thead>
+    <tbody>
+      <tr><td>swift-onboardingkit <code>Package.swift</code> · <code>COnBoardingKit</code></td><td><span class="tag tag-changed">修改</span></td><td><code>linkerSettings</code> 改为 <code>-F/System/Library/PrivateFrameworks</code> 加 <code>-Xlinker -weak_framework -Xlinker OnBoardingKit</code>，去掉 <code>.linkedFramework</code></td><td>框架不在的系统上 App 仍能启动</td><td class="numeric">1</td></tr>
+      <tr><td>swift-onboardingkit <code>README.md</code></td><td><span class="tag tag-changed">修改</span></td><td>安装写法改 <code>from: "0.1.0"</code>；「Things to know」加弱链接与可用性检查</td><td>公开发布后的用法</td><td class="numeric">1</td></tr>
+      <tr><td>swift-onboardingkit <code>Documentations/Evolutions/0001-…md</code>（与 <code>.html</code>）</td><td><span class="tag tag-changed">修改</span></td><td>决策日志加一行：改弱链接、公开、发布 0.1.0</td><td>那边的决策留档</td><td class="numeric">1</td></tr>
+      <tr><td>GitHub <code>Mx-Iris/swift-onboardingkit</code></td><td><span class="tag tag-changed">修改</span></td><td>可见性改公开；tag <code>0.1.0</code> 与 Release</td><td>RV 是公开仓库</td><td class="numeric">1</td></tr>
+      <tr><td><code>RuntimeViewerPackages/Package.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>声明 <code>swift-onboardingkit</code>（本地候选 + <code>from: "0.1.0"</code>）；<code>RuntimeViewerAppUI</code> 依赖 <code>OnBoardingKit</code>，只给 macOS</td><td>接入依赖</td><td class="numeric">2</td></tr>
+      <tr><td><code>RuntimeViewerPackages</code>、<code>RuntimeViewerCommandLine</code> 与 Debug、Distribution 两个 workspace 的 <code>Package.resolved</code></td><td><span class="tag tag-changed">修改</span></td><td>加 swift-onboardingkit 的 pin，其余 pin 不动</td><td>锁文件随依赖变</td><td class="numeric">2</td></tr>
+      <tr><td><code>RuntimeViewerSettings/Settings.swift</code> · <code>SettingsAccess</code></td><td><span class="tag tag-changed">修改</span></td><td>新增 <code>didFindStoredSettingsOnLoad</code>，在 <code>logLoadOutcome(_:)</code> 里记</td><td>认新用户，不另存布尔值</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerSettingsTests/SettingsStoredSettingsDetectionTests.swift</code></td><td><span class="tag tag-added">新增</span></td><td>无数据、有数据、坏数据三种</td><td>第 3 步的测试</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerAppCore/App/FeatureRelease.swift</code></td><td><span class="tag tag-added">新增</span></td><td>主次版本、解析、比较、编码</td><td>按功能版本弹页</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerAppCore/App/OnboardingPage.swift</code></td><td><span class="tag tag-added">新增</span></td><td>一页的内容值</td><td>AppCore 只描述、AppUI 画</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerAppCore/App/OnboardingCatalog.swift</code></td><td><span class="tag tag-added">新增</span></td><td>欢迎页与 3.0 的 What's New；按版本取页</td><td>内容</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerAppCore/App/OnboardingPolicy.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>pageForLaunch(…)</code></td><td>判断可单测</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerAppCore/Storage/AppDefaults.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>新增 <code>lastPresentedOnboardingRelease: FeatureRelease?</code></td><td>记住看过哪一版</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerAppCore/Presentation/SystemSymbol.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>加页面用到、还没有的符号</td><td>页面的符号</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerAppCoreTests/</code> 的 <code>FeatureReleaseTests</code>、<code>OnboardingPolicyTests</code>、<code>OnboardingCatalogTests</code></td><td><span class="tag tag-added">新增</span></td><td>解析与比较；每种启动情形；目录覆盖当前版本、每页行数、取页规则</td><td>第 3 步的测试</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerAppUI/App/OnboardingPage+TemplateContainer.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>makeTemplateContainerViewController(onContinue:)</code>、<code>isPresentable</code></td><td>画成 OnBoardingKit 模板</td><td class="numeric">4</td></tr>
+      <tr><td><code>RuntimeViewerAppUITests/OnboardingTemplateContainerTests.swift</code></td><td><span class="tag tag-added">新增</span></td><td>标题、按钮、Continue 的回调</td><td>第 4 步的测试</td><td class="numeric">4</td></tr>
+      <tr><td><code>App/OnboardingController.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>start()</code>、<code>showWhatsNew()</code>、等主窗口、写记录</td><td>新的启动职责</td><td class="numeric">5</td></tr>
+      <tr><td><code>App/WelcomeController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>新增 <code>owns(_ window: NSWindow) -&gt; Bool</code></td><td>让页面能挂在欢迎窗口上</td><td class="numeric">5</td></tr>
+      <tr><td><code>App/AppDelegate.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>@Dependency(\.onboardingController)</code>、<code>start()</code> 一行、<code>showWhatsNew(_:)</code> 一行</td><td>接入启动</td><td class="numeric">5</td></tr>
+      <tr><td><code>App/MainMenuController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>Help 菜单加「What's New in RuntimeViewer」</td><td>随时再看</td><td class="numeric">5</td></tr>
+      <tr><td>根 <code>AGENTS.md</code></td><td><span class="tag tag-changed">修改</span></td><td><em>Dependency floors</em> 加 swift-onboardingkit 一句</td><td>依赖下限要写理由</td><td class="numeric">6</td></tr>
+      <tr><td><code>RuntimeViewerUsingAppKit/AGENTS.md</code></td><td><span class="tag tag-changed">修改</span></td><td>生命周期控制器清单加 <code>OnboardingController</code>；新功能版本必须带 What's New</td><td>规则落到受管目录</td><td class="numeric">6</td></tr>
+      <tr><td><code>Documentations/Evolutions/README.md</code>、<code>Documentations/README.md</code></td><td><span class="tag tag-changed">修改</span></td><td>登记本提案</td><td>文档索引</td><td class="numeric">6</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section id="design">
+  <h2>详细设计</h2>
+  <details open>
+    <summary>启动时弹哪一页：<code>OnboardingPolicy.pageForLaunch</code> 的规则</summary>
+    <div class="details-body">
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th><code>lastPresentedRelease</code></th><th><code>hasStoredSettings</code></th><th>目录里有当前版本</th><th>结果</th></tr></thead>
+        <tbody>
+          <tr><td><code>nil</code></td><td><code>false</code></td><td>任意</td><td>欢迎页</td></tr>
+          <tr><td><code>nil</code></td><td><code>true</code></td><td>有</td><td>当前版本的 What's New</td></tr>
+          <tr><td><code>nil</code></td><td><code>true</code></td><td>没有</td><td><code>nil</code></td></tr>
+          <tr><td>早于当前</td><td>任意</td><td>有</td><td>当前版本的 What's New</td></tr>
+          <tr><td>早于当前</td><td>任意</td><td>没有</td><td><code>nil</code></td></tr>
+          <tr><td>等于或晚于当前</td><td>任意</td><td>任意</td><td><code>nil</code></td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p>点 Continue 时 <code>AppDefaults.lastPresentedOnboardingRelease</code> 写成当前功能版本；欢迎页也写，所以新用户不会紧接着再看同一版的 What's New。<code>SettingsAccess.didFindStoredSettingsOnLoad</code>：<code>.loaded</code> 与 <code>.failed</code> 为 <code>true</code>，<code>.noStoredData</code> 为 <code>false</code>。</p>
+    </div>
+  </details>
+  <details>
+    <summary>AppCore 的类型</summary>
+    <div class="details-body">
+<pre><code><span class="token-keyword">#if</span> os(macOS)
+
+<span class="token-comment">/// A feature release of the app: the major and minor parts of its marketing version.</span>
+<span class="token-keyword">public struct</span> <span class="token-type">FeatureRelease</span>: <span class="token-type">Hashable</span>, <span class="token-type">Comparable</span>, <span class="token-type">Codable</span>, <span class="token-type">Sendable</span>, <span class="token-type">CustomStringConvertible</span> {
+    <span class="token-keyword">public var</span> major: <span class="token-type">Int</span>
+    <span class="token-keyword">public var</span> minor: <span class="token-type">Int</span>
+    <span class="token-keyword">public init</span>(major: <span class="token-type">Int</span>, minor: <span class="token-type">Int</span>)
+    <span class="token-comment">/// `3.0.0`, `3.0` and `3.0.1` are all 3.0. `nil` when the string does not start with two numbers.</span>
+    <span class="token-keyword">public init</span>?(marketingVersion: <span class="token-type">String</span>)
+    <span class="token-keyword">public var</span> description: <span class="token-type">String</span>
+}
+
+<span class="token-keyword">public struct</span> <span class="token-type">OnboardingPage</span>: <span class="token-type">Equatable</span>, <span class="token-type">Sendable</span> {
+    <span class="token-keyword">public enum</span> <span class="token-type">Kind</span>: <span class="token-type">Equatable</span>, <span class="token-type">Sendable</span> { <span class="token-keyword">case</span> welcome; <span class="token-keyword">case</span> whatsNew(<span class="token-type">FeatureRelease</span>) }
+    <span class="token-keyword">public struct</span> <span class="token-type">Feature</span>: <span class="token-type">Equatable</span>, <span class="token-type">Sendable</span> {
+        <span class="token-keyword">public var</span> title: <span class="token-type">String</span>
+        <span class="token-keyword">public var</span> description: <span class="token-type">String</span>
+        <span class="token-keyword">public var</span> symbol: <span class="token-type">SystemSymbol</span>
+        <span class="token-keyword">public init</span>(<span class="token-keyword">_</span> title: <span class="token-type">String</span>, description: <span class="token-type">String</span>, symbol: <span class="token-type">SystemSymbol</span>)
+    }
+    <span class="token-keyword">public var</span> kind: <span class="token-type">Kind</span>
+    <span class="token-keyword">public var</span> title: <span class="token-type">String</span>
+    <span class="token-keyword">public var</span> bodyText: <span class="token-type">String</span>?
+    <span class="token-keyword">public var</span> symbol: <span class="token-type">SystemSymbol</span>
+    <span class="token-keyword">public var</span> features: [<span class="token-type">Feature</span>]
+}
+
+<span class="token-keyword">public struct</span> <span class="token-type">OnboardingCatalog</span>: <span class="token-type">Sendable</span> {
+    <span class="token-keyword">public var</span> welcomePage: <span class="token-type">OnboardingPage</span>
+    <span class="token-keyword">public var</span> whatsNewPages: [<span class="token-type">FeatureRelease</span>: <span class="token-type">OnboardingPage</span>]
+    <span class="token-keyword">public static let</span> runtimeViewer: <span class="token-type">OnboardingCatalog</span>
+    <span class="token-comment">/// The page Help › What's New shows: the release's own, or else the latest one before it.</span>
+    <span class="token-keyword">public func</span> latestWhatsNewPage(upTo release: <span class="token-type">FeatureRelease</span>) -&gt; <span class="token-type">OnboardingPage</span>?
+}
+
+<span class="token-keyword">public enum</span> <span class="token-type">OnboardingPolicy</span> {
+    <span class="token-keyword">public static func</span> pageForLaunch(
+        currentRelease: <span class="token-type">FeatureRelease</span>,
+        lastPresentedRelease: <span class="token-type">FeatureRelease</span>?,
+        hasStoredSettings: <span class="token-type">Bool</span>,
+        catalog: <span class="token-type">OnboardingCatalog</span>
+    ) -&gt; <span class="token-type">OnboardingPage</span>?
+}
+
+<span class="token-keyword">#endif</span></code></pre>
+    </div>
+  </details>
+  <details>
+    <summary>页面内容（界面文字用英文）</summary>
+    <div class="details-body">
+      <h4>Welcome to RuntimeViewer（<code>hand.wave</code>）</h4>
+      <p><em>Read the Objective-C, Swift and C++ interfaces of the images on your Mac, in other processes and on your devices.</em></p>
+      <ul>
+        <li><strong>Every Interface</strong> — Browse the Objective-C, Swift and C++ objects of any image, printed with Xcode's syntax highlighting. — <code>square.stack.3d.up</code></li>
+        <li><strong>Jump Through Types</strong> — Click a type in an interface to open it, and go back the way you came. — <code>arrow.right.circle</code></li>
+        <li><strong>Beyond This Process</strong> — Attach to a running app, a Mac Catalyst app, the Simulator or a device, or open files from disk. — <code>app.connected.to.app.below.fill</code></li>
+        <li><strong>Find and Cross References</strong> — Search every indexed interface and follow callers, callees and type references. — <code>magnifyingglass</code></li>
+        <li><strong>Made for Agents</strong> — An MCP server and runtime-viewer-cli give coding agents the same interfaces. — <code>terminal</code></li>
+      </ul>
+      <h4>What's New in RuntimeViewer 3.0（<code>sparkles</code>）</h4>
+      <ul>
+        <li><strong>Find Navigator</strong> — Search the interfaces of every indexed image, find types with their hierarchy, and find members. — <code>magnifyingglass</code></li>
+        <li><strong>Cross References</strong> — See who calls a method, what it calls and which functions use a type. — <code>arrow.triangle.branch</code></li>
+        <li><strong>Files from Disk</strong> — Open Mach-O files, bundles, folders and dyld shared caches, each in its own window. — <code>folder</code></li>
+        <li><strong>C++ Interfaces</strong> — Classes and namespaces recovered from RTTI, vtables and symbols, printed and exported as headers. — <code>curlybraces</code></li>
+        <li><strong>Editor Panes</strong> — Split the content area; each pane has its own tabs, history and jump bar. — <code>rectangle.split.2x1</code></li>
+        <li><strong>Command-Line Tool</strong> — runtime-viewer-cli ships inside the app and works without it running. — <code>terminal</code></li>
+      </ul>
+    </div>
+  </details>
+  <details>
+    <summary>AppUI、App 与弱链接</summary>
+    <div class="details-body">
+<pre><code><span class="token-keyword">extension</span> <span class="token-type">OnboardingPage</span> {
+    <span class="token-comment">/// Whether this system has OnBoardingKit, which the package links weakly.</span>
+    <span class="token-keyword">public static var</span> isPresentable: <span class="token-type">Bool</span> { <span class="token-type">NSClassFromString</span>(<span class="token-string">"OBTemplateContainerViewController"</span>) != <span class="token-keyword">nil</span> }
+
+    <span class="token-comment">/// The page as OnBoardingKit's template in its container, with one Continue button.</span>
+    <span class="token-comment">/// `nil` when the system has no OnBoardingKit.</span>
+    <span class="token-macro">@MainActor</span>
+    <span class="token-keyword">public func</span> makeTemplateContainerViewController(onContinue: <span class="token-keyword">@escaping</span> <span class="token-macro">@MainActor</span> () -&gt; <span class="token-type">Void</span>) -&gt; <span class="token-type">NSViewController</span>?
+}
+
+<span class="token-macro">@MainActor</span>
+<span class="token-keyword">final class</span> <span class="token-type">OnboardingController</span> {
+    <span class="token-comment">/// Called from `applicationDidFinishLaunching(_:)`, after `WelcomeController.start()`.</span>
+    <span class="token-keyword">func</span> start()
+    <span class="token-comment">/// Help › What's New in RuntimeViewer.</span>
+    <span class="token-keyword">func</span> showWhatsNew()
+}</code></pre>
+      <ul>
+        <li>当前版本取 <code>CFBundleShortVersionString</code>，解析不出就什么也不弹。</li>
+        <li>等主窗口：先看 <code>NSApp.mainWindow</code>，不合适就观察 <code>didBecomeMainNotification</code>，第一个是文档窗口或欢迎窗口、且没挂着 sheet 的窗口拿到页面。</li>
+        <li>窗口没有 <code>contentViewController</code> 时退回独立窗口；<code>showWhatsNew()</code> 不写记录，页面已挂着时不重复弹。</li>
+        <li>swift-onboardingkit 的链接参数：<code>.unsafeFlags(["-F/System/Library/PrivateFrameworks", "-Xlinker", "-weak_framework", "-Xlinker", "OnBoardingKit"])</code>；第 2 步用 <code>otool -l</code> 确认是 <code>LC_LOAD_WEAK_DYLIB</code>。</li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<section id="research">
+  <h2>调研</h2>
+  <details>
+    <summary>查证过的事实</summary>
+    <div class="details-body">
+      <ul>
+        <li>swift-onboardingkit 只有一个提交，已推到 <code>Mx-Iris/swift-onboardingkit</code> 的 <code>main</code>，仓库私有、没有 tag；现在是强链接，框架不在时链接它的 App 启动即被 dyld 拒绝。</li>
+        <li>RuntimeViewer 是公开仓库；release workflow 只为 SourceEditor 配了额外的 token，其余依赖用 job 自己的 token，读不到别的私有仓库。</li>
+        <li>带 unsafe flags 的远端依赖能否被 Xcode 与 Tuist 接受：<strong>尚未验证</strong>，本机没有工程依赖过同样写法的 swift-skylight。放在第 2 步实测。</li>
+        <li><code>SettingsAccess.load()</code> 拿到的 <code>LoadOutcome</code> 现在只打日志；UIFoundation 设置层 skill 建议首次启动的判断从已持久化的状态推出。</li>
+        <li><code>AppDefaults</code> 存 App 的非偏好状态；Debug 与 Release 的 bundle identifier 不同，defaults 天然分开。</li>
+        <li><code>MARKETING_VERSION = 3.0.0</code>，所有 beta 都报 3.0.0，所以按 <code>主版本.次版本</code> 认功能版本。</li>
+        <li>Help 菜单是 UIFoundation 的 <code>MainMenu.help()</code>，另有接受 <code>@MenuBuilder</code> 的 <code>help(title:_:)</code>。</li>
+        <li>升级后 <code>HelperServiceVersionChecker</code> 可能 <code>runModal()</code> 一个 alert；sheet 会等它结束才显示，不做特别处理。</li>
+        <li><code>Changelogs/*.md</code> 的条目是整句话，没有标题与符号，内容只能手写。</li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<section id="alternatives">
+  <h2>替代方案</h2>
+  <details>
+    <summary>评估过但放弃的 7 条</summary>
+    <div class="details-body">
+      <ul>
+        <li><strong>自己用 AppKit 画页面</strong>：外观永远差一点，系统改样式还得跟。</li>
+        <li><strong>保持私有、CI 加 token</strong>：公开仓库的贡献者解析不了依赖图；用户选了改公开。</li>
+        <li><strong>封装放进 UIFoundation 的 <code>UIFoundationAppleInternal</code></strong>：用户已做成独立包，本提案只接入。</li>
+        <li><strong>另存 <code>hasCompletedOnboarding</code> 布尔值</strong>：同样认不出没改过设置的老用户，还多一份可能矛盾的状态。</li>
+        <li><strong>用 Sparkle 的 <code>SUHasLaunchedBefore</code></strong>：内部键，且写入时机绑在 <code>UpdaterService.start()</code> 上，容易被启动顺序调整悄悄打破。</li>
+        <li><strong>按完整版本号或构建号弹</strong>：每个 beta 都弹一次，补丁版没东西可讲。</li>
+        <li><strong>独立窗口</strong>：会和欢迎窗口并排抢焦点；只在没有合适主窗口时退回。</li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<section id="impact">
+  <h2>影响</h2>
+  <ul>
+    <li><strong>用户可见</strong>：新用户第一次启动看到欢迎页；老用户升级到 3.0 后第一次启动看到 What's New；Help 菜单多一项「What's New in RuntimeViewer」。</li>
+    <li><strong>可发现性</strong>：默认开启、没有开关；每个功能版本只出现一次。</li>
+    <li><strong>数据</strong>：新增 defaults 键 <code>lastPresentedOnboardingRelease</code>；<code>settings.json</code> 格式不变。删掉这个键即可让页面再出现一次。</li>
+    <li><strong>平台</strong>：只在 macOS；系统上没有 OnBoardingKit 时不弹、只记日志，App 照常启动。iOS、visionOS、Mac Catalyst 不变。</li>
+    <li><strong>发布</strong>：不需要新的 entitlement 或隐私条目，不影响公证与 Sparkle；下一个功能版本缺 What's New 时测试失败。</li>
+  </ul>
+</section>
+
+<section id="steps">
+  <h2>落地步骤</h2>
+  <ol>
+    <li><strong>发布 swift-onboardingkit 0.1.0</strong>：改弱链接、README、0001 决策日志；仓库改公开；tag 与 Release。</li>
+    <li><strong>接入依赖并实测构建</strong>：在 Ultra 上构建 Debug workspace 与 Tuist workspace，确认 Xcode 接受带 unsafe flags 的远端包、App 里是弱链接；有一项不成立就停下报给用户。</li>
+    <li><strong>AppCore 的判断与内容</strong>：<code>FeatureRelease</code>、<code>OnboardingPage</code>、<code>OnboardingCatalog</code>、<code>OnboardingPolicy</code>、<code>AppDefaults</code>、<code>SystemSymbol</code>、<code>SettingsAccess</code> 与测试。</li>
+    <li><strong>AppUI 画页面</strong>：<code>makeTemplateContainerViewController(onContinue:)</code> 与测试。</li>
+    <li><strong>App 接入启动与菜单</strong>：<code>OnboardingController</code>、<code>WelcomeController.owns(_:)</code>、AppDelegate、Help 菜单；界面由用户目视验收。</li>
+    <li><strong>文档</strong>：两份 <code>AGENTS.md</code>、两份索引、本提案；「功能版本」登记进术语表。</li>
+  </ol>
+  <p>每步的行为清单（测试用例名）见提案原文「落地步骤」。</p>
+</section>
+
+<section id="log">
+  <h2>决策日志</h2>
+  <details>
+    <summary>1 条，最近一条：Created as Draft</summary>
+    <div class="details-body">
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>日期</th><th>变更</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td class="numeric">2026-11-24</td><td>Created as Draft</td><td>用户要求接入新建的 swift-onboardingkit。澄清一轮定了两件事：做首次启动欢迎页与更新后的 What's New 两种页面；swift-onboardingkit 改为公开仓库并发布 0.1.0，RV 按版本号依赖。</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+  </details>
+</section>
+
+</main>
+</div>
+</body>
+</html>
