@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Draft - Debug 构建的图标：主图标加 DEBUG 角标</title>
+<style>
+/* Evolution proposal page, shared style (style A, "Apple documentation").
+   Copy this whole <style> block verbatim. Page-specific rules, if any, go only
+   in the marked block at the end. Must render in WebKit (Safari, Xcode preview,
+   Quick Look): no JavaScript, no external resources. */
+:root {
+  --background: #ffffff; --foreground: #1d1d1f; --secondary: #6e6e73; --separator: #d2d2d7;
+  --panel: #f5f5f7; --code-background: #f2f2f4; --accent: #0071e3;
+  --added: #1f8a4c; --added-fill: #e3f5ea;
+  --changed: #b26a00; --changed-fill: #fdf0db;
+  --removed: #c62828; --removed-fill: #fbe4e4;
+  --moved: #0066cc; --moved-fill: #e5f0fc;
+  --kept: #6e6e73; --kept-fill: #ececef;
+  --token-keyword: #ad3da4; --token-type: #3900a0; --token-string: #c41a16; --token-number: #1c00cf;
+  --token-comment: #707f8c; --token-macro: #643820;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #1c1c1e; --foreground: #f2f2f7; --secondary: #a1a1a6; --separator: #3a3a3c;
+    --panel: #2c2c2e; --code-background: #2a2a2d; --accent: #4ea1ff;
+    --added: #4cd281; --added-fill: #183826;
+    --changed: #ffb340; --changed-fill: #3d2c10;
+    --removed: #ff6b6b; --removed-fill: #3d1a1a;
+    --moved: #5aa9ff; --moved-fill: #142b45;
+    --kept: #b0b0b5; --kept-fill: #333336;
+    --token-keyword: #fc5fa3; --token-type: #d0a8ff; --token-string: #fc6a5d; --token-number: #d0bf69;
+    --token-comment: #7f8c98; --token-macro: #fd8f3f;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--background); color: var(--foreground);
+  font: 15px/1.65 -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased; }
+.page { max-width: 1080px; margin: 0 auto; padding: 28px 24px 72px; }
+.svg-definitions { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+/* Header */
+.eyebrow { margin: 0 0 6px; font-size: 13px; color: var(--secondary); }
+.crumb + .crumb::before { content: " / "; }
+h1 { font-size: 28px; line-height: 1.3; letter-spacing: -0.01em; margin: 0 0 12px; }
+h1 code { font-size: 0.8em; }
+.proposal-number { color: var(--secondary); margin-right: 4px; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 20px; margin: 0; font-size: 13px; color: var(--secondary); }
+.meta div { display: flex; gap: 6px; align-items: baseline; }
+.meta dd { margin: 0; color: var(--foreground); }
+.meta dd code { font-size: 12px; }
+.status { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--kept); background: var(--kept-fill); }
+.status-accepted { color: var(--moved); background: var(--moved-fill); }
+.status-in-progress { color: var(--changed); background: var(--changed-fill); }
+.status-implemented { color: var(--added); background: var(--added-fill); }
+.status-rejected, .status-withdrawn { color: var(--removed); background: var(--removed-fill); }
+
+/* Table of contents */
+.toc { margin: 22px 0 8px; padding: 8px 10px; background: var(--panel); border-radius: 12px; }
+.toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 2px 4px; }
+.toc li { margin: 0; }
+.toc a { display: inline-block; padding: 3px 11px; border-radius: 999px; color: var(--accent); text-decoration: none; font-size: 14px; }
+.toc a:hover { background: var(--background); }
+
+/* Text */
+section { scroll-margin-top: 16px; }
+h2 { font-size: 21px; margin: 40px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--separator); }
+h3 { font-size: 16px; margin: 22px 0 8px; }
+h4 { font-size: 15px; margin: 18px 0 6px; }
+p { margin: 10px 0; }
+a { color: var(--accent); }
+ul, ol { padding-left: 22px; }
+li { margin: 4px 0; }
+blockquote { margin: 12px 0; padding: 2px 14px; border-left: 3px solid var(--separator); color: var(--secondary); }
+hr { border: none; border-top: 1px solid var(--separator); margin: 24px 0; }
+
+/* Code */
+code { font: 0.86em/1.4 ui-monospace, "SF Mono", Menlo, monospace; background: var(--code-background); padding: 1px 5px; border-radius: 5px; }
+pre { background: var(--code-background); border-radius: 10px; padding: 14px 16px; overflow-x: auto; -webkit-overflow-scrolling: touch; font: 12.5px/1.6 ui-monospace, "SF Mono", Menlo, monospace; }
+pre code { font: inherit; background: none; padding: 0; border-radius: 0; }
+.token-keyword { color: var(--token-keyword); font-weight: 600; }
+.token-type { color: var(--token-type); }
+.token-string { color: var(--token-string); }
+.token-number { color: var(--token-number); }
+.token-comment { color: var(--token-comment); }
+.token-macro { color: var(--token-macro); }
+
+/* Callouts */
+.callout { background: var(--panel); border-left: 4px solid var(--accent); border-radius: 10px; padding: 12px 16px; margin: 14px 0; }
+.callout-note { border-left-color: var(--secondary); }
+.callout-warning { border-left-color: var(--changed); }
+.callout-title { margin: 0 0 6px; font-weight: 600; }
+.callout > :last-child { margin-bottom: 0; }
+.callout ol, .callout ul { margin: 6px 0 0; }
+
+/* Diagrams */
+.legend { list-style: none; padding: 0; margin: 8px 0 12px; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--secondary); }
+.legend li { margin: 0; }
+.swatch { display: inline-block; width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid; vertical-align: -2px; margin-right: 6px; }
+.swatch-added { background: var(--added-fill); border-color: var(--added); }
+.swatch-changed { background: var(--changed-fill); border-color: var(--changed); }
+.swatch-removed { background: var(--removed-fill); border-color: var(--removed); border-style: dashed; }
+.swatch-moved { background: var(--moved-fill); border-color: var(--moved); }
+.swatch-kept { background: var(--kept-fill); border-color: var(--kept); }
+.figure { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--separator); border-radius: 12px; padding: 12px; margin: 12px 0; }
+.figure svg { display: block; width: 100%; min-width: 760px; height: auto; }
+.figure-narrow svg { min-width: 0; max-width: 640px; margin: 0 auto; }
+.figure-caption { font-size: 13px; color: var(--secondary); margin-top: 8px; }
+svg text { font: 12px ui-monospace, "SF Mono", Menlo, monospace; fill: var(--foreground); }
+svg .group-label { font-size: 13px; font-weight: 700; }
+svg .caption { font-size: 10.5px; fill: var(--secondary); }
+svg .strike { text-decoration: line-through; }
+svg .group { fill: none; stroke: var(--separator); stroke-width: 1.5; stroke-dasharray: 5 4; }
+svg .box-added { fill: var(--added-fill); stroke: var(--added); stroke-width: 1.5; }
+svg .box-changed { fill: var(--changed-fill); stroke: var(--changed); stroke-width: 1.5; }
+svg .box-removed { fill: var(--removed-fill); stroke: var(--removed); stroke-width: 1.5; stroke-dasharray: 4 3; }
+svg .box-moved { fill: var(--moved-fill); stroke: var(--moved); stroke-width: 1.5; }
+svg .box-kept { fill: var(--kept-fill); stroke: var(--kept); stroke-width: 1.2; }
+svg .arrow { fill: none; stroke: var(--secondary); stroke-width: 1.4; marker-end: url(#arrowhead); }
+svg .arrow-weak { stroke-dasharray: 4 3; }
+svg .arrow-removed { stroke: var(--removed); stroke-dasharray: 4 3; }
+svg .arrowhead { fill: var(--secondary); }
+
+/* Tables */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 10px 0; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { border: 1px solid var(--separator); padding: 7px 9px; text-align: left; vertical-align: top; }
+th { background: var(--panel); font-weight: 600; }
+.numeric { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tag { display: inline-block; white-space: nowrap; padding: 0 7px; border-radius: 5px; font-size: 12px; font-weight: 600; color: var(--kept); background: var(--kept-fill); }
+.tag-added { color: var(--added); background: var(--added-fill); }
+.tag-changed { color: var(--changed); background: var(--changed-fill); }
+.tag-removed { color: var(--removed); background: var(--removed-fill); }
+.tag-moved { color: var(--moved); background: var(--moved-fill); }
+
+/* Collapsible sections */
+details { border: 1px solid var(--separator); border-radius: 12px; margin: 12px 0; overflow: hidden; }
+summary { cursor: pointer; list-style: none; padding: 11px 16px; font-weight: 600; background: var(--panel); }
+summary::-webkit-details-marker { display: none; }
+summary::before { content: "›"; display: inline-block; width: 1em; color: var(--secondary); -webkit-transition: -webkit-transform 0.15s; transition: transform 0.15s; }
+details[open] > summary::before { -webkit-transform: rotate(90deg); transform: rotate(90deg); }
+details[open] > summary { border-bottom: 1px solid var(--separator); }
+.details-body { padding: 4px 16px 12px; }
+
+@media (max-width: 640px) {
+  .page { padding: 20px 16px 56px; }
+  h1 { font-size: 23px; }
+}
+
+/* ===== Page-specific styles (only for elements the shared style lacks, e.g. UI mockups) ===== */
+</style>
+</head>
+<body>
+<svg class="svg-definitions" aria-hidden="true" focusable="false">
+  <defs><marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>
+</svg>
+<div class="page">
+
+<header class="doc-header">
+  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">Draft</span></p>
+  <h1><span class="proposal-number">Draft</span> Debug 构建的图标：主图标加 DEBUG 角标</h1>
+  <dl class="meta">
+    <div><dt>状态</dt><dd><span class="status status-accepted">Accepted</span></dd></div>
+    <div><dt>最后更新</dt><dd>2026-11-24</dd></div>
+    <div><dt>项目类型</dt><dd>App</dd></div>
+    <div><dt>原文</dt><dd><code>draft-debug-app-icon.md</code></dd></div>
+  </dl>
+</header>
+
+<nav class="toc" aria-label="目录">
+  <ol>
+    <li><a href="#summary">摘要</a></li>
+    <li><a href="#decide">要你定</a></li>
+    <li><a href="#architecture">架构图</a></li>
+    <li><a href="#map">改动地图</a></li>
+    <li><a href="#design">详细设计</a></li>
+    <li><a href="#research">调研</a></li>
+    <li><a href="#alternatives">替代方案</a></li>
+    <li><a href="#impact">影响</a></li>
+    <li><a href="#steps">落地步骤</a></li>
+    <li><a href="#log">决策日志</a></li>
+  </ol>
+</nav>
+
+<main class="content">
+
+<section id="summary">
+  <h2>摘要</h2>
+  <p>Debug 与 Debug-arm64e 构建出来的 App（<code>RuntimeViewer-Debug.app</code>、<code>RuntimeViewer-Debug-arm64e.app</code>）改用一份新图标 <code>Resources/AppIconDebug.icon</code>：<strong>主图标原样照搬，右下角叠一个和 BETA 同款的黑底白字角标，写「DEBUG」</strong>。画法完全照 BETA 角标——同一个胶囊外形（两端圆头保持 Xcode 的原曲线，只按字长伸缩直边）、同样的颜色与图层组设置、同一个位置（右边缘与底边对齐 BETA）。角标的两层 SVG 由现有的 CATALYST 角标脚本生成，脚本改为按「角标预设」生成，CATALYST 的输出逐字节不变。Xcode 26 变体照 0020 的机制生成。Release 构建与 beta 渠道的图标不变。</p>
+  <p>动机：开发时常同时开着发布版和自己编的 Debug 版，两者图标完全相同，Dock、⌘-Tab、Finder、欢迎窗口里分不出哪个是哪个。项目已有 BETA（beta 渠道）与 CATALYST（Catalyst helper，0028）两个「主图标加角标」的先例，DEBUG 照同一套画法。</p>
+</section>
+
+<section id="decide">
+  <h2>要你定</h2>
+  <div class="callout">
+    <p class="callout-title">批准之后、动手第一步时再定</p>
+    <ol>
+      <li>DEBUG 的字高：渲染 136（BETA 原值）、120、108 三档给你挑，选定后写进预设。</li>
+    </ol>
+  </div>
+  <div class="callout callout-note">
+    <p class="callout-title">没问就采用的假设</p>
+    <ul>
+      <li>颜色照 BETA 的黑底白字，不换成别的颜色。</li>
+      <li>只给 macOS App 的 Debug / Debug-arm64e 配置；Catalyst helper 与 iOS 系 App 不加。</li>
+      <li>beta 渠道仍优先：用 Debug 配置做 beta 归档演练时出 BETA 图标。</li>
+    </ul>
+  </div>
+</section>
+
+<section id="architecture">
+  <h2>架构图</h2>
+  <ul class="legend">
+    <li><i class="swatch swatch-added"></i>新增</li>
+    <li><i class="swatch swatch-changed"></i>修改</li>
+    <li><i class="swatch swatch-removed"></i>删除</li>
+    <li><i class="swatch swatch-kept"></i>不变</li>
+  </ul>
+  <div class="figure">
+  <svg viewBox="0 0 1000 300" role="img" aria-label="Icon name resolution">
+    <rect class="group" x="10" y="10" width="470" height="280" rx="10"/>
+    <text class="group-label" x="22" y="30">Configurations/RuntimeViewerUsingAppKit/</text>
+    <rect class="box-kept" x="25" y="44" width="440" height="40" rx="6"/><text x="35" y="62">Shared.xcconfig</text><text class="caption" x="35" y="77">..._APPICON_NAME = $(RUNTIME_VIEWER_APP_ICON_NAME)</text>
+    <rect class="box-changed" x="25" y="94" width="440" height="40" rx="6"/><text x="35" y="112">Debug.xcconfig</text><text class="caption" x="35" y="127">BASE_NAME = AppIcon -&gt; AppIconDebug</text>
+    <rect class="box-kept" x="25" y="144" width="440" height="40" rx="6"/><text x="35" y="162">Debug-arm64e.xcconfig</text><text class="caption" x="35" y="177">#include "Debug.xcconfig" (inherits AppIconDebug)</text>
+    <rect class="box-kept" x="25" y="194" width="440" height="40" rx="6"/><text x="35" y="212">Release.xcconfig</text><text class="caption" x="35" y="227">BASE_NAME = AppIcon</text>
+    <rect class="box-changed" x="25" y="244" width="440" height="40" rx="6"/><text x="35" y="262">ArchiveScript.sh</text><text class="caption" x="35" y="277">beta: BASE_NAME=AppIconBeta (command line, wins); check knows Debug*</text>
+    <rect class="group" x="520" y="10" width="470" height="280" rx="10"/>
+    <text class="group-label" x="532" y="30">Resolved icon (Xcode 27+ / Xcode 26)</text>
+    <rect class="box-kept" x="535" y="60" width="440" height="40" rx="6"/><text x="545" y="78">Release</text><text class="caption" x="545" y="93">AppIcon / AppIconXcode26</text>
+    <rect class="box-kept" x="535" y="120" width="440" height="40" rx="6"/><text x="545" y="138">any configuration, beta channel</text><text class="caption" x="545" y="153">AppIconBeta / AppIconBetaXcode26</text>
+    <rect class="box-added" x="535" y="180" width="440" height="40" rx="6"/><text x="545" y="198">Debug, Debug-arm64e</text><text class="caption" x="545" y="213">AppIconDebug / AppIconDebugXcode26</text>
+    <path class="arrow" d="M 465 114 L 535 198"/>
+    <path class="arrow" d="M 465 164 L 535 202"/>
+    <path class="arrow" d="M 465 214 L 535 82"/>
+    <path class="arrow arrow-weak" d="M 465 262 L 535 142"/>
+  </svg>
+  </div>
+  <p class="figure-caption">图标名 = 基名 + <code>RUNTIME_VIEWER_APP_ICON_VARIANT_$(XCODE_VERSION_MAJOR)</code>；只有 Debug 的基名变了。</p>
+  <div class="figure">
+  <svg viewBox="0 0 1000 330" role="img" aria-label="Documents and generators">
+    <rect class="group" x="10" y="10" width="560" height="310" rx="10"/>
+    <text class="group-label" x="22" y="30">Resources/</text>
+    <rect class="box-kept" x="25" y="42" width="260" height="34" rx="6"/><text x="35" y="64">AppIcon.icon</text>
+    <rect class="box-kept" x="25" y="84" width="260" height="34" rx="6"/><text x="35" y="106">AppIconBeta.icon</text>
+    <rect class="box-added" x="25" y="126" width="260" height="44" rx="6"/><text x="35" y="144">AppIconDebug.icon</text><text class="caption" x="35" y="161">copied from AppIconBeta, Debug badge layers</text>
+    <rect class="box-kept" x="295" y="42" width="260" height="34" rx="6"/><text x="305" y="64">AppIconXcode26.icon</text>
+    <rect class="box-kept" x="295" y="84" width="260" height="34" rx="6"/><text x="305" y="106">AppIconBetaXcode26.icon</text>
+    <rect class="box-added" x="295" y="126" width="260" height="44" rx="6"/><text x="305" y="144">AppIconDebugXcode26.icon</text><text class="caption" x="305" y="161">"features" stripped</text>
+    <text class="group-label" x="22" y="200">AppIconTools/</text>
+    <rect class="box-removed" x="25" y="212" width="260" height="34" rx="6"/><text class="strike" x="35" y="234">GenerateCatalystBadgeLayers.swift</text>
+    <rect class="box-added" x="25" y="254" width="260" height="44" rx="6"/><text x="35" y="272">GenerateBadgeLayers.swift</text><text class="caption" x="35" y="289">presets: catalyst, debug</text>
+    <rect class="box-changed" x="295" y="254" width="260" height="44" rx="6"/><text x="305" y="272">GenerateXcode26IconDocuments</text><text class="caption" x="305" y="289">+ AppIconDebug -&gt; AppIconDebugXcode26</text>
+    <rect class="group" x="610" y="10" width="380" height="140" rx="10"/>
+    <text class="group-label" x="622" y="30">RuntimeViewerCatalystHelper/</text>
+    <rect class="box-kept" x="625" y="44" width="350" height="44" rx="6"/><text x="635" y="62">CatalystHelperIcon.icon</text><text class="caption" x="635" y="79">Catalyst*.svg regenerated, byte-identical</text>
+    <path class="arrow" d="M 285 270 L 330 270 L 330 200 L 200 200 L 160 172"/>
+    <path class="arrow" d="M 285 262 L 600 262 L 600 100 L 625 80"/>
+    <path class="arrow" d="M 425 254 L 425 172"/>
+  </svg>
+  </div>
+  <p class="figure-caption">三份带角标的文档下三组图层都与 <code>AppIcon.icon</code> 相同，改共享图层要四处一起改。</p>
+</section>
+
+<section id="map">
+  <h2>改动地图</h2>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>文件 / 类型</th><th>动作</th><th>改什么</th><th>为什么</th><th>步骤</th></tr></thead>
+    <tbody>
+      <tr><td><code>Resources/AppIconTools/GenerateCatalystBadgeLayers.swift</code> → <code>GenerateBadgeLayers.swift</code></td><td><span class="tag tag-moved">移动</span> <span class="tag tag-changed">修改</span></td><td>改名；字、字高、左右留白、文件名前缀收成 <code>BadgePreset</code>，第一个参数选 <code>catalyst</code> / <code>debug</code>；头注释记下 DEBUG 的取舍</td><td>同一套画法生成两种角标，避免复制一份脚本</td><td class="numeric">1</td></tr>
+      <tr><td><code>CatalystHelperIcon.icon/Assets/Catalyst*.svg</code></td><td><span class="tag">不变（验证）</span></td><td>用新脚本重新生成，确认逐字节相同</td><td>证明重构没改 CATALYST</td><td class="numeric">1</td></tr>
+      <tr><td><code>Resources/AppIconDebug.icon/</code></td><td><span class="tag tag-added">新增</span></td><td>复制 <code>AppIconBeta.icon</code>；角标两层的 <code>image-name</code> / <code>name</code> 改为 Debug；删掉 Beta 的两份 SVG</td><td>Debug 构建的图标</td><td class="numeric">2</td></tr>
+      <tr><td><code>AppIconDebug.icon/Assets/DebugLozenge.svg</code>、<code>DebugWordmark.svg</code></td><td><span class="tag tag-added">新增</span></td><td><code>GenerateBadgeLayers.swift debug</code> 生成</td><td>角标两层</td><td class="numeric">2</td></tr>
+      <tr><td><code>Resources/AppIconDebugXcode26.icon/</code></td><td><span class="tag tag-added">新增</span></td><td><code>GenerateXcode26IconDocuments.swift</code> 生成</td><td>Xcode 26 的 actool 打不开原件</td><td class="numeric">2</td></tr>
+      <tr><td><code>Resources/AppIconTools/GenerateXcode26IconDocuments.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>加一行生成 <code>AppIconDebugXcode26</code>，头注释提到它</td><td>变体与原件同批生成</td><td class="numeric">2</td></tr>
+      <tr><td><code>Configurations/RuntimeViewerUsingAppKit/Debug.xcconfig</code></td><td><span class="tag tag-changed">修改</span></td><td><code>RUNTIME_VIEWER_APP_ICON_BASE_NAME = AppIconDebug</code>；注释改为配置与渠道两维</td><td>Debug / Debug-arm64e 选 DEBUG 图标</td><td class="numeric">3</td></tr>
+      <tr><td><code>Configurations/RuntimeViewerUsingAppKit/Release.xcconfig</code></td><td><span class="tag tag-changed">修改</span></td><td>只改注释</td><td>注释与事实一致</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerUsingAppKit.xcodeproj/project.xcproj</code></td><td><span class="tag tag-changed">修改</span></td><td><code>files</code> 加两份新文档，资源成员</td><td>actool 只认资源阶段里的文档，漏了会静默产出无图标的包</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerUsingAppKit/Project.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>resources</code> 加同样两项</td><td>Tuist 与原生工程一致，<code>TuistScript.sh check</code> 才过</td><td class="numeric">3</td></tr>
+      <tr><td><code>ArchiveScript.sh</code></td><td><span class="tag tag-changed">修改</span></td><td>非 beta 渠道按 <code>$CONFIGURATION</code> 取基名（<code>Debug*</code> → <code>AppIconDebug</code>）；注释四份 → 六份</td><td><code>--configuration Debug</code> 演练时校验不误报</td><td class="numeric">3</td></tr>
+      <tr><td><code>Resources/AGENTS.md</code></td><td><span class="tag tag-changed">修改</span></td><td>六份文档、配置一维、共享图层名单、脚本新名字与用法</td><td>规则文件与事实一致</td><td class="numeric">4</td></tr>
+      <tr><td><code>AGENTS.md</code> · App Icon</td><td><span class="tag tag-changed">修改</span></td><td>四份 → 六份，点出 AppIconDebug</td><td>同上</td><td class="numeric">4</td></tr>
+      <tr><td><code>Documentations/Evolutions/draft-debug-app-icon.md</code> / <code>.html</code></td><td><span class="tag tag-added">新增</span></td><td>本提案与网页版</td><td>提案制</td><td class="numeric">0</td></tr>
+      <tr><td><code>Documentations/Evolutions/README.md</code>、<code>Documentations/README.md</code></td><td><span class="tag tag-changed">修改</span></td><td>登记草案；落地时改编号</td><td>文档索引</td><td class="numeric">0 / 4</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section id="design">
+  <h2>详细设计</h2>
+  <details open>
+    <summary>生成脚本的预设</summary>
+    <div class="details-body">
+<pre><code><span class="token-keyword">struct</span> <span class="token-type">BadgePreset</span> {
+    <span class="token-keyword">let</span> word: <span class="token-type">String</span>
+    <span class="token-keyword">let</span> capHeight: <span class="token-type">CGFloat</span>
+    <span class="token-comment">// In BETA's units, scaled by capHeight / 136.</span>
+    <span class="token-keyword">let</span> leadingPadding: <span class="token-type">CGFloat</span>
+    <span class="token-keyword">let</span> trailingPadding: <span class="token-type">CGFloat</span>
+    <span class="token-comment">// &lt;prefix&gt;Lozenge.svg and &lt;prefix&gt;Wordmark.svg</span>
+    <span class="token-keyword">let</span> fileNamePrefix: <span class="token-type">String</span>
+}
+
+<span class="token-keyword">let</span> badgePresets: [<span class="token-type">String</span>: <span class="token-type">BadgePreset</span>] = [
+    <span class="token-string">"catalyst"</span>: <span class="token-type">BadgePreset</span>(word: <span class="token-string">"CATALYST"</span>, capHeight: <span class="token-number">96</span>, leadingPadding: <span class="token-number">71.5</span>, trailingPadding: <span class="token-number">71.5</span>, fileNamePrefix: <span class="token-string">"Catalyst"</span>),
+    <span class="token-string">"debug"</span>: <span class="token-type">BadgePreset</span>(word: <span class="token-string">"DEBUG"</span>, capHeight: <span class="token-comment">/* picked from the renders */</span> <span class="token-number">120</span>, leadingPadding: <span class="token-number">79</span>, trailingPadding: <span class="token-number">64</span>, fileNamePrefix: <span class="token-string">"Debug"</span>),
+]</code></pre>
+      <p>胶囊宽度 = 墨迹宽 + (左留白 + 右留白) × 缩放比；字的横向位置 = 胶囊左缘 + 左留白 × 缩放比 − 墨迹左缘。左右留白相等时与原来的居中公式数学上相同，CATALYST 的输出应逐字节不变，用 <code>git diff --exit-code</code> 验证。</p>
+<pre><code>swift Resources/AppIconTools/GenerateBadgeLayers.swift catalyst "RuntimeViewerUsingAppKit/RuntimeViewerCatalystHelper/CatalystHelperIcon.icon/Assets"
+swift Resources/AppIconTools/GenerateBadgeLayers.swift debug "Resources/AppIconDebug.icon/Assets"</code></pre>
+    </div>
+  </details>
+  <details>
+    <summary>AppIconDebug.icon/icon.json 与 AppIconBeta 的差别</summary>
+    <div class="details-body">
+<pre><code>"image-name" : "BetaWordmark.svg"  -&gt;  "DebugWordmark.svg"
+"name"       : "Beta Wordmark"     -&gt;  "Debug Wordmark"
+"image-name" : "BetaLozenge.svg"   -&gt;  "DebugLozenge.svg"
+"name"       : "Beta Lozenge"      -&gt;  "Debug Lozenge"</code></pre>
+    </div>
+  </details>
+  <details>
+    <summary>ArchiveScript.sh 的推导</summary>
+    <div class="details-body">
+<pre><code>APP_ICON_BASE_NAME="AppIcon"
+if [[ "$CHANNEL" == "beta" ]]; then
+    APP_ICON_BASE_NAME="AppIconBeta"
+    MAIN_APP_XCODEBUILD_SETTINGS+=("RUNTIME_VIEWER_APP_ICON_BASE_NAME=$APP_ICON_BASE_NAME")
+elif [[ "$CONFIGURATION" == Debug* ]]; then
+    # Debug.xcconfig picks the DEBUG-badged icon, and Debug-arm64e includes it.
+    APP_ICON_BASE_NAME="AppIconDebug"
+fi</code></pre>
+      <p>只改推导、不传覆盖：图标由 xcconfig 决定，脚本独立复述一遍，两处对不上就归档失败。</p>
+    </div>
+  </details>
+  <details>
+    <summary>验证</summary>
+    <div class="details-body">
+      <ul>
+        <li><code>ictool</code> 渲染 Default / Dark / Tinted，512 与 64 像素，与 <code>AppIconBeta.icon</code> 并排比较；字高候选 136 / 120 / 108 各一张。</li>
+        <li>到 Ultra 上：三个配置的 <code>-showBuildSettings</code> 解析出 <code>AppIconDebug</code> / <code>AppIconDebug</code> / <code>AppIcon</code>；Xcode 27 与 26.6 的 actool 以绝对路径编两份新文档；<code>TuistScript.sh check</code> 通过；Tuist workspace 编一次 Debug App，<code>CFBundleIconName</code> 是 <code>AppIconDebug</code>。</li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<section id="research">
+  <h2>调研</h2>
+  <details>
+    <summary>查证过的事实</summary>
+    <div class="details-body">
+      <ul>
+        <li><code>Shared.xcconfig:11</code> 用 <code>RUNTIME_VIEWER_APP_ICON_NAME</code>；<code>Debug.xcconfig:30-32</code> 与 <code>Release.xcconfig:33-35</code> 各自定义基名 <code>AppIcon</code>；<code>Debug-arm64e.xcconfig</code> include <code>Debug.xcconfig</code>、不覆盖图标；<code>INCLUDE_ALL_APPICON_ASSETS = NO</code>。</li>
+        <li>Tuist 的三个配置引用同名 xcconfig（<code>Project.swift:71-83</code>），资源清单在 <code>Project.swift:157-162</code>。</li>
+        <li>原生工程资源条目在 <code>project.xcproj:51-54</code>（Xcode 27 新格式）；本会话没有 Xcode MCP，<code>xcrun xcodeproj</code> 写入会改坏工程，所以手工加两行。</li>
+        <li>BETA 角标组：两层、平移 (-33, 40)、折射 0.07 / 0.39、半透 0.42、阴影 neutral 1；四组已是 actool 上限，DEBUG 文档也是四组。</li>
+        <li><code>CatalystHelperIcon.icon</code> 的角标组与 BETA 的只差两层的 <code>image-name</code> 与 <code>name</code>。</li>
+        <li>CATALYST 脚本：SF Pro 半窄体 Black（量 BETA 得 424，Xcode 原版 426），胶囊按 BETA 缩放、直边伸缩，右缘 929、底边 898；留白 71.5 是 BETA 左 79 右 64 的平均，原注释说 79 / 64 是给 B 的直竖笔的补偿——D 同样是直竖笔，所以 DEBUG 用 79 / 64。</li>
+        <li><code>ArchiveScript.sh</code> 支持 <code>--configuration Debug</code>，图标校验会因 AppIconDebug 误报，要跟着改推导。</li>
+        <li>没有代码按名字取 App 图标（<code>git grep</code> 查过）。</li>
+        <li>推测：按 BETA 的 136 字高，DEBUG 角标约 700 × 260，可能过大；待渲染确认。</li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<section id="alternatives">
+  <h2>替代方案</h2>
+  <details>
+    <summary>5 条，均放弃</summary>
+    <div class="details-body">
+      <ul>
+        <li><strong>用颜色区分</strong>：换主色在深色外观下分不出（0028 试过）；换角标颜色可行，但要求照 BETA 画法，先保持黑底白字，渲染后觉得难分再改两个 fill。</li>
+        <li><strong>复制一份 Debug 专用脚本</strong>：九成重复，改画法要改两处。</li>
+        <li><strong>原名加参数</strong>：文件名与用途不符；改名后 0028 里是历史路径，提案是快照不回改。</li>
+        <li><strong>用 Xcode 原版 B、E 拼 DEBUG</strong>：D、U、G 没有原版轮廓，混用不协调。</li>
+        <li><strong>命令行覆盖图标名</strong>：Debug 构建多来自 Xcode 界面和 <code>RunScript.sh</code>，没有统一入口。</li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<section id="impact">
+  <h2>影响</h2>
+  <ul>
+    <li>只影响自己编 Debug / Debug-arm64e 的开发者：Dock、⌘-Tab、Finder、欢迎窗口里带 DEBUG 角标。Release 与 beta 渠道不变。</li>
+    <li>不涉及设置与缓存；系统图标缓存可能让旧 Debug 版暂时显示旧图标，重启 App 或 Dock 即更新。</li>
+    <li>平台与最低版本不变；无新权限、entitlement；公证与 Sparkle 不受影响，Release 包不变大。</li>
+  </ul>
+</section>
+
+<section id="steps">
+  <h2>落地步骤</h2>
+  <ol>
+    <li><strong>脚本改为预设并渲染候选</strong>（改动地图 1–2 行）：<code>catalystPresetRegeneratesCommittedLayersByteForByte</code>、<code>debugPresetWritesLozengeAndWordmarkIntoGivenAssetsDirectory</code>、<code>debugCandidatesAt136And120And108AreRenderedForReview</code></li>
+    <li><strong>新文档与 Xcode 26 变体</strong>（3–6 行）：<code>appIconDebugDiffersFromAppIconBetaOnlyInBadgeLayers</code>、<code>xcode26VariantOfAppIconDebugHasNoFeaturesKey</code>、<code>debugIconRendersInDefaultDarkAndTintedAppearances</code></li>
+    <li><strong>选择规则、工程登记与发版校验</strong>（7–11 行）：<code>debugAndDebugArm64eResolveAppIconDebug</code>、<code>releaseStillResolvesAppIcon</code>、<code>betaChannelStillResolvesAppIconBetaInAnyConfiguration</code>、<code>debugBuildProductHasCFBundleIconNameAppIconDebug</code>、<code>archiveScriptExpectsAppIconDebugForDebugConfiguration</code>、<code>tuistCheckPassesWithBothNewDocuments</code></li>
+    <li><strong>文档</strong>（12–15 行）：<code>resourcesAgentsDescribesSixDocumentsAndTheConfigurationAxis</code></li>
+  </ol>
+  <p>收尾判断：预计不需要配套专题文章（用法写进 <code>Resources/AGENTS.md</code>，取舍写进脚本头注释），预计没有新术语。</p>
+</section>
+
+<section id="log">
+  <h2>决策日志</h2>
+  <details>
+    <summary>2 条，最近一条：状态改为 Accepted</summary>
+    <div class="details-body">
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>日期</th><th>变更</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td class="numeric">2026-11-24</td><td>Created as Draft</td><td>用户要求照 BETA 图标的画法，给 Debug 构建做一个带 DEBUG 角标的图标</td></tr>
+          <tr><td class="numeric">2026-11-24</td><td>状态改为 Accepted</td><td>用户批准，开始实现。功能分支从本地 <code>next</code> 切出；本地 <code>next</code> 上还有 swift-type-indexing 一线未推送的提交，提案提交只留在本地 <code>next</code>，随功能分支推送</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+  </details>
+</section>
+
+</main>
+</div>
+</body>
+</html>
