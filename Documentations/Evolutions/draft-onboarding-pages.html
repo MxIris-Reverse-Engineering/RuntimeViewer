@@ -515,7 +515,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <section id="log">
   <h2>决策日志</h2>
   <details>
-    <summary>13 条，最近一条：修法移进 swift-onboardingkit 0.1.1</summary>
+    <summary>14 条，最近一条：页面用居中模板类型</summary>
     <div class="details-body">
       <div class="table-wrap">
       <table>
@@ -533,6 +533,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
           <tr><td class="numeric">2026-11-24</td><td>实现完成，待用户看过后收尾</td><td>Settings 75 个全过；AppCore 1098 个里 3 个既有必红、1 个单独重跑通过；AppUI 264 个只有既有必红的一条。原生 App、Tuist、iOS App 构建都通过，两种 App 都是弱链接。界面目视验收留给用户。不写配套文章；新术语已登记。正式收尾时清理 Ultra 与 MacBook 上的同名 worktree 和构建目录。</td></tr>
           <tr><td class="numeric">2026-11-24</td><td>修好 0 × 0 的页面</td><td>用户看效果时发现页面窗口是 0 × 0：模板视图零尺寸创建、自动约束没关，被按零尺寸钉死；容器自己也不定尺寸。关掉模板视图的 <code>translatesAutoresizingMaskIntoConstraints</code>，再照框架自家隐私页窗口的公式（宽 482，高取父窗口 88%、限制在 546–600）设 <code>preferredContentSize</code>。新增尺寸与「窗口、sheet 是页面尺寸且模板铺满」的测试，去掉修复时变红。swift-onboardingkit 的 README 示例同样有这个问题，改不改库待用户定。</td></tr>
           <tr><td class="numeric">2026-11-24</td><td>修法移进 swift-onboardingkit 0.1.1</td><td>用户决定改库。库的容器便利构造器关掉模板视图的开关、默认要求框架自家 sheet 的尺寸，新增 <code>sheetSize(forParentWindowSize:)</code>，发布 <code>0.1.1</code>。RV 下限抬到 <code>from: "0.1.1"</code>，四份锁文件只改这一条 pin，删掉自己那份公式与开关；公式测试移到库里，RV 留窗口与 sheet 两条集成测试。</td></tr>
+          <tr><td class="numeric">2026-11-24</td><td>页面用居中模板类型</td><td>正文挤在中间约 130pt 宽的一列：构造器给的标准类型每边留 175pt 边距，是给整窗口页面用的。改用居中类型（每边 68pt、列表行宽 344，正好配 482 宽的页面），模板与列表都设；新增宽度测试，去掉修复时标题宽 136、测试变红。库的 README 示例同样如此，改不改库待用户定。</td></tr>
         </tbody>
       </table>
       </div>
