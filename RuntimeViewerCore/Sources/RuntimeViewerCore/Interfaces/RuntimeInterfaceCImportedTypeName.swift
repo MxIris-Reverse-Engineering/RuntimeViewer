@@ -1,5 +1,5 @@
 import Foundation
-public import Semantic
+import Semantic
 @_spi(Support) import SwiftPrinting
 
 /// A C-imported type an interface declares that has a Swift name and a C name — `AnyWeakAttribute`
