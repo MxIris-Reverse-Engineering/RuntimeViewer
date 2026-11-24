@@ -662,8 +662,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/swift-onboardingkit",
       "state" : {
-        "revision" : "5d9acef8a75e8244076f0e12efaa0d329f8484ac",
-        "version" : "0.1.1"
+        "revision" : "fcccb5618d02a9543add5e621b47f3918e83b19f",
+        "version" : "0.2.0"
       }
     },
     {

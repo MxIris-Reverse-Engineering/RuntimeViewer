@@ -49,10 +49,10 @@ macOS App 接入 swift-onboardingkit（Apple 私有框架 OnBoardingKit 的 Swif
 ## 提议方案
 
 1. **swift-onboardingkit 发布 `0.1.0`**：链接改成弱链接（`-weak_framework OnBoardingKit`），README 的安装写法改成 `from: "0.1.0"`，在它的提案 0001 决策日志里记一笔；仓库改为公开；打 tag `0.1.0`（Mx-Iris 库的 tag 不带 `v`，同 UIFoundation）并建 GitHub Release。
-2. **RV 依赖它**：`RuntimeViewerPackages/Package.swift` 照既有写法声明 `swift-onboardingkit`（本地候选指向 `Personal/Library/macOS/swift-onboardingkit`，远端 `from: "0.1.0"`，修 0 × 0 页面时抬到 `0.1.1`），`RuntimeViewerAppUI` 依赖 `OnBoardingKit` product，条件 `.when(platforms: appkitPlatforms)`。更新受版本控制的锁文件：`RuntimeViewerPackages`、`RuntimeViewerCommandLine` 两个包的，以及 Debug、Distribution 两个 workspace 的。
+2. **RV 依赖它**：`RuntimeViewerPackages/Package.swift` 照既有写法声明 `swift-onboardingkit`（本地候选指向 `Personal/Library/macOS/swift-onboardingkit`，远端 `from: "0.1.0"`，修 0 × 0 页面时抬到 `0.1.1`，改用页面值时抬到 `0.2.0`），`RuntimeViewerAppUI` 依赖 `OnBoardingKit` product，条件 `.when(platforms: appkitPlatforms)`。更新受版本控制的锁文件：`RuntimeViewerPackages`、`RuntimeViewerCommandLine` 两个包的，以及 Debug、Distribution 两个 workspace 的。
 3. **「功能版本」与判断放在 AppCore**（全部 `#if os(macOS)`）：
    - `FeatureRelease`：`主版本.次版本`，可比较、可编码，从 marketing version 解析。
-   - `OnboardingPage`：一页的内容，值类型——标题、正文、顶部符号、功能行（标题、描述、`SystemSymbol`），以及它是欢迎页还是哪一版的 What's New。
+   - `OnboardingPage`：一页的内容，值类型——标题、正文、顶部图片（`Image?`：App 图标或某个 `SystemSymbol`，可以没有）、功能行（标题、描述、`SystemSymbol`），以及它是欢迎页还是哪一版的 What's New。
    - `OnboardingCatalog.runtimeViewer`：欢迎页一份，What's New 按功能版本各一份；第一份是 3.0。
    - `OnboardingPolicy.pageForLaunch(currentRelease:lastPresentedRelease:hasStoredSettings:catalog:)`：
      - 记录为空：没有存过设置 → 欢迎页；存过设置（老用户）→ 当前版本的 What's New，目录里没有就不弹。
@@ -60,7 +60,7 @@ macOS App 接入 swift-onboardingkit（Apple 私有框架 OnBoardingKit 的 Swif
      - 其余（同版本、降级、目录里没有这一版）→ 不弹。
    - `AppDefaults.lastPresentedOnboardingRelease: FeatureRelease?`：点 Continue 时写成当前功能版本。欢迎页也写当前版本，所以新用户不会紧接着再看一次同一版的 What's New。
 4. **`SettingsAccess` 记下这次读设置时有没有找到存储的设置**：`didFindStoredSettingsOnLoad`，`.loaded` 与 `.failed` 为 `true`（文件在，只是读坏了，也算老用户），`.noStoredData` 为 `false`。
-5. **AppUI 把页面画成 OnBoardingKit 的模板**：`OnboardingPage.makeTemplateContainerViewController(parentWindowSize:onContinue:)` 返回带一个 Continue 按钮的容器。容器由 swift-onboardingkit 0.1.1 的便利构造器建：它关掉模板视图的 `translatesAutoresizingMaskIntoConstraints`，并要求框架自家 sheet 的尺寸；AppUI 再按页面挂在哪里设 `preferredContentSize = OBTemplateContainerViewController.sheetSize(forParentWindowSize:)`（宽 482，高取父窗口的 88%、限制在 546–600，没有父窗口时 546）。两样都不做，页面就是 0 × 0。模板与它的列表还要设成居中类型（`OBTemplateType.centered`），否则正文挤成中间约 130pt 的一列。见详细设计「AppUI」一节。系统上没有 OnBoardingKit（弱链接后类为 nil）时返回 `nil`，调用方就不弹，只记日志。Continue 先把页面从屏幕上拿掉（被 present 的就 `dismiss`，作为 sheet 窗口内容的就 `endSheet`，独立窗口里的就关窗），再调 `onContinue`。
+5. **AppUI 把页面画成 OnBoardingKit 的模板**：`OnboardingPage.templatePage(parentWindowSize:)` 把页面值映射成 swift-onboardingkit 0.2.0 的 `OBTemplatePage`，取 App Store 的样式——居中版式（`.centered`：每边 68pt、图片居中）、功能行的符号用强调色（`.controlAccentColor`）、App 图标按 128pt 显示，尺寸取 `OBTemplateContainerViewController.sheetSize(forParentWindowSize:)`（宽 482，高取父窗口的 88%、限制在 546–600，没有父窗口时 546）。`makeTemplateContainerViewController(parentWindowSize:onContinue:)` 交给库的 `OBTemplateContainerViewController(page:primaryButton:)` 组装，返回带一个 Continue 按钮的容器；视图与控制器的属性（自动约束、模板类型、`preferredContentSize`）都由库按页面值设，原因见详细设计「AppUI」一节。系统上没有 OnBoardingKit（弱链接后类为 nil）时返回 `nil`，调用方就不弹，只记日志。Continue 先把页面从屏幕上拿掉（被 present 的就 `dismiss`，作为 sheet 窗口内容的就 `endSheet`，独立窗口里的就关窗），再调 `onContinue`。
 6. **App 里新增 `OnboardingController`**（`App/`）：
    - `start()`：等设置读完，用 policy 算出这次要弹的页。主窗口已是文档窗口，就挂成它的 sheet；欢迎窗口在屏幕上，就放进一个独立窗口、显示在欢迎窗口前面；两者都没有，就等第一个成为主窗口的文档窗口或成为 key 的欢迎窗口。Continue 时写 `AppDefaults` 的记录。
    - `showWhatsNew()`：Help › What's New in RuntimeViewer 的动作，弹不超过当前版本的最新一页 What's New，不改记录；主窗口是文档窗口就挂成它的 sheet，否则用独立窗口。页面已在屏幕上时不重复弹。
@@ -85,7 +85,7 @@ macOS App 接入 swift-onboardingkit（Apple 私有框架 OnBoardingKit 的 Swif
 | swift-onboardingkit `README.md` | 修改 | 安装写法改 `from: "0.1.0"`；「Things to know」加一条弱链接与可用性检查 | 公开发布后的用法 | 1 |
 | swift-onboardingkit `Documentations/Evolutions/0001-…md`（与 `.html`） | 修改 | 决策日志加一行：改弱链接、公开、发布 0.1.0 | 那边的决策留档 | 1 |
 | GitHub `Mx-Iris/swift-onboardingkit` | 修改 | 可见性改公开；tag `0.1.0` 与 Release | RV 是公开仓库 | 1 |
-| `RuntimeViewerPackages/Package.swift` | 修改 | 声明 `swift-onboardingkit`（本地候选 + `from: "0.1.1"`）；`RuntimeViewerAppUI` 依赖 `OnBoardingKit`，只给 macOS | 接入依赖 | 2 |
+| `RuntimeViewerPackages/Package.swift` | 修改 | 声明 `swift-onboardingkit`（本地候选 + `from: "0.2.0"`）；`RuntimeViewerAppUI` 依赖 `OnBoardingKit`，只给 macOS | 接入依赖 | 2 |
 | `RuntimeViewerPackages/Package.resolved`、`RuntimeViewerCommandLine/Package.resolved`、`RuntimeViewer-Debug.xcworkspace/…/Package.resolved`、`RuntimeViewer-Distribution.xcworkspace/…/Package.resolved` | 修改 | 加 swift-onboardingkit 的 pin，其余 pin 不动 | 锁文件随依赖变 | 2 |
 | `RuntimeViewerPackages/Sources/RuntimeViewerSettings/Settings.swift` · `SettingsAccess` | 修改 | 新增 `didFindStoredSettingsOnLoad`，在 `logLoadOutcome(_:)` 里记 | 认新用户，不另存布尔值 | 3 |
 | `RuntimeViewerPackages/Tests/RuntimeViewerSettingsTests/SettingsStoredSettingsDetectionTests.swift` | 新增 | 无数据、有数据、坏数据三种 | 第 3 步的测试 | 3 |
@@ -117,9 +117,10 @@ macOS App 接入 swift-onboardingkit（Apple 私有框架 OnBoardingKit 的 Swif
 改了什么：
 
 ```text
-swift-onboardingkit 0.1.1                    (+ new public dependency, macOS only)
+swift-onboardingkit 0.2.0                    (+ new public dependency, macOS only)
   COnBoardingKit   ~ links OnBoardingKit.framework weakly (-weak_framework)  [0.1.0]
   OnBoardingKit    ~ container sizes itself, sheetSize(forParentWindowSize:)  [0.1.1]
+                   + OBTemplatePage, init(page:primaryButton:)                [0.2.0]
 
 RuntimeViewerPackages
   RuntimeViewerSettings
@@ -237,10 +238,12 @@ public struct OnboardingPage: Equatable, Sendable {
     public var kind: Kind
     public var title: String
     public var bodyText: String?
-    public var symbol: SystemSymbol
+    /// The image above the title, or `nil` for none, as the App Store's What's New pages have.
+    public enum Image: Equatable, Sendable { case appIcon; case symbol(SystemSymbol) }
+    public var image: Image?
     public var features: [Feature]
 
-    public init(kind: Kind, title: String, bodyText: String? = nil, symbol: SystemSymbol, features: [Feature])
+    public init(kind: Kind, title: String, bodyText: String? = nil, image: Image? = nil, features: [Feature])
 }
 
 /// Every onboarding page the app has.
@@ -310,7 +313,7 @@ public private(set) var didFindStoredSettingsOnLoad = false
 
 ### 页面内容（界面文字用英文）
 
-欢迎页（`symbol: .handWave`）：
+欢迎页（`image: .appIcon`，128pt 的 App 图标）：
 
 - 标题 **Welcome to RuntimeViewer**；正文 *Read the Objective-C, Swift and C++ interfaces of the images on your Mac, in other processes and on your devices.*
 - Every Interface — *Browse the Objective-C, Swift and C++ objects of any image, printed with Xcode's syntax highlighting.* — `square.stack.3d.up`
@@ -319,7 +322,7 @@ public private(set) var didFindStoredSettingsOnLoad = false
 - Find and Cross References — *Search every indexed interface and follow callers, callees and type references.* — `magnifyingglass`
 - Made for Agents — *An MCP server and runtime-viewer-cli give coding agents the same interfaces.* — `terminal`
 
-What's New in RuntimeViewer 3.0（`symbol: .sparkles`，取材于 `Changelogs/v3.0.0-beta.5.md`–`v3.0.0-beta.10.md`）：
+What's New in RuntimeViewer 3.0（不放顶部图片，取材于 `Changelogs/v3.0.0-beta.5.md`–`v3.0.0-beta.10.md`）：
 
 - Find Navigator — *Search the interfaces of every indexed image, find types with their hierarchy, and find members.* — `magnifyingglass`
 - Cross References — *See who calls a method, what it calls and which functions use a type.* — `arrow.triangle.branch`
@@ -328,7 +331,7 @@ What's New in RuntimeViewer 3.0（`symbol: .sparkles`，取材于 `Changelogs/v3
 - Editor Panes — *Split the content area; each pane has its own tabs, history and jump bar.* — `rectangle.split.2x1`
 - Command-Line Tool — *runtime-viewer-cli ships inside the app and works without it running.* — `terminal`
 
-`SystemSymbol` 新加的 case：`handWave = "hand.wave"`、`squareStack3dUp = "square.stack.3d.up"`、`arrowRightCircle = "arrow.right.circle"`、`appConnectedToAppBelowFill = "app.connected.to.app.below.fill"`、`terminal`、`folder`、`curlybraces`、`rectangleSplit2x1 = "rectangle.split.2x1"`（已有的不重复加）。`SystemSymbolTests` 会在 macOS 上逐个加载。
+`SystemSymbol` 新加的 case（起初还有欢迎页顶部的 `handWave`，改用 App 图标后删掉）：`squareStack3dUp = "square.stack.3d.up"`、`arrowRightCircle = "arrow.right.circle"`、`appConnectedToAppBelowFill = "app.connected.to.app.below.fill"`、`terminal`、`folder`、`curlybraces`、`rectangleSplit2x1 = "rectangle.split.2x1"`（已有的不重复加）。`SystemSymbolTests` 会在 macOS 上逐个加载。
 
 ### AppUI
 
@@ -342,8 +345,12 @@ extension OnboardingPage {
     /// Whether this system has OnBoardingKit, which the package links weakly.
     public static var isPresentable: Bool { NSClassFromString("OBTemplateContainerViewController") != nil }
 
-    /// The page as OnBoardingKit's template in its container, sized by swift-onboardingkit's
-    /// `OBTemplateContainerViewController.sheetSize(forParentWindowSize:)`, with one
+    /// The page as swift-onboardingkit's page value, in the App Store's style: centered, the rows'
+    /// symbols in the accent color, the app's icon at 128 points, the framework's sheet size.
+    @MainActor
+    func templatePage(parentWindowSize: NSSize?) -> OBTemplatePage
+
+    /// The page assembled by `OBTemplateContainerViewController(page:primaryButton:)`, with one
     /// Continue button. Continue dismisses the container — or closes its window when it was not
     /// presented — and then calls `onContinue`. `nil` when the system has no OnBoardingKit.
     @MainActor
@@ -352,9 +359,9 @@ extension OnboardingPage {
 #endif
 ```
 
-模板用 `OBTemplateView(title:bodyText:systemImage:features:)`，每个 `Feature` 变成 `OBTemplatePartBulletList.Item(_:description:systemImage:)`，按钮文字 `Continue`。
+每个 `Feature` 变成 `OBTemplatePartBulletList.Item(_:description:systemImage:)`，按钮文字 `Continue`。App 图标取 `NSImage(named: NSImage.applicationIconName)` 的副本再设成 128pt：具名的应用图标是全 App 共用的那一份，直接改尺寸会影响别处。
 
-**页面要有尺寸，模板视图要关掉自动约束。** 两处都是框架的行为，在 macOS 27.2 的 cache 上用 IDA 反编译、再在测试里逐步打印尺寸查明；最初在 RV 里修，随后移进 swift-onboardingkit 0.1.1，结论也记在它的实现说明「Swift 层依赖的框架行为」：
+**页面要有尺寸，模板视图要关掉自动约束。** 两处都是框架的行为，在 macOS 27.2 的 cache 上用 IDA 反编译、再在测试里逐步打印尺寸查明；最初在 RV 里修，随后移进 swift-onboardingkit（0.1.1 的尺寸、0.2.0 的页面值与版式），结论也记在它的实现说明「Swift 层依赖的框架行为」：
 
 - 模板视图用零尺寸创建，`translatesAutoresizingMaskIntoConstraints` 是默认的 `true`；容器（`setTemplateView:` 里的 `_completelyFillWithView:`）又用约束把它与四边贴死。于是 AppKit 按它的零尺寸生成 `width == 0`、`height == 0` 两条必需约束，把容器连同用它建的窗口或 sheet 一起压成 0 × 0，什么尺寸约束都顶不过。只给尺寸不关开关时，窗口够大，模板仍是 0 × 0，页面里只剩按钮栏。
 - 容器自己不定尺寸：`-[OBTemplateContainerViewController loadView]` 用 `NSZeroRect` 建视图，只约束了按钮栏的高度（63），宽度没有任何约束；模板要到第一次 `viewWillDraw` 才搭子视图，所以在那之前也撑不起尺寸。只关开关不给尺寸时，窗口宽约 300、高为 0。
@@ -493,3 +500,4 @@ extension DependencyValues {
 | 2026-11-24 | 修好 0 × 0 的页面 | 用户看效果时发现页面窗口是 0 × 0。查明两个原因（详细设计「AppUI」一节）：模板视图零尺寸创建、自动约束没关，被按零尺寸钉死；容器自己也不定尺寸。修法是关掉模板视图的 `translatesAutoresizingMaskIntoConstraints`，再照框架给自家隐私页窗口定尺寸的公式（`+[OBStyle sheetSizeForParentWindowSize:]`，15.5 与 27.2 相同）设容器的 `preferredContentSize`；sheet 按文档窗口的高度算，`makeTemplateContainerViewController` 因此多了 `parentWindowSize:` 参数。第一版只给了尺寸、没关开关，测试显示窗口够大但模板仍是 0 × 0，随即改正。AppUI 测试新增尺寸公式的四种情况，以及「用容器建的窗口、弹出的 sheet 是页面尺寸且模板铺满」两条；去掉关开关那一行时这两条变红，已实测。swift-onboardingkit 的 README 示例（`presentAsSheet(controller)`）同样会弹出 0 × 0 的 sheet，库里还没改，是否改库并发 0.1.1 待用户定。 |
 | 2026-11-24 | 修法移进 swift-onboardingkit 0.1.1 | 用户决定改库：库的 README 示例同样会弹出 0 × 0 的 sheet，修法放在框架知识所在的地方，别的 App 也不必再撞一次。swift-onboardingkit 的容器便利构造器关掉模板视图的开关、默认要求框架自家 sheet 的尺寸，新增 `sheetSize(forParentWindowSize:)`，发布 `0.1.1`（库的 27 个测试在 Ultra 上全过，去掉关开关那一行时三条变红）。RV 下限抬到 `from: "0.1.1"`，四份锁文件只改这一条 pin，删掉自己那份公式与开关；公式测试随之移到库里，RV 留窗口与 sheet 两条集成测试。 |
 | 2026-11-24 | 页面用居中模板类型 | 用户看过修好尺寸的页面：正文挤在中间约 130pt 宽的一列。原因是构造器给模板的标准类型每边留 175pt 边距，是给整窗口页面用的。反编译模板的边距与列表行宽规则后，改用居中类型（每边 68pt、列表行宽 344，正好配 482 宽的页面），模板与列表都设；新增「标题与列表占页面宽度的六成以上」的测试，去掉这两行时标题宽 136、测试变红。swift-onboardingkit 的 README 示例用的也是标准类型，同样会挤成一列，是否改库待用户定。 |
+| 2026-11-24 | 改用库的页面值，取 App Store 样式 | 用户看过居中版式后嫌难看（图标居中、文字靠左，空隙大），先要一个 demo 自己比较样式，再要求把 demo 里「数据组装成控制器」的部分搬进 swift-onboardingkit，封装成结构化数据、不暴露视图与控制器的属性（库的提案 0002，发布 `0.2.0`）。随后选定 App Store 的样式：反汇编 App Store 得知它的 What's New 模板不带图片、模板与列表都是居中类型、列表符号用 App 的强调色，欢迎页放 128pt 的 App 图标。RV 的页面值把顶部符号改成可选的 `image`（App 图标或符号），What's New 不放图片、欢迎页放 App 图标；AppUI 映射成 `OBTemplatePage` 交给库组装，不再自己设模板类型与尺寸。下限抬到 `0.2.0`，四份锁文件只改这条 pin；`SystemSymbol.handWave` 不再使用，删掉。验证（Ultra）：全新目录下包级构建、引导页相关测试（设置检测 3 个、AppUI 引导页 11 个、AppCore 引导页与功能版本 15 个）全过；CommandLine 包与 Debug、Distribution 两个 workspace 在全新目录下解析，锁文件不被改写；原生 Debug-arm64e 构建 App 通过，解析到 0.2.0。界面仍待用户目视。 |

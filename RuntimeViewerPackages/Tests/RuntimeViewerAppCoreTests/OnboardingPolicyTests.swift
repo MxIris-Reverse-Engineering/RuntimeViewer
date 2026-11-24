@@ -13,10 +13,10 @@ struct OnboardingPolicyTests {
 
     /// A catalog with What's New for 3.0 and 3.1 only.
     private static let catalog = OnboardingCatalog(
-        welcomePage: OnboardingPage(kind: .welcome, title: "Welcome", symbol: .handWave, features: []),
+        welcomePage: OnboardingPage(kind: .welcome, title: "Welcome", image: .appIcon, features: []),
         whatsNewPages: [
-            release30: OnboardingPage(kind: .whatsNew(release30), title: "3.0", symbol: .sparkles, features: []),
-            release31: OnboardingPage(kind: .whatsNew(release31), title: "3.1", symbol: .sparkles, features: []),
+            release30: OnboardingPage(kind: .whatsNew(release30), title: "3.0", features: []),
+            release31: OnboardingPage(kind: .whatsNew(release31), title: "3.1", features: []),
         ]
     )
 

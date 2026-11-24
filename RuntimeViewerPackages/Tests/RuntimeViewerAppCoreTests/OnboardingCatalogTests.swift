@@ -59,10 +59,10 @@ struct OnboardingCatalogTests {
         let release30 = FeatureRelease(major: 3, minor: 0)
         let release32 = FeatureRelease(major: 3, minor: 2)
         let catalog = OnboardingCatalog(
-            welcomePage: OnboardingPage(kind: .welcome, title: "Welcome", symbol: .handWave, features: []),
+            welcomePage: OnboardingPage(kind: .welcome, title: "Welcome", image: .appIcon, features: []),
             whatsNewPages: [
-                release30: OnboardingPage(kind: .whatsNew(release30), title: "3.0", symbol: .sparkles, features: []),
-                release32: OnboardingPage(kind: .whatsNew(release32), title: "3.2", symbol: .sparkles, features: []),
+                release30: OnboardingPage(kind: .whatsNew(release30), title: "3.0", features: []),
+                release32: OnboardingPage(kind: .whatsNew(release32), title: "3.2", features: []),
             ]
         )
 
