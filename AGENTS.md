@@ -264,14 +264,16 @@ sidebar's text-token filter fields need — a comparison type's `valuePrefix` / 
 token whose comparison the field does not offer, and the delegate's `filterTokenField(_:editingStringFor:)` —
 and `NSNavigationPopoverController`, which the runtime source picker's list is; `0.19.0` stops a window that
 showed a navigation popover from never being freed, and filters a long list in one quickly.
-swift-type-indexing is declared `from: "0.1.0"` in `RuntimeViewerCore`, macOS only, with MachOObjCSection's
-`ObjCTypeIndexing` and MachOSwiftSection's `SwiftTypeNameResolution`: its first release, the SDK type index that
+swift-type-indexing is declared `from: "0.1.1"` in `RuntimeViewerCore`, macOS only, with MachOObjCSection's
+`ObjCTypeIndexing` and MachOSwiftSection's `SwiftTypeNameResolution`: the SDK type index that
 resolves a Swift interface's `__C.X` types to their module and Swift name and gives an Objective-C header the
 SDK's `NS_SWIFT_NAME` / `NS_REFINED_FOR_SWIFT` (MachOSwiftSection's proposal `swift-type-indexing-package`). It
 runs only in a process that calls `RuntimeTypeNames.enableInThisProcess()` — the four XPC services, the Catalyst
 helper and the standalone command-line host — and keeps its cache beside the derived data
-(`~/Library/Caches/<bundle identifier>/TypeIndex`). Its `0.1.0` needs swift-apinotes `0.3.0`, the first release
-whose Objective-C members are public.
+(`~/Library/Caches/<bundle identifier>/TypeIndex`). `0.1.1` closes each module interface it generates once it
+has read it and generates two at a time: with `0.1.0` each service's SourceKitService grew to tens of GB, keeping
+every interface open. `0.1.0` was the first release; it needs swift-apinotes `0.3.0`, the first release whose
+Objective-C members are public.
 MachOKitExtensions is declared `from: "3.3.0"` in `RuntimeViewerCore`, the first release that says where
 a C++ signature spells each named type (`CPlusPlusSymbolName.parameterTypeReferences`), which the C++
 interface prints as class names, and that files an Objective-C method's static locals under a function
