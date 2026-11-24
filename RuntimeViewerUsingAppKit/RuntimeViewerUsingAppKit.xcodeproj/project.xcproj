@@ -51,6 +51,8 @@
     { "path": "<PROJECT>/../Resources/AppIcon.icon", "target-membership": [ "RuntimeViewerUsingAppKit/resources" ] },
     { "path": "<PROJECT>/../Resources/AppIconBeta.icon", "target-membership": [ "RuntimeViewerUsingAppKit/resources" ] },
     { "path": "<PROJECT>/../Resources/AppIconBetaXcode26.icon", "target-membership": [ "RuntimeViewerUsingAppKit/resources" ] },
+    { "path": "<PROJECT>/../Resources/AppIconDebug.icon", "target-membership": [ "RuntimeViewerUsingAppKit/resources" ] },
+    { "path": "<PROJECT>/../Resources/AppIconDebugXcode26.icon", "target-membership": [ "RuntimeViewerUsingAppKit/resources" ] },
     { "path": "<PROJECT>/../Resources/AppIconXcode26.icon", "target-membership": [ "RuntimeViewerUsingAppKit/resources" ] },
     { "path": "RuntimeViewerUsingAppKit.xctestplan" },
     { "path": "<PROJECT>/../RuntimeViewerServer/RuntimeViewerServer.xcodeproj" },
