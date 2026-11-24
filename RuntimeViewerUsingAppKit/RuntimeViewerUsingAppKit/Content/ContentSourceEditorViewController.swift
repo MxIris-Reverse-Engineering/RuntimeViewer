@@ -50,6 +50,9 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
 
     private let generatedInterfaceToggledRelay = PublishRelay<SelectionRoute.Destination>()
 
+    /// The switch of a C-imported type's line annotation chosen.
+    private let cImportedTypeNameSpellingToggledRelay = PublishRelay<Void>()
+
     /// `viewDidChangeEffectiveAppearance` is an `NSView` callback, not an `NSViewController`
     /// one, so the appearance switch has to be observed rather than overridden.
     private var effectiveAppearanceObservation: NSKeyValueObservation?
@@ -142,7 +145,8 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
             runtimeObjectOpenedInNextEditorPane: openInNextEditorPaneRelay.asSignal(),
             crossReferenceRequested: crossReferenceRequestedRelay.asSignal(),
             generatedInterfaceToggled: generatedInterfaceToggledRelay.asSignal(),
-            runtimeObjectActionRequested: runtimeObjectActionRequestedRelay.asSignal()
+            runtimeObjectActionRequested: runtimeObjectActionRequestedRelay.asSignal(),
+            cImportedTypeNameSpellingToggled: cImportedTypeNameSpellingToggledRelay.asSignal()
         )
         let output = viewModel.transform(input)
         awaitsHighlightedFirstRender = output.highlightsFirstRender
@@ -222,6 +226,16 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
         )
         lastShownSource = source
         awaitsHighlightedFirstRender = false
+        // The other name of each C-imported type the text declares, at the end of its declaration,
+        // with the switch to it (proposal c-imported-type-name-spelling in MachOSwiftSection).
+        bridge.showLineAnnotations(interface.cImportedTypeNameNotes.enumerated().map { noteIndex, note in
+            SourceEditorBridgingLineAnnotation(
+                characterRange: note.range,
+                message: note.message,
+                actionTitle: note.actionTitle,
+                identifier: String(noteIndex)
+            )
+        })
         for showableExpansion in reopenedExpansions {
             showInlineExpansion(showableExpansion, with: bridge)
         }
@@ -452,6 +466,11 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
 // MARK: - Navigation
 
 extension ContentSourceEditorViewController: SourceEditorBridgingNavigationDelegate {
+    /// Every note offers the same switch, so which one it was does not matter.
+    func sourceEditorBridge(_ bridge: SourceEditorBridging, didPerformActionOfLineAnnotationWithIdentifier identifier: String) {
+        cImportedTypeNameSpellingToggledRelay.accept(())
+    }
+
     func sourceEditorBridge(_ bridge: SourceEditorBridging, didCommandClickTokenIn characterRange: NSRange) {
         guard let runtimeObject = runtimeObject(atCharacterIndex: characterRange.location) else { return }
 

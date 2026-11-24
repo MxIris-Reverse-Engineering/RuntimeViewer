@@ -216,6 +216,8 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         // The inline expansions go first: a gap hangs under a line of the data source it was
         // inserted into, and keeps that line's identifier, which the new data source does not have.
         sourceEditorView.editorGapController.removeAllGapItems()
+        // The line annotations likewise: each is filed under a line identifier of the old data source.
+        sourceEditorView.removeAllLineAnnotations()
         // **The old decorations go before the unfold**, which lays the old text out again: they
         // are columns of the text they came with, and a column past the end of a line is a
         // `fatalError` in the framework. The new ones come in only once their text is in place.
@@ -844,6 +846,84 @@ extension SourceEditorBridge: MinimapLandmarkIconProvider {
         @unknown default: .other
         }
     }
+}
+
+
+// MARK: - Line annotations
+
+/// Line annotations: Xcode's issue annotations, a message at the end of a line, here a note with one
+/// action — the other name of a C-imported type the interface declares (proposal
+/// `c-imported-type-name-spelling` in MachOSwiftSection).
+///
+/// What the reconstruction does with one, read from its sources at the pinned tag: the message sits
+/// at the end of its line, which is tinted with the category's line highlight colour; a click on the
+/// message opens the aggregated dropdown, where the annotation's row carries a button for each action
+/// whose display style is `.inline` or `.dropdown`, titled with its button message
+/// (`SourceEditorLineAnnotationAggregatedDropdown`, `DropdownAnnotationView`); a right click opens a
+/// menu holding the reveal action (`SourceEditorLineAnnotationView.showMenuForRightMouseDownEvent`).
+/// The message itself has no button, and a click on it performs nothing.
+extension SourceEditorBridge {
+    func showLineAnnotations(_ annotations: [SourceEditorBridgingLineAnnotation]) {
+        sourceEditorView.removeAllLineAnnotations()
+        let dataSource = sourceEditorView.dataSource
+        for annotation in annotations {
+            // The conversion `revealCharacterRange(_:)` makes.
+            let position = dataSource.positionFromInternalCharOffset(max(0, annotation.characterRange.location), lineHint: 0)
+            let identifier = annotation.identifier
+            let performAction: () -> Void = { [weak self] in
+                guard let self else { return }
+                navigationDelegate?.sourceEditorBridge(self, didPerformActionOfLineAnnotationWithIdentifier: identifier)
+            }
+            let action = SourceEditorLineAnnotation.Action(
+                message: annotation.actionTitle,
+                displayStyle: .dropdown,
+                buttonMessage: annotation.actionTitle,
+                buttonAlignment: .right,
+                buttonShape: .roundedRect,
+                performStyle: .multiple,
+                action: performAction
+            )
+            sourceEditorView.insertLineAnnotation(SourceEditorLineAnnotation(
+                category: Self.noteLineAnnotationCategory,
+                message: annotation.message,
+                lineIdentifier: dataSource.identifierForLine(position.line),
+                primaryManagedRange: nil,
+                secondaryManagedRanges: [],
+                underlineSymbols: false,
+                explanatoryText: nil,
+                primaryAction: nil,
+                actions: [action],
+                revealAction: SourceEditorLineAnnotation.RevealAction(title: annotation.actionTitle, action: performAction),
+                notes: [],
+                expandedViewClosure: nil,
+                defaultViewState: .inline,
+                allowsMinimization: false,
+                isMessageTextEditable: false,
+                editableMessageTextPlaceholder: nil,
+                representedObject: nil
+            ))
+        }
+    }
+
+    /// A note, not an issue: grey, with the information symbol, the line tinted only faintly, no
+    /// range marked, nothing in the scroller and nothing to drag. Our own category — Xcode's issue
+    /// categories live in IDESourceEditor, outside the reconstruction — so its look is a choice of
+    /// ours, not Xcode's.
+    static let noteLineAnnotationCategory = SourceEditorLineAnnotationCategory(
+        identifier: "RuntimeViewer.note",
+        priority: 0,
+        icon: NSImage(systemSymbolName: "info.circle.fill", accessibilityDescription: nil),
+        annotationColor: .systemGray,
+        lineHighlightColor: NSColor.systemGray.withAlphaComponent(0.08),
+        rangeHighlightColor: nil,
+        rangeStyle: .none,
+        scrollerMarkerType: 0,
+        annotationSortOrder: .messageAscending,
+        isDraggable: false,
+        needsDivider: false,
+        needsDividerInDropdown: false,
+        allowsAnimation: false
+    )
 }
 
 #endif

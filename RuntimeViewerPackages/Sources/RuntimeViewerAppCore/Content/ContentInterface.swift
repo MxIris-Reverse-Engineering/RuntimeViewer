@@ -56,6 +56,11 @@ public struct ContentInterface: Sendable, Identifiable {
     /// empty when the engine sent none. The `NSTextView` pane does not read them.
     public let macroExpansions: [ContentTextViewModel.MacroExpansion]
 
+    /// What the SourceEditor pane says beside each C-imported type this text declares under two
+    /// names, ascending by location; empty when the engine sent none. The `NSTextView` pane does not
+    /// read them.
+    public let cImportedTypeNameNotes: [ContentTextViewModel.CImportedTypeNameNote]
+
     init(
         id: ID = ID(),
         runtimeObject: RuntimeObject,
@@ -63,7 +68,8 @@ public struct ContentInterface: Sendable, Identifiable {
         links: [Link],
         declaredMemberLines: [DeclaredMemberLine],
         commentDecorations: InterfaceCommentDecorations? = nil,
-        macroExpansions: [ContentTextViewModel.MacroExpansion] = []
+        macroExpansions: [ContentTextViewModel.MacroExpansion] = [],
+        cImportedTypeNameNotes: [ContentTextViewModel.CImportedTypeNameNote] = []
     ) {
         self.id = id
         self.runtimeObject = runtimeObject
@@ -72,6 +78,7 @@ public struct ContentInterface: Sendable, Identifiable {
         self.declaredMemberLines = declaredMemberLines
         self.commentDecorations = commentDecorations
         self.macroExpansions = macroExpansions
+        self.cImportedTypeNameNotes = cImportedTypeNameNotes
     }
 
     /// The text without its semantic runs.
@@ -131,7 +138,8 @@ extension ContentInterface {
             commentDecorations: fetchedInterface.commentStructure.map {
                 InterfaceCommentDecorations(structure: $0, interfaceString: semanticString)
             },
-            macroExpansions: ContentTextViewModel.renderedMacroExpansions(of: fetchedInterface)
+            macroExpansions: ContentTextViewModel.renderedMacroExpansions(of: fetchedInterface),
+            cImportedTypeNameNotes: ContentTextViewModel.cImportedTypeNameNotes(of: fetchedInterface)
         )
     }
 

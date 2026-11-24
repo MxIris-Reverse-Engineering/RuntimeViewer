@@ -1,4 +1,5 @@
 import Semantic
+import SwiftPrinting
 
 extension RuntimeInterfaceCommentStructure {
     /// The structure that an annotated print's table describes: swift-semantic-string's regions and
@@ -6,13 +7,14 @@ extension RuntimeInterfaceCommentStructure {
     /// region says nothing about a comment and is left out.
     ///
     /// The regions MachOSwiftSection puts around the attached macros' attributes
-    /// (`marksAttachedMacros`) share the table but are no comments: they are left out, and the
+    /// (`marksAttachedMacros`) and around the declared names of C-imported types
+    /// (`marksCImportedTypeNames`) share the table but are no comments: they are left out, and the
     /// comments numbered again without them.
     init(_ table: AnnotationRegionTable) {
         var commentIndexByRegionIndex: [Int: Int] = [:]
         var comments: [Comment] = []
         // The table lists a region after the region enclosing it, so the enclosing one is numbered first.
-        for (regionIndex, region) in table.regions.enumerated() where !Self.isAttachedMacroRegionKind(region.kind.rawValue) {
+        for (regionIndex, region) in table.regions.enumerated() where !Self.isAttachedMacroRegionKind(region.kind.rawValue) && region.kind.cImportedTypeNames == nil {
             commentIndexByRegionIndex[regionIndex] = comments.count
             comments.append(Comment(
                 kind: Kind(rawValue: region.kind.rawValue),

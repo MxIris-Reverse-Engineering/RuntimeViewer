@@ -485,6 +485,7 @@ extension RuntimeSwiftSection {
         // Read before printing, as the configuration the print starts with.
         let marksCommentStructure = printer.configuration.marksCommentStructure
         let marksAttachedMacros = printer.configuration.marksAttachedMacros
+        let marksCImportedTypeNames = printer.configuration.marksCImportedTypeNames
         let definitions = try printedDefinitions(for: object)
         // Each definition formatted on its own: joining only puts blank lines between them, so the
         // result is the same as formatting the whole, and `typeUTF8Range` below measures the
@@ -492,7 +493,8 @@ extension RuntimeSwiftSection {
         let definitionPrints = try await Self.printDefinitions(definitions, using: printer).map { formatted($0) }
         let newInterfaceString = Self.joinedDefinitionPrints(definitionPrints)
         let separatedPrint = Self.separatingMarks(of: newInterfaceString, marksAttachedMacros: marksAttachedMacros,
-                                                  marksCommentStructure: marksCommentStructure)
+                                                  marksCommentStructure: marksCommentStructure,
+                                                  marksCImportedTypeNames: marksCImportedTypeNames)
         var macroExpansions: [RuntimeInterfaceMacroExpansion]?
         if marksAttachedMacros, let annotations = separatedPrint.annotations {
             // The type's own print comes first, and joining puts nothing before it: its range ends
@@ -515,7 +517,8 @@ extension RuntimeSwiftSection {
             interfaceString: separatedPrint.text,
             commentStructure: marksCommentStructure ? separatedPrint.annotations.map(RuntimeInterfaceCommentStructure.init) : nil,
             interfaceLanguage: .swift,
-            macroExpansions: macroExpansions
+            macroExpansions: macroExpansions,
+            cImportedTypeNames: marksCImportedTypeNames ? separatedPrint.annotations.map(RuntimeInterfaceCImportedTypeName.names(in:)) ?? [] : nil
         )
         interfaceByObject[object.key] = newInterface
         #log(.debug, "Interface generated and cached")
@@ -597,7 +600,8 @@ extension RuntimeSwiftSection {
         // The marks attached macros bring are taken out with the rest; an imported interface shows
         // no macro of its own to expand.
         let separatedPrint = Self.separatingMarks(of: formatted(interfaceString), marksAttachedMacros: marksAttachedMacros,
-                                                  marksCommentStructure: marksCommentStructure)
+                                                  marksCommentStructure: marksCommentStructure,
+                                                  marksCImportedTypeNames: printer.configuration.marksCImportedTypeNames)
         let interface = RuntimeObjectInterface(
             object: object,
             interfaceString: separatedPrint.text,
@@ -613,7 +617,7 @@ extension RuntimeSwiftSection {
     /// while attached macros are marked, the annotation regions — comments and
     /// attached macros' attributes — while either is. A table that was not
     /// asked for is nil. The text is what printing without the marks gives.
-    private static func separatingMarks(of print: SemanticString, marksAttachedMacros: Bool, marksCommentStructure: Bool)
+    private static func separatingMarks(of print: SemanticString, marksAttachedMacros: Bool, marksCommentStructure: Bool, marksCImportedTypeNames: Bool)
         -> (text: FrozenSemanticString, definitionRegions: DefinitionRegionTable?, annotations: AnnotationRegionTable?) {
         var text = print.frozen()
         var definitionRegions: DefinitionRegionTable?
@@ -623,7 +627,7 @@ extension RuntimeSwiftSection {
             definitionRegions = regions
         }
         var annotations: AnnotationRegionTable?
-        if marksAttachedMacros || marksCommentStructure {
+        if marksAttachedMacros || marksCommentStructure || marksCImportedTypeNames {
             let (unmarkedText, regions) = text.separatingAnnotationRegions()
             text = unmarkedText
             annotations = regions
@@ -753,7 +757,7 @@ extension RuntimeSwiftSection {
                 anchorRange = placement.closingBraceLine
                 side = .belowLine
             }
-            let content = separatingMarks(of: expansionPart.content, marksAttachedMacros: true, marksCommentStructure: true).text
+            let content = separatingMarks(of: expansionPart.content, marksAttachedMacros: true, marksCommentStructure: true, marksCImportedTypeNames: true).text
             guard !content.string.isEmpty else { return nil }
             let nestedExpansions = expansionPart.nestedExpansions.compactMap { nestedExpansion -> RuntimeInterfaceMacroExpansion? in
                 let nestedParts = interfaceParts(of: nestedExpansion.parts, in: placement)
@@ -1898,7 +1902,8 @@ extension RuntimeSwiftSection {
     /// cache, so an interface with a structure and one without never stand in
     /// for each other.
     func updateConfiguration(for options: RuntimeObjectInterface.GenerationOptions) async throws {
-        if options.swiftInterfaceOptions.resolvesImportedTypeNames {
+        // Spelling C names asks no resolver (`CImportedTypeNameSpelling.cName`), so it needs no index.
+        if options.swiftInterfaceOptions.resolvesImportedTypeNames, options.swiftInterfaceOptions.cImportedTypeNameSpelling == .swiftName {
             let typeIndexBatch = requestTypeIndex()
             if options.waitsForTypeIndex {
                 await typeIndexBatch?.value
@@ -1908,11 +1913,12 @@ extension RuntimeSwiftSection {
             using: options.swiftInterfaceOptions,
             transformer: options.transformer.swift,
             marksCommentStructure: options.marksCommentStructure,
-            marksAttachedMacros: options.marksAttachedMacros
+            marksAttachedMacros: options.marksAttachedMacros,
+            marksCImportedTypeNames: options.marksCImportedTypeNames
         )
     }
 
-    func updateConfiguration(using options: SwiftGenerationOptions, transformer: Transformer.SwiftConfiguration, marksCommentStructure: Bool, marksAttachedMacros: Bool) async throws {
+    func updateConfiguration(using options: SwiftGenerationOptions, transformer: Transformer.SwiftConfiguration, marksCommentStructure: Bool, marksAttachedMacros: Bool, marksCImportedTypeNames: Bool = false) async throws {
         #log(.debug, "Updating Swift section configuration")
 
         let oldPrintConfiguration = printer.configuration
@@ -1932,6 +1938,9 @@ extension RuntimeSwiftSection {
         // (`macroExpansions(of:definitionRegions:annotations:)`).
         newPrintConfiguration.marksAttachedMacros = marksAttachedMacros
         newPrintConfiguration.marksNestedDefinitions = marksAttachedMacros
+        // Where each declared name of a C-imported type known by two names is, and both names
+        // (`RuntimeObjectInterface.cImportedTypeNames`).
+        newPrintConfiguration.marksCImportedTypeNames = marksCImportedTypeNames
 
         // The engine updates the section before every interface, nearly
         // always with what it already has. Handing the printer even an equal
@@ -2050,6 +2059,11 @@ extension RuntimeSwiftSection {
             enumLayoutCaseTransformer: oldConfiguration.enumLayoutCaseTransformer,
         )
         newConfiguration.applySwitches(of: options)
+        // The display's alone: the Find corpus prints Swift names whatever this option says.
+        newConfiguration.cImportedTypeNameSpelling = switch options.cImportedTypeNameSpelling {
+        case .swiftName: .swiftName
+        case .cName: .cName
+        }
         newConfiguration.staticLayoutDependencyResolution = factory.staticLayoutDependencyResolution(forImageAt: imagePath)
 
         // The transformer templates render library-side

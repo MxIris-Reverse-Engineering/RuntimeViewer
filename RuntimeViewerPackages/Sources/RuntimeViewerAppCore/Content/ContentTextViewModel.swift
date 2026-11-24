@@ -92,6 +92,10 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         let runtimeObject: RuntimeObject
         let commentStructure: RuntimeInterfaceCommentStructure?
         var macroExpansions: [RuntimeInterfaceMacroExpansion] = []
+        /// The C-imported types the text declares under two names, and the spelling it was printed
+        /// with, which decides what the SourceEditor pane offers beside each.
+        var cImportedTypeNames: [RuntimeInterfaceCImportedTypeName] = []
+        var cImportedTypeNameSpelling: SwiftGenerationOptions.CImportedTypeNameSpelling = .swiftName
     }
 
     /// The interface on screen: the text, the tables the pane looks things up in, and what the
@@ -182,8 +186,10 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         // Fixed for the process: whether SourceEditor runs does not change while the app does.
         // Merged the way `currentMergedGenerationOptions` merges it, like the comment structure.
         let marksAttachedMacros: Bool
+        let marksCImportedTypeNames: Bool
         #if canImport(AppKit) && !targetEnvironment(macCatalyst)
         marksAttachedMacros = settings.editor.showsMacroExpansionsInline
+        marksCImportedTypeNames = settings.editor.showsCImportedTypeNameNotes
         // Resolve the dependency once. `Observable.tracking` re-arms on a
         // main-queue hop where the dependency context is no longer available.
         // This is `ViewModel`'s own `settings`, already resolved by `super.init`
@@ -211,6 +217,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         transformerObservable = .just(.init())
         marksCommentStructureObservable = .just(false)
         marksAttachedMacros = false
+        marksCImportedTypeNames = false
         #endif
 
         // ── Fetch half ──────────────────────────────────────────────────
@@ -258,6 +265,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
                 mergedOptions.transformer = transformer
                 mergedOptions.marksCommentStructure = marksCommentStructure
                 mergedOptions.marksAttachedMacros = marksAttachedMacros
+                mergedOptions.marksCImportedTypeNames = marksCImportedTypeNames
                 mergedOptions.interfaceLanguage = interfaceLanguage
                 return Observable.async {
                     let fetchInterval = contentTextSignposter.beginInterval("content.interfaceFetch", id: contentTextSignposter.makeSignpostID())
@@ -463,8 +471,37 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
             interfaceString: interfaceString,
             runtimeObject: runtimeObject,
             commentStructure: commentStructure,
-            macroExpansions: showsNote ? [] : interface.macroExpansions ?? []
+            macroExpansions: showsNote ? [] : interface.macroExpansions ?? [],
+            cImportedTypeNames: showsNote ? [] : interface.cImportedTypeNames ?? [],
+            cImportedTypeNameSpelling: options.swiftInterfaceOptions.cImportedTypeNameSpelling
         )
+    }
+
+    /// What the SourceEditor pane says beside each C-imported type the fetched interface declares
+    /// under two names (proposal `c-imported-type-name-spelling` in MachOSwiftSection): the name it
+    /// does not print, and the switch to it. A declared name whose UTF-8 range does not fall on
+    /// character boundaries of the text is left out.
+    nonisolated static func cImportedTypeNameNotes(of fetchedInterface: FetchedInterface) -> [CImportedTypeNameNote] {
+        guard !fetchedInterface.cImportedTypeNames.isEmpty else { return [] }
+        let text = fetchedInterface.interfaceString.string
+        return fetchedInterface.cImportedTypeNames.compactMap { names in
+            guard let range = characterRange(ofUTF8Range: names.nameUTF8Range, in: text) else { return nil }
+            switch fetchedInterface.cImportedTypeNameSpelling {
+            case .swiftName:
+                return CImportedTypeNameNote(range: range, message: "Imported from C as \(names.cName)", actionTitle: "Show C Names")
+            case .cName:
+                return CImportedTypeNameNote(range: range, message: "Imported to Swift as \(names.swiftName)", actionTitle: "Show Swift Names")
+            }
+        }
+    }
+
+    /// A note beside a C-imported type's declared name: its other name, and the switch to the
+    /// spelling that prints it.
+    public struct CImportedTypeNameNote: Sendable, Equatable {
+        /// The declared name, in UTF-16 offsets of the text.
+        public let range: NSRange
+        public let message: String
+        public let actionTitle: String
     }
 
     /// Each `// ` line of `text` as a note: the marker, then the prose.
@@ -562,6 +599,10 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         /// right-click menu on a type link (Copy Name).
         @Init(default: Signal<RuntimeObjectActionRequest>.empty())
         public let runtimeObjectActionRequested: Signal<RuntimeObjectActionRequest>
+        /// The switch of a C-imported type's note chosen: every pane prints imported type names the
+        /// other way (`SwiftGenerationOptions.cImportedTypeNameSpelling`).
+        @Init(default: Signal<Void>.empty())
+        public let cImportedTypeNameSpellingToggled: Signal<Void>
     }
 
     public struct Output {
@@ -636,6 +677,16 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
             else { return }
             documentState.selectionRouter.trigger(.focusEditorPane(editorPaneID))
             documentState.selectionRouter.trigger(.open(toggledObject, in: destination, interfaceLanguage: toggledEntry.interfaceLanguage))
+        }
+        .disposed(by: rx.disposeBag)
+
+        // The spelling is a Generation Option like any other: storing it refetches every pane's
+        // interface through `appDefaults.$options`.
+        input.cImportedTypeNameSpellingToggled.emitOnNext { [weak self] in
+            guard let self else { return }
+            var options = appDefaults.options
+            options.swiftInterfaceOptions.cImportedTypeNameSpelling = options.swiftInterfaceOptions.cImportedTypeNameSpelling.toggled
+            appDefaults.options = options
         }
         .disposed(by: rx.disposeBag)
 

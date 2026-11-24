@@ -36,6 +36,17 @@ extension RuntimeObjectInterface {
         @Default(false)
         public var marksAttachedMacros: Bool
 
+        /// Asks the engine to send, with a Swift interface, the C-imported types it declares that
+        /// have a Swift name and a C name — where each declared name is and both names
+        /// (`RuntimeObjectInterface.cImportedTypeNames`), for a viewer that offers the other
+        /// spelling beside the declaration. The text is the same either way.
+        ///
+        /// Not a Generation Option the user sets: the content pane decides it for each request (the
+        /// SourceEditor pane), like `marksAttachedMacros`. A peer that predates it ignores the key
+        /// and sends no names.
+        @Default(false)
+        public var marksCImportedTypeNames: Bool
+
         /// Mark in an Objective-C header the `NS_SWIFT_NAME(...)` and `NS_REFINED_FOR_SWIFT` the SDK's
         /// API notes give the class, protocol or category and its members, read from the SDK of the Mac
         /// serving the engine (swift-type-indexing). A top-level option rather than one of

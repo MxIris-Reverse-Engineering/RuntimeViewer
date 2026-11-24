@@ -57,6 +57,22 @@ struct SwiftSectionPrinterConfigurationTests {
         #expect(await section.opaqueTypeResolverRegistrationCount == resolverRegistrations)
     }
 
+    /// The spelling is the printer's (proposal `c-imported-type-name-spelling` in MachOSwiftSection),
+    /// so changing it hands the printer a new configuration, which drops the printed interfaces.
+    @Test("changing the C-imported type name spelling reconfigures the printer once")
+    func changedSpellingReconfiguresOnce() async throws {
+        let section = try await Self.sharedSection.value.section
+        var options = SwiftGenerationOptions()
+        try await Self.update(section, with: options)
+        let configurationUpdates = await section.printerConfigurationUpdateCount
+
+        options.cImportedTypeNameSpelling = .cName
+        try await Self.update(section, with: options)
+        try await Self.update(section, with: options)
+
+        #expect(await section.printerConfigurationUpdateCount == configurationUpdates + 1)
+    }
+
     @Test("a changed option reconfigures the printer once, and the opaque type resolver is registered again only after it was turned off")
     func changedOptionsReconfigureOnce() async throws {
         let section = try await Self.sharedSection.value.section
