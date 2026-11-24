@@ -311,6 +311,12 @@ Agent 运行时用 `TUIST_SCRIPT_ROOT=/Volumes/DerivedData/Agents.noindex/<agent
   `OnBoardingKit.framework` 同名。编成静态 framework 时，同名产物排在搜索路径前面，ObjC target 的
   `-weak_framework OnBoardingKit` 就链到了依赖它的 Swift target 上，预热报两者循环依赖（2026-11-24 实测）。
   ObjC target `COnBoardingKit` 照 UIFoundation 的做法钉回静态 framework。
+- **链接 AppUI 的 target 重复 swift-onboardingkit 的链接参数**（`Tuist/ProjectDescriptionHelpers/OnBoardingKitLinking.swift`，
+  `Project.swift` 的 `linksOnBoardingKit`，`Tuist/Package.swift` 的 `localTestTargetSettings`）：这个包在 ObjC target 上用
+  unsafe 参数弱链接私有框架。原生的 SwiftPM 集成把包 target 的链接参数传给每个链接它的二进制，Tuist 只留在包自己的静态
+  target 上，App 链接时 `OBTemplateView` 等类全部未定义（2026-11-24 实测）。现在 App 与 `RuntimeViewerAppUITests` 两处
+  带上；新 target 链到 RuntimeViewerAppUI 时，工程 target 传 `linksOnBoardingKit: true`，包测试加进
+  `OnBoardingKitLinking.testTargetNames`。
 - **`CAPSTONE_HAS_AARCH64` 手动补上**：Tuist 丢掉只以 trait 为条件的设置；不补的话 Swift 包装编不过，
   C 库能编过但没有任何架构可用。`check` 第 4 项防它再次发生。
 - **预热要带 `--cache-profile development`**（`TuistScript.sh warm` 已经带上）：`tuist cache warm` 不读 `Tuist.swift`

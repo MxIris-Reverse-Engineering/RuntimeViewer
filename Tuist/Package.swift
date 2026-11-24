@@ -75,7 +75,12 @@ let localUpstreamDependencies: [PackageDescription.Package.Dependency] = localUp
                 let registrationFlags = SymbolLanguageRegistration.testTargetNames.contains(targetName)
                     ? SymbolLanguageRegistration.linkerFlags
                     : []
-                var settings: SettingsDictionary = ["OTHER_LDFLAGS": .array(["$(inherited)", "-ObjC"] + registrationFlags)]
+                // swift-onboardingkit's linker flags stay on its own static target here; see
+                // OnBoardingKitLinking in ProjectDescriptionHelpers.
+                let onBoardingKitFlags = OnBoardingKitLinking.testTargetNames.contains(targetName)
+                    ? OnBoardingKitLinking.linkerFlags
+                    : []
+                var settings: SettingsDictionary = ["OTHER_LDFLAGS": .array(["$(inherited)", "-ObjC"] + registrationFlags + onBoardingKitFlags)]
                 if entry.package == "RuntimeViewerCore" {
                     settings["MACOSX_DEPLOYMENT_TARGET"] = "14.0"
                 }
