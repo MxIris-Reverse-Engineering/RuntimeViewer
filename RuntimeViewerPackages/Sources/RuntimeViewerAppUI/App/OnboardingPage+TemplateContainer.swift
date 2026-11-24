@@ -46,6 +46,12 @@ extension OnboardingPage {
                 OBTemplatePartBulletList.Item(feature.title, description: feature.description, systemImage: feature.symbol.rawValue)
             }
         }
+        // The initializers give the template the standard type, whose 175-point side margins are meant for a
+        // whole window: in a 482-point sheet they leave the text a column about 130 points wide. The centered
+        // type has 68-point margins, and keeps its bullet list's rows 344 points wide, the width that leaves.
+        // The template reads its type when it first draws.
+        templateView.templateType = .centered
+        templateView.bulletList?.templateType = .centered
         let container = OBTemplateContainerViewController(
             templateView: templateView,
             primaryButton: .init(Self.continueButtonTitle) { controller in

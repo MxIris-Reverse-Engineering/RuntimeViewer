@@ -47,6 +47,31 @@ struct OnboardingTemplateContainerTests {
         #expect(try #require(container.templateView).frame.size == expectedSize)
     }
 
+    /// The standard type's 175-point side margins left the text a column about 130 points wide in the
+    /// 482-point page. The template builds its subviews when it first draws; `viewWillDraw()` stands in for
+    /// that, so nothing is put on screen.
+    @Test("the page's text spans most of its width")
+    func textSpansPageWidth() throws {
+        let container = try Self.makeContainer()
+        let pageSize = OBTemplateContainerViewController.sheetSize(forParentWindowSize: nil)
+        let window = NSWindow(contentViewController: container)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        let templateView = try #require(container.templateView)
+
+        window.layoutIfNeeded()
+        templateView.viewWillDraw()
+        window.layoutIfNeeded()
+
+        #expect(templateView.templateType == .centered)
+        #expect(templateView.bulletList?.templateType == .centered)
+        let titleWidth = try #require(templateView.titleView).frame.width
+        let listWidth = try #require(templateView.bulletList).frame.width
+        let shortestAcceptableWidth: CGFloat = pageSize.width * 0.6
+        #expect(titleWidth > shortestAcceptableWidth)
+        #expect(listWidth > shortestAcceptableWidth)
+    }
+
     @Test("a sheet presented from the page is the size its window gives it, and the template fills it")
     func sheetPresentedFromContainerHasPageSize() throws {
         let parentWindowSize = NSSize(width: 1000, height: 650)
