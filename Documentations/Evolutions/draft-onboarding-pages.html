@@ -243,7 +243,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
     <rect class="box-changed" x="570" y="144" width="405" height="44" rx="6"/><text x="580" y="162">AppDefaults</text><text class="caption" x="580" y="179">+ lastPresentedOnboardingRelease</text>
     <rect class="box-changed" x="570" y="196" width="405" height="44" rx="6"/><text x="580" y="214">SystemSymbol</text><text class="caption" x="580" y="231">+ symbol cases for the pages</text>
     <text class="caption" x="345" y="256">RuntimeViewerAppUI</text>
-    <rect class="box-added" x="345" y="264" width="360" height="44" rx="6"/><text x="355" y="282">OnboardingPage+TemplateContainer</text><text class="caption" x="355" y="299">makeTemplateContainerViewController(onContinue:)</text>
+    <rect class="box-added" x="345" y="264" width="360" height="44" rx="6"/><text x="355" y="282">OnboardingPage+TemplateContainer</text><text class="caption" x="355" y="299">makeTemplateContainerViewController(parentWindowSize:onContinue:)</text>
 
     <rect class="group" x="10" y="345" width="980" height="115" rx="10"/>
     <rect class="box-added" x="25" y="360" width="230" height="44" rx="6"/><text x="35" y="378">OnboardingController</text><text class="caption" x="35" y="395">start(), showWhatsNew()</text>
@@ -307,7 +307,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
       <tr><td><code>RuntimeViewerAppCore/Storage/AppDefaults.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>新增 <code>lastPresentedOnboardingRelease: FeatureRelease?</code></td><td>记住看过哪一版</td><td class="numeric">3</td></tr>
       <tr><td><code>RuntimeViewerAppCore/Presentation/SystemSymbol.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>加页面用到、还没有的符号</td><td>页面的符号</td><td class="numeric">3</td></tr>
       <tr><td><code>RuntimeViewerAppCoreTests/</code> 的 <code>FeatureReleaseTests</code>、<code>OnboardingPolicyTests</code>、<code>OnboardingCatalogTests</code></td><td><span class="tag tag-added">新增</span></td><td>解析与比较；每种启动情形；目录覆盖当前版本、每页行数、取页规则</td><td>第 3 步的测试</td><td class="numeric">3</td></tr>
-      <tr><td><code>RuntimeViewerAppUI/App/OnboardingPage+TemplateContainer.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>makeTemplateContainerViewController(onContinue:)</code>、<code>isPresentable</code></td><td>画成 OnBoardingKit 模板</td><td class="numeric">4</td></tr>
+      <tr><td><code>RuntimeViewerAppUI/App/OnboardingPage+TemplateContainer.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>makeTemplateContainerViewController(parentWindowSize:onContinue:)</code>、<code>isPresentable</code></td><td>画成 OnBoardingKit 模板</td><td class="numeric">4</td></tr>
       <tr><td><code>RuntimeViewerAppUITests/OnboardingTemplateContainerTests.swift</code></td><td><span class="tag tag-added">新增</span></td><td>标题、按钮、Continue 的回调</td><td>第 4 步的测试</td><td class="numeric">4</td></tr>
       <tr><td><code>App/OnboardingController.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>start()</code>、<code>showWhatsNew()</code>、等主窗口、写记录</td><td>新的启动职责</td><td class="numeric">5</td></tr>
       <tr><td><code>App/WelcomeController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>新增 <code>owns(_ window: NSWindow) -&gt; Bool</code> 与 <code>isShowingWindow</code></td><td>让页面知道欢迎窗口在不在前面</td><td class="numeric">5</td></tr>
@@ -429,7 +429,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
     <span class="token-comment">/// The page as OnBoardingKit's template in its container, with one Continue button.</span>
     <span class="token-comment">/// `nil` when the system has no OnBoardingKit.</span>
     <span class="token-macro">@MainActor</span>
-    <span class="token-keyword">public func</span> makeTemplateContainerViewController(onContinue: <span class="token-keyword">@escaping</span> <span class="token-macro">@MainActor</span> () -&gt; <span class="token-type">Void</span>) -&gt; <span class="token-type">NSViewController</span>?
+    <span class="token-keyword">public func</span> makeTemplateContainerViewController(parentWindowSize: NSSize?, onContinue: <span class="token-keyword">@escaping</span> <span class="token-macro">@MainActor</span> () -&gt; <span class="token-type">Void</span>) -&gt; <span class="token-type">NSViewController</span>?
 }
 
 <span class="token-macro">@MainActor</span>
@@ -505,7 +505,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
     <li>✅ <strong>发布 swift-onboardingkit 0.1.0</strong>：改弱链接、README、0001 决策日志；仓库改公开；tag 与 Release。</li>
     <li>✅ <strong>接入依赖并实测构建</strong>：原生 Debug workspace 构建通过、App 里是弱链接；Tuist 起初不成立，照项目已有的两种 Tuist 绕行补上后 install、check、warm、构建全过；iOS App 构建通过。</li>
     <li>✅ <strong>AppCore 的判断与内容</strong>：<code>FeatureRelease</code>、<code>OnboardingPage</code>、<code>OnboardingCatalog</code>、<code>OnboardingPolicy</code>、<code>AppDefaults</code>、<code>SystemSymbol</code>、<code>SettingsAccess</code> 与测试。</li>
-    <li>✅ <strong>AppUI 画页面</strong>：<code>makeTemplateContainerViewController(onContinue:)</code> 与测试。</li>
+    <li>✅ <strong>AppUI 画页面</strong>：<code>makeTemplateContainerViewController(parentWindowSize:onContinue:)</code> 与测试。</li>
     <li>✅ <strong>App 接入启动与菜单</strong>：<code>OnboardingController</code>、<code>WelcomeController.owns(_:)</code> 与 <code>isShowingWindow</code>、AppDelegate、Help 菜单；界面由用户目视验收。</li>
     <li>✅ <strong>文档</strong>：<code>RuntimeViewerUsingAppKit/AGENTS.md</code>、<code>TuistDevelopment.md</code>、术语表、两份索引、本提案。</li>
   </ol>
@@ -515,7 +515,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <section id="log">
   <h2>决策日志</h2>
   <details>
-    <summary>11 条，最近一条：实现完成，待用户看过后收尾</summary>
+    <summary>12 条，最近一条：修好 0 × 0 的页面</summary>
     <div class="details-body">
       <div class="table-wrap">
       <table>
@@ -531,6 +531,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
           <tr><td class="numeric">2026-11-24</td><td>独立窗口不带关闭按钮</td><td>自审发现：从关闭按钮关掉不会记下版本。与 sheet 一样只留 Continue 一个出口。</td></tr>
           <tr><td class="numeric">2026-11-24</td><td>根 AGENTS.md 不加依赖下限</td><td>根文件已超过 64 KiB；理由写在 <code>Package.swift</code> 注释，规则写进 <code>RuntimeViewerUsingAppKit/AGENTS.md</code>，「功能版本」登记进术语表。</td></tr>
           <tr><td class="numeric">2026-11-24</td><td>实现完成，待用户看过后收尾</td><td>Settings 75 个全过；AppCore 1098 个里 3 个既有必红、1 个单独重跑通过；AppUI 264 个只有既有必红的一条。原生 App、Tuist、iOS App 构建都通过，两种 App 都是弱链接。界面目视验收留给用户。不写配套文章；新术语已登记。正式收尾时清理 Ultra 与 MacBook 上的同名 worktree 和构建目录。</td></tr>
+          <tr><td class="numeric">2026-11-24</td><td>修好 0 × 0 的页面</td><td>用户看效果时发现页面窗口是 0 × 0：模板视图零尺寸创建、自动约束没关，被按零尺寸钉死；容器自己也不定尺寸。关掉模板视图的 <code>translatesAutoresizingMaskIntoConstraints</code>，再照框架自家隐私页窗口的公式（宽 482，高取父窗口 88%、限制在 546–600）设 <code>preferredContentSize</code>。新增尺寸与「窗口、sheet 是页面尺寸且模板铺满」的测试，去掉修复时变红。swift-onboardingkit 的 README 示例同样有这个问题，改不改库待用户定。</td></tr>
         </tbody>
       </table>
       </div>
