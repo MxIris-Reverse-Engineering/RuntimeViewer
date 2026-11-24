@@ -26,8 +26,8 @@ struct LineEndTagTests {
     private static let declarationLine = 1
     private static let declarationLineLength = "struct AnyWeakAttribute {".utf16.count
 
-    /// `AnyWeakAttribute`, on the second line.
-    private static let declaredNameRange = NSRange(location: ("struct Holder {}\nstruct " as NSString).length,
+    /// `AnyWeakAttribute`, on the second line. Nonisolated: it is the default of `tag(at:identifier:)`.
+    private nonisolated static let declaredNameRange = NSRange(location: ("struct Holder {}\nstruct " as NSString).length,
                                                    length: "AnyWeakAttribute".utf16.count)
 
     /// `Holder`, on the first line.
