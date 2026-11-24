@@ -80,11 +80,17 @@ struct CImportedTypeNameNoteTests {
     func togglingFlipsStoredSpelling() throws {
         let appDefaults = AppDefaults.isolated()
         let toggledRelay = PublishRelay<Void>()
-        let viewModel = withLiveDependencyContext(appDefaults: appDefaults) {
+        let router = MockRouter<ContentRoute>()
+        // The live context, with this test's own store: the view model writes the spelling there.
+        let viewModel = withDependencies {
+            $0.context = .live
+            $0.settings = SettingsAccess.preview
+            $0.appDefaults = appDefaults
+        } operation: {
             ContentTextViewModel(
                 runtimeObject: Self.runtimeObject,
                 documentState: DocumentState(),
-                router: MockRouter<ContentRoute>(),
+                router: router,
                 interfaceProvider: { runtimeObject, _ in
                     RuntimeObjectInterface(object: runtimeObject, interfaceString: SemanticString(stringLiteral: "struct AnyWeakAttribute {}"))
                 }
@@ -104,5 +110,6 @@ struct CImportedTypeNameNoteTests {
         // The internal switch the content pane merges in per request is never stored.
         #expect(!appDefaults.options.marksCImportedTypeNames)
         withExtendedLifetime(viewModel) {}
+        withExtendedLifetime(router) {}
     }
 }
