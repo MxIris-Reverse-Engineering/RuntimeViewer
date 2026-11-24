@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @Dependency(\.debugMenuController) private var debugMenuController
     @Dependency(\.helperServiceVersionChecker) private var helperServiceVersionChecker
     @Dependency(\.mcpService) private var mcpService
+    @Dependency(\.onboardingController) private var onboardingController
     @Dependency(\.fileController) private var fileController
     @Dependency(\.frameworkInstanceController) private var frameworkInstanceController
     @Dependency(\.runtimeConnectionNotificationService) private var runtimeConnectionNotificationService
@@ -90,6 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         settingsLifecycleController.loadOnLaunch()
         welcomeController.start()
+        onboardingController.start()
         runtimeConnectionNotificationService.start()
         sourceEditorBridgeProvider.startPrewarming()
         appearanceController.start()
@@ -136,6 +138,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func showWelcomeWindow(_ sender: Any?) {
         welcomeController.showWindow()
+    }
+
+    @objc func showWhatsNew(_ sender: Any?) {
+        onboardingController.showWhatsNew()
     }
 
     @objc func showSimulatorInstaller(_ sender: Any?) {
