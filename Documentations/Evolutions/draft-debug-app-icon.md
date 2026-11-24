@@ -232,14 +232,15 @@ fi
    - 行为：`xcode26VariantOfAppIconDebugHasNoFeaturesKey`
    - 行为：`debugIconRendersInDefaultDarkAndTintedAppearances`
    - 结果：`ictool` 渲染了原件与变体的 Default、Dark、TintedLight、TintedDark、ClearLight、ClearDark 与 design generation 26，全部正常；变体与原件只差 `features`，素材逐字节相同
-3. **选择规则、工程登记与发版校验** —— 第 7–11 行
+3. **选择规则、工程登记与发版校验**（已完成）—— 第 7–11 行
    - 行为：`debugAndDebugArm64eResolveAppIconDebug`
    - 行为：`releaseStillResolvesAppIcon`
    - 行为：`betaChannelStillResolvesAppIconBetaInAnyConfiguration`
    - 行为：`debugBuildProductHasCFBundleIconNameAppIconDebug`
    - 行为：`archiveScriptExpectsAppIconDebugForDebugConfiguration`
    - 行为：`tuistCheckPassesWithBothNewDocuments`
-4. **文档** —— 第 12–15 行
+   - 结果（Ultra，Xcode 27.2）：Tuist workspace 的 `-showBuildSettings` 给出 Debug、Debug-arm64e 为 `AppIconDebug`，Release 为 `AppIcon`；`TuistScript.sh check` 通过；Debug 构建成功，`RuntimeViewer-Debug.app` 的 `CFBundleIconName` 是 `AppIconDebug`，`Assets.car` 里只有它；actool 直接编 `AppIconDebug.icon`（Xcode 27.2）与 `AppIconDebugXcode26.icon`（Xcode 26.6）都产出图标；`ArchiveScript.sh` 的推导逐个配置求值，Release → `AppIcon`、beta 渠道 → `AppIconBeta`（任何配置）、Debug 与 Debug-arm64e → `AppIconDebug`。没有实际跑一次归档
+4. **文档**（已完成）—— 第 12–15 行
    - 行为：`resourcesAgentsDescribesSixDocumentsAndTheConfigurationAxis`
 
 **收尾时必须判断两件事**：
@@ -257,3 +258,4 @@ fi
 | 2026-11-24 | CATALYST 的 SVG 只有文件头注释变化 | 原计划「逐字节不变」，但生成的 SVG 头注释写着生成脚本的路径，改名后必然跟着变；路径数据逐字节相同，注释指向现存脚本更有用，所以接受这一行变化 |
 | 2026-11-24 | 脚本加 `--cap-height` 参数 | 渲染候选要多次改字高，临时覆盖比反复改预设常量干净；以后调整任何角标的字高也用得上 |
 | 2026-11-24 | DEBUG 字高定为 120 | 渲染了 136 / 120 / 108 三档（64 像素下都可辨认）：136 角标宽 718、盖住放大镜下半圈；108 与 BETA 同宽（570）但字明显比 BETA 小；120 角标约 634 × 229，覆盖面与 BETA 接近。用户选了推荐的 120 |
+| 2026-11-24 | 实现完成，待用户看过后收尾 | 四步都已提交并推送功能分支。文档判断：不需要使用指南或实现说明，用法与约束写进了 `Resources/AGENTS.md`，字高与留白的取舍写在 `GenerateBadgeLayers.swift` 的注释里；没有新术语 |
