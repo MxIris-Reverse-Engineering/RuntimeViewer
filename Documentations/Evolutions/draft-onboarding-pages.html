@@ -191,7 +191,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
   <h2>摘要</h2>
   <p>macOS App 接入 swift-onboardingkit（Apple 私有框架 OnBoardingKit 的 Swift 封装，App Store、Freeform、Shortcuts 的欢迎页与 "What's New" 页就是它画的），做两种一次性页面：新用户第一次启动时的<strong>欢迎页</strong>，以及升级到新的功能版本（<code>主版本.次版本</code>）后第一次启动时的 <strong>What's New 页</strong>。</p>
   <p>页面在文档窗口上是 sheet；0105 的欢迎窗口在前时（它是无边框窗口、不会成为主窗口），页面放在一个独立窗口里显示在它前面。点 Continue 关闭并记下「已看过这一版」；Help 菜单新增 What's New in RuntimeViewer，随时可再看。「这次启动该弹哪一页」由 RuntimeViewerAppCore 判断（可单测），页面内容是 AppCore 里的值，由 RuntimeViewerAppUI 画成 OnBoardingKit 的模板，App 里一个新的启动控制器负责弹出。</p>
-  <p>swift-onboardingkit 改为公开仓库、改成弱链接私有框架后发布 <code>0.1.0</code>，RV 按 <code>from: "0.1.0"</code> 依赖它，只给 macOS 链接。</p>
+  <p>swift-onboardingkit 改为公开仓库、改成弱链接私有框架后发布 <code>0.1.0</code>，修 0 × 0 页面时再发 <code>0.1.1</code>（容器自己定好尺寸）；RV 按 <code>from: "0.1.1"</code> 依赖它，只给 macOS 链接。</p>
 </section>
 
 <section id="decide">
@@ -227,7 +227,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
   <div class="figure">
   <svg viewBox="0 0 1000 470" role="img" aria-label="What changes">
     <rect class="group" x="10" y="10" width="300" height="150" rx="10"/>
-    <text class="group-label" x="22" y="30">swift-onboardingkit 0.1.0</text>
+    <text class="group-label" x="22" y="30">swift-onboardingkit 0.1.1</text>
     <rect class="box-changed" x="25" y="42" width="270" height="44" rx="6"/><text x="35" y="60">COnBoardingKit</text><text class="caption" x="35" y="77">weak-links OnBoardingKit.framework</text>
     <rect class="box-kept" x="25" y="94" width="270" height="44" rx="6"/><text x="35" y="112">OnBoardingKit</text><text class="caption" x="35" y="129">Swift layer, unchanged</text>
 
@@ -296,7 +296,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
       <tr><td>swift-onboardingkit <code>README.md</code></td><td><span class="tag tag-changed">修改</span></td><td>安装写法改 <code>from: "0.1.0"</code>；「Things to know」加弱链接与可用性检查</td><td>公开发布后的用法</td><td class="numeric">1</td></tr>
       <tr><td>swift-onboardingkit <code>Documentations/Evolutions/0001-…md</code>（与 <code>.html</code>）</td><td><span class="tag tag-changed">修改</span></td><td>决策日志加一行：改弱链接、公开、发布 0.1.0</td><td>那边的决策留档</td><td class="numeric">1</td></tr>
       <tr><td>GitHub <code>Mx-Iris/swift-onboardingkit</code></td><td><span class="tag tag-changed">修改</span></td><td>可见性改公开；tag <code>0.1.0</code> 与 Release</td><td>RV 是公开仓库</td><td class="numeric">1</td></tr>
-      <tr><td><code>RuntimeViewerPackages/Package.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>声明 <code>swift-onboardingkit</code>（本地候选 + <code>from: "0.1.0"</code>）；<code>RuntimeViewerAppUI</code> 依赖 <code>OnBoardingKit</code>，只给 macOS</td><td>接入依赖</td><td class="numeric">2</td></tr>
+      <tr><td><code>RuntimeViewerPackages/Package.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>声明 <code>swift-onboardingkit</code>（本地候选 + <code>from: "0.1.1"</code>）；<code>RuntimeViewerAppUI</code> 依赖 <code>OnBoardingKit</code>，只给 macOS</td><td>接入依赖</td><td class="numeric">2</td></tr>
       <tr><td><code>RuntimeViewerPackages</code>、<code>RuntimeViewerCommandLine</code> 与 Debug、Distribution 两个 workspace 的 <code>Package.resolved</code></td><td><span class="tag tag-changed">修改</span></td><td>加 swift-onboardingkit 的 pin，其余 pin 不动</td><td>锁文件随依赖变</td><td class="numeric">2</td></tr>
       <tr><td><code>RuntimeViewerSettings/Settings.swift</code> · <code>SettingsAccess</code></td><td><span class="tag tag-changed">修改</span></td><td>新增 <code>didFindStoredSettingsOnLoad</code>，在 <code>logLoadOutcome(_:)</code> 里记</td><td>认新用户，不另存布尔值</td><td class="numeric">3</td></tr>
       <tr><td><code>RuntimeViewerSettingsTests/SettingsStoredSettingsDetectionTests.swift</code></td><td><span class="tag tag-added">新增</span></td><td>无数据、有数据、坏数据三种</td><td>第 3 步的测试</td><td class="numeric">3</td></tr>
@@ -515,7 +515,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <section id="log">
   <h2>决策日志</h2>
   <details>
-    <summary>12 条，最近一条：修好 0 × 0 的页面</summary>
+    <summary>13 条，最近一条：修法移进 swift-onboardingkit 0.1.1</summary>
     <div class="details-body">
       <div class="table-wrap">
       <table>
@@ -532,6 +532,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
           <tr><td class="numeric">2026-11-24</td><td>根 AGENTS.md 不加依赖下限</td><td>根文件已超过 64 KiB；理由写在 <code>Package.swift</code> 注释，规则写进 <code>RuntimeViewerUsingAppKit/AGENTS.md</code>，「功能版本」登记进术语表。</td></tr>
           <tr><td class="numeric">2026-11-24</td><td>实现完成，待用户看过后收尾</td><td>Settings 75 个全过；AppCore 1098 个里 3 个既有必红、1 个单独重跑通过；AppUI 264 个只有既有必红的一条。原生 App、Tuist、iOS App 构建都通过，两种 App 都是弱链接。界面目视验收留给用户。不写配套文章；新术语已登记。正式收尾时清理 Ultra 与 MacBook 上的同名 worktree 和构建目录。</td></tr>
           <tr><td class="numeric">2026-11-24</td><td>修好 0 × 0 的页面</td><td>用户看效果时发现页面窗口是 0 × 0：模板视图零尺寸创建、自动约束没关，被按零尺寸钉死；容器自己也不定尺寸。关掉模板视图的 <code>translatesAutoresizingMaskIntoConstraints</code>，再照框架自家隐私页窗口的公式（宽 482，高取父窗口 88%、限制在 546–600）设 <code>preferredContentSize</code>。新增尺寸与「窗口、sheet 是页面尺寸且模板铺满」的测试，去掉修复时变红。swift-onboardingkit 的 README 示例同样有这个问题，改不改库待用户定。</td></tr>
+          <tr><td class="numeric">2026-11-24</td><td>修法移进 swift-onboardingkit 0.1.1</td><td>用户决定改库。库的容器便利构造器关掉模板视图的开关、默认要求框架自家 sheet 的尺寸，新增 <code>sheetSize(forParentWindowSize:)</code>，发布 <code>0.1.1</code>。RV 下限抬到 <code>from: "0.1.1"</code>，四份锁文件只改这一条 pin，删掉自己那份公式与开关；公式测试移到库里，RV 留窗口与 sheet 两条集成测试。</td></tr>
         </tbody>
       </table>
       </div>
