@@ -177,10 +177,10 @@ final class SourceEditorTestHarness {
         set { bridge.navigationDelegate = newValue }
     }
 
-    /// Shows line annotations on the current source, as the content pane does for the C-imported
-    /// types an interface declares.
-    func showLineAnnotations(_ annotations: [SourceEditorBridgingLineAnnotation]) {
-        bridge.showLineAnnotations(annotations)
+    /// Shows line-end tags on the current source, as the content pane does for the C-imported types
+    /// an interface declares.
+    func showLineEndTags(_ tags: [SourceEditorBridgingLineEndTag]) {
+        bridge.showLineEndTags(tags)
     }
 
     func hideInlineExpansion(identifier: String) {

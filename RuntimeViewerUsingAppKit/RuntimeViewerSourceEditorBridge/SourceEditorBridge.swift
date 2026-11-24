@@ -23,6 +23,10 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
     /// needs the view; it is created and registered in `init`.
     private lazy var commentDecorationController = CommentDecorationController(sourceEditorView: sourceEditorView)
 
+    /// Draws the tags `showLineEndTags(_:)` places after the end of lines and reports their clicks.
+    /// Lazy for the same reason; created and registered in `init`.
+    private lazy var lineEndTagController = LineEndTagController(sourceEditorView: sourceEditorView)
+
     /// A gutter has to exist before there are any line numbers to show — the view ships
     /// without one — and it also draws the active-line emphasis, so it stays installed
     /// whether or not the numbers are wanted.
@@ -135,6 +139,15 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         // Cursor rects are the view's, not the layout manager's.
         sourceEditorView.addCursorRectOverrideProvider(commentDecorationController)
 
+        // Likewise registered once: with no tags shown it draws nothing and takes no event.
+        lineEndTagController.clickHandler = { [weak self] identifier in
+            guard let self else { return }
+            navigationDelegate?.sourceEditorBridge(self, didClickLineEndTagWithIdentifier: identifier)
+        }
+        sourceEditorView.layoutManager.addLayoutVisualization(lineEndTagController)
+        sourceEditorView.addEventConsumer(lineEndTagController)
+        sourceEditorView.addCursorRectOverrideProvider(lineEndTagController)
+
         // Held weakly by the view, and the view is owned by this object, so this does not
         // retain-cycle and does not need clearing.
         sourceEditorView.contextualMenuItemProvider = self
@@ -216,8 +229,8 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         // The inline expansions go first: a gap hangs under a line of the data source it was
         // inserted into, and keeps that line's identifier, which the new data source does not have.
         sourceEditorView.editorGapController.removeAllGapItems()
-        // The line annotations likewise: each is filed under a line identifier of the old data source.
-        sourceEditorView.removeAllLineAnnotations()
+        // The line-end tags likewise: each was placed on a line of the old text.
+        lineEndTagController.clear()
         // **The old decorations go before the unfold**, which lays the old text out again: they
         // are columns of the text they came with, and a column past the end of a line is a
         // `fatalError` in the framework. The new ones come in only once their text is in place.
@@ -260,7 +273,9 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
     }
 
     func applyCommentTagAppearance(_ appearance: SourceEditorBridgingCommentTagAppearance) {
-        commentDecorationController.applyTagAppearance(CommentDecorationController.TagAppearance(appearance))
+        let tagAppearance = CommentDecorationController.TagAppearance(appearance)
+        commentDecorationController.applyTagAppearance(tagAppearance)
+        lineEndTagController.applyTagAppearance(tagAppearance)
     }
 
     func applyTheme(name: String, dictionary: NSDictionary, fontSizeModifier: Int, lineNumberFont: NSFont) {
@@ -848,82 +863,12 @@ extension SourceEditorBridge: MinimapLandmarkIconProvider {
     }
 }
 
+// MARK: - Line-End Tags
 
-// MARK: - Line annotations
-
-/// Line annotations: Xcode's issue annotations, a message at the end of a line, here a note with one
-/// action — the other name of a C-imported type the interface declares (proposal
-/// `c-imported-type-name-spelling` in MachOSwiftSection).
-///
-/// What the reconstruction does with one, read from its sources at the pinned tag: the message sits
-/// at the end of its line, which is tinted with the category's line highlight colour; a click on the
-/// message opens the aggregated dropdown, where the annotation's row carries a button for each action
-/// whose display style is `.inline` or `.dropdown`, titled with its button message
-/// (`SourceEditorLineAnnotationAggregatedDropdown`, `DropdownAnnotationView`); a right click opens a
-/// menu holding the reveal action (`SourceEditorLineAnnotationView.showMenuForRightMouseDownEvent`).
-/// The message itself has no button, and a click on it performs nothing.
 extension SourceEditorBridge {
-    func showLineAnnotations(_ annotations: [SourceEditorBridgingLineAnnotation]) {
-        sourceEditorView.removeAllLineAnnotations()
-        let dataSource = sourceEditorView.dataSource
-        for annotation in annotations {
-            // The conversion `revealCharacterRange(_:)` makes.
-            let position = dataSource.positionFromInternalCharOffset(max(0, annotation.characterRange.location), lineHint: 0)
-            let identifier = annotation.identifier
-            let performAction: () -> Void = { [weak self] in
-                guard let self else { return }
-                navigationDelegate?.sourceEditorBridge(self, didPerformActionOfLineAnnotationWithIdentifier: identifier)
-            }
-            let action = SourceEditorLineAnnotation.Action(
-                message: annotation.actionTitle,
-                displayStyle: .dropdown,
-                buttonMessage: annotation.actionTitle,
-                buttonAlignment: .right,
-                buttonShape: .roundedRect,
-                performStyle: .multiple,
-                action: performAction
-            )
-            sourceEditorView.insertLineAnnotation(SourceEditorLineAnnotation(
-                category: Self.noteLineAnnotationCategory,
-                message: annotation.message,
-                lineIdentifier: dataSource.identifierForLine(position.line),
-                primaryManagedRange: nil,
-                secondaryManagedRanges: [],
-                underlineSymbols: false,
-                explanatoryText: nil,
-                primaryAction: nil,
-                actions: [action],
-                revealAction: SourceEditorLineAnnotation.RevealAction(title: annotation.actionTitle, action: performAction),
-                notes: [],
-                expandedViewClosure: nil,
-                defaultViewState: .inline,
-                allowsMinimization: false,
-                isMessageTextEditable: false,
-                editableMessageTextPlaceholder: nil,
-                representedObject: nil
-            ))
-        }
+    func showLineEndTags(_ tags: [SourceEditorBridgingLineEndTag]) {
+        lineEndTagController.show(tags)
     }
-
-    /// A note, not an issue: grey, with the information symbol, the line tinted only faintly, no
-    /// range marked, nothing in the scroller and nothing to drag. Our own category — Xcode's issue
-    /// categories live in IDESourceEditor, outside the reconstruction — so its look is a choice of
-    /// ours, not Xcode's.
-    static let noteLineAnnotationCategory = SourceEditorLineAnnotationCategory(
-        identifier: "RuntimeViewer.note",
-        priority: 0,
-        icon: NSImage(systemSymbolName: "info.circle.fill", accessibilityDescription: nil),
-        annotationColor: .systemGray,
-        lineHighlightColor: NSColor.systemGray.withAlphaComponent(0.08),
-        rangeHighlightColor: nil,
-        rangeStyle: .none,
-        scrollerMarkerType: 0,
-        annotationSortOrder: .messageAscending,
-        isDraggable: false,
-        needsDivider: false,
-        needsDividerInDropdown: false,
-        allowsAnimation: false
-    )
 }
 
 #endif
