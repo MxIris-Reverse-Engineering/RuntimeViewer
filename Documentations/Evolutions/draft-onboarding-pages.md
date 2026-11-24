@@ -1,6 +1,6 @@
 # Draft - 首次启动欢迎页与更新后的 What's New（接入 swift-onboardingkit）
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-24
 - **最后更新**: 2026-11-24
@@ -420,7 +420,7 @@ extension DependencyValues {
 
 ## 落地步骤
 
-1. **发布 swift-onboardingkit 0.1.0** —— 改动地图 swift-onboardingkit 四行
+1. ✅ **发布 swift-onboardingkit 0.1.0** —— 改动地图 swift-onboardingkit 四行
    - 行为：`swift test` 在那个包里照旧通过。
    - 行为：链接它的可执行文件里 OnBoardingKit 是 `LC_LOAD_WEAK_DYLIB`。
    - 行为：`gh repo view` 显示公开，`0.1.0` 的 tag 与 Release 存在。
