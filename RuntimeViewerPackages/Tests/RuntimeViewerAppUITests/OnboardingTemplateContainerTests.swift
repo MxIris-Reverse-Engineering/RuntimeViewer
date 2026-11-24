@@ -65,9 +65,9 @@ struct OnboardingTemplateContainerTests {
         #expect(heightError < 0.001)
     }
 
-    /// The template builds its subviews only when it first draws, so a container left at the size its
-    /// `loadView` gives it is 0 × 0, and so is a window or sheet made from it.
-    @Test("a window made from the page is the page's size, before anything draws")
+    /// The template is created with a zero frame; translating its autoresizing mask, it holds itself — and
+    /// the container, and any window made from it — at 0 × 0. Nothing is put on screen.
+    @Test("a window made from the page is the page's size, and the template fills it")
     func windowMadeFromContainerHasPageSize() throws {
         let container = try Self.makeContainer()
         let expectedSize = OnboardingPage.templateContainerSize(forParentWindowSize: nil)
@@ -77,8 +77,35 @@ struct OnboardingTemplateContainerTests {
         defer { window.close() }
         window.layoutIfNeeded()
 
-        #expect(container.view.frame.size == expectedSize)
         #expect(window.contentRect(forFrameRect: window.frame).size == expectedSize)
+        #expect(container.view.frame.size == expectedSize)
+        #expect(try #require(container.templateView).frame.size == expectedSize)
+    }
+
+    @Test("a sheet presented from the page is the size its window gives it, and the template fills it")
+    func sheetPresentedFromContainerHasPageSize() throws {
+        let parentWindowSize = NSSize(width: 1000, height: 650)
+        let parentWindow = NSWindow(
+            contentRect: NSRect(origin: .zero, size: parentWindowSize),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: true
+        )
+        parentWindow.isReleasedWhenClosed = false
+        defer { parentWindow.close() }
+        let parentViewController = NSViewController()
+        parentViewController.view = NSView(frame: NSRect(origin: .zero, size: parentWindowSize))
+        parentWindow.contentViewController = parentViewController
+        let container = try Self.makeContainer(parentWindowSize: parentWindow.frame.size)
+        let expectedSize = OnboardingPage.templateContainerSize(forParentWindowSize: parentWindow.frame.size)
+
+        parentViewController.presentAsSheet(container)
+        defer { parentViewController.dismiss(container) }
+        let sheetWindow = try #require(container.view.window)
+        sheetWindow.layoutIfNeeded()
+
+        #expect(sheetWindow.contentRect(forFrameRect: sheetWindow.frame).size == expectedSize)
+        #expect(try #require(container.templateView).frame.size == expectedSize)
     }
 
     @Test("this system has OnBoardingKit")
