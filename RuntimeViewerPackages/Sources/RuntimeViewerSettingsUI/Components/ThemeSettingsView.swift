@@ -203,7 +203,7 @@ private struct ThemeColorPreview: View {
     let colorScheme: ColorScheme
 
     private var styles: [RuntimeViewerSettings.Settings.Theme.Style] {
-        [preset.keyword, preset.typeName, preset.declaration, preset.comment, preset.number, preset.error]
+        [preset.keyword, preset.typeName, preset.declaration, preset.comment, preset.number, preset.macro, preset.error]
     }
 
     var body: some View {
@@ -252,6 +252,7 @@ private struct ThemeDetailsView: View {
         Slot(title: "Declaration", keyPath: \.declaration, supportsTraits: true),
         Slot(title: "Comment", keyPath: \.comment, supportsTraits: true),
         Slot(title: "Number", keyPath: \.number, supportsTraits: false),
+        Slot(title: "Macro", keyPath: \.macro, supportsTraits: true),
         Slot(title: "Error", keyPath: \.error, supportsTraits: false),
     ]
 
@@ -348,6 +349,7 @@ private struct ThemeDetailsView: View {
     private var previewBox: some View {
         let background = variant(\.background)
         return VStack(alignment: .leading, spacing: 2) {
+            run("NS_SWIFT_NAME", \.macro) + run("(RuntimeObjectInfo)", \.text)
             (run("@interface ", \.keyword) + run("RuntimeObject", \.declaration) + run(" : ", \.text) + run("NSObject", \.typeName))
             run("// A sample comment", \.comment)
             (run("@property ", \.keyword) + run("(", \.text) + run("nonatomic", \.keyword) + run(") ", \.text) + run("NSInteger", \.typeName) + run(" count", \.declaration) + run(";", \.text))

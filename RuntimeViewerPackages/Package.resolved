@@ -160,7 +160,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection",
       "state" : {
         "branch" : "feature/swift-type-indexing-package",
-        "revision" : "b8a0a899c3630f7d3688c87f0d396a26e35a21da"
+        "revision" : "d8f420f45abd7bf453d8448c1c755560cf65442c"
       }
     },
     {
@@ -168,8 +168,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
-        "branch" : "feature/swift-type-indexing-package",
-        "revision" : "57db0f90d92ee063c650c5e8ad0b061a9500fb66"
+        "branch" : "feature/c-imported-type-name-spelling",
+        "revision" : "6c06d2d1f6c0ec6d28c07e4975bbd8c516d7c257"
       }
     },
     {
@@ -546,8 +546,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/swift-semantic-string",
       "state" : {
-        "branch" : "next",
-        "revision" : "388b71e5479b21f0f795039f0689f8fee47ea41f"
+        "branch" : "feature/swift-type-indexing-package",
+        "revision" : "725e6b483016e508aac59461eaa7e70bec463e4b"
       }
     },
     {

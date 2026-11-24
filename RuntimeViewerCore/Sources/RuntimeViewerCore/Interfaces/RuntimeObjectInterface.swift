@@ -32,19 +32,27 @@ public struct RuntimeObjectInterface: Codable, Sendable {
     /// otherwise, and always nil from a peer that predates it, which leaves the key out of its reply.
     public let macroExpansions: [RuntimeInterfaceMacroExpansion]?
 
-    public init(object: RuntimeObject, interfaceString: SemanticString, commentStructure: RuntimeInterfaceCommentStructure? = nil, interfaceLanguage: RuntimeInterfaceLanguage? = nil, macroExpansions: [RuntimeInterfaceMacroExpansion]? = nil) {
+    /// The C-imported types `interfaceString` declares that have a Swift name and a C name, with
+    /// where each declared name is, in text order, when the request asked for them
+    /// (`GenerationOptions.marksCImportedTypeNames`); nil otherwise, and always nil from a peer that
+    /// predates it, which leaves the key out of its reply.
+    public let cImportedTypeNames: [RuntimeInterfaceCImportedTypeName]?
+
+    public init(object: RuntimeObject, interfaceString: SemanticString, commentStructure: RuntimeInterfaceCommentStructure? = nil, interfaceLanguage: RuntimeInterfaceLanguage? = nil, macroExpansions: [RuntimeInterfaceMacroExpansion]? = nil, cImportedTypeNames: [RuntimeInterfaceCImportedTypeName]? = nil) {
         self.object = object
         self.interfaceString = interfaceString.frozen()
         self.commentStructure = commentStructure
         self.interfaceLanguage = interfaceLanguage
         self.macroExpansions = macroExpansions
+        self.cImportedTypeNames = cImportedTypeNames
     }
 
-    public init(object: RuntimeObject, interfaceString: FrozenSemanticString, commentStructure: RuntimeInterfaceCommentStructure? = nil, interfaceLanguage: RuntimeInterfaceLanguage? = nil, macroExpansions: [RuntimeInterfaceMacroExpansion]? = nil) {
+    public init(object: RuntimeObject, interfaceString: FrozenSemanticString, commentStructure: RuntimeInterfaceCommentStructure? = nil, interfaceLanguage: RuntimeInterfaceLanguage? = nil, macroExpansions: [RuntimeInterfaceMacroExpansion]? = nil, cImportedTypeNames: [RuntimeInterfaceCImportedTypeName]? = nil) {
         self.object = object
         self.interfaceString = interfaceString
         self.commentStructure = commentStructure
         self.interfaceLanguage = interfaceLanguage
         self.macroExpansions = macroExpansions
+        self.cImportedTypeNames = cImportedTypeNames
     }
 }

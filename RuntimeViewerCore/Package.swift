@@ -156,8 +156,9 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
-                // TEMPORARY, as MachOObjCSection's above.
-                branch: "feature/swift-type-indexing-package"
+                // TEMPORARY, as MachOObjCSection's above. The feature branch of proposal
+                // c-imported-type-name-spelling, which sits on swift-type-indexing-package's.
+                branch: "feature/c-imported-type-name-spelling"
             ),
         ),
         // Resolves `__C` types to their module and Swift name, and gives the Objective-C
@@ -181,7 +182,10 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/swift-semantic-string",
-                branch: "next"
+                // TEMPORARY, as MachOObjCSection's above: the feature branch carries
+                // `SemanticType.macro`, which MachOObjCSection's feature branch prints and
+                // which that branch pins too; the wrap-up puts `branch: "next"` back.
+                branch: "feature/swift-type-indexing-package"
             ),
         ),
         .package(

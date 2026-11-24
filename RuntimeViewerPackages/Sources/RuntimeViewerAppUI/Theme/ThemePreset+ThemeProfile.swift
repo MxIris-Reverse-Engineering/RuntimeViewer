@@ -44,6 +44,7 @@ public struct ResolvedTheme: ThemeProfile, @unchecked Sendable {
             preset.comment,
             preset.number,
             preset.error,
+            preset.macro,
         ]
         var colorByStyle: [Settings.Theme.Style: NSUIColor] = [:]
         var fontByStyle: [Settings.Theme.Style: NSUIFont] = [:]
@@ -94,6 +95,8 @@ public struct ResolvedTheme: ThemeProfile, @unchecked Sendable {
             return preset.comment
         case .keyword:
             return preset.keyword
+        case .macro:
+            return preset.macro
         case .variable,
              .function(.declaration),
              .member(.declaration),

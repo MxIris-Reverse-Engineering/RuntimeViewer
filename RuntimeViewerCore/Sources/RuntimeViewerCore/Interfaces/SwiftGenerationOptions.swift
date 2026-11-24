@@ -26,6 +26,24 @@ public struct SwiftGenerationOptions: Sendable, Equatable, Hashable {
         case byOffset
     }
 
+    /// How imported C and Objective-C types are spelled (MachOSwiftSection's
+    /// `CImportedTypeNameSpelling`; proposal `c-imported-type-name-spelling` in
+    /// MachOSwiftSection). The raw values are stored in the settings.
+    public enum CImportedTypeNameSpelling: String, Codable, Sendable, Equatable, Hashable, CaseIterable {
+        /// The name Swift code uses: `AnyWeakAttribute`, `UIKit.UITraitCollection`.
+        case swiftName
+        /// The C name every mangled reference carries: `__C.AGWeakAttribute`.
+        case cName
+
+        /// The other spelling, which the content pane's line annotation switches to.
+        public var toggled: Self {
+            switch self {
+            case .swiftName: .cName
+            case .cName: .swiftName
+            }
+        }
+    }
+
     @Default(true)
     public var printStrippedSymbolicItem: Bool
 
@@ -96,6 +114,15 @@ public struct SwiftGenerationOptions: Sendable, Equatable, Hashable {
     /// existed.
     @Default(true)
     public var resolvesImportedTypeNames: Bool
+
+    /// How imported C and Objective-C types are spelled — declarations, member types and extension
+    /// headers alike. `.swiftName` prints the name Swift code uses: a type the image's own
+    /// descriptors rename under that name (`AnyWeakAttribute`), under its module when
+    /// `resolvesImportedTypeNames` finds it. `.cName` prints every one as the binary mangles it
+    /// (`__C.AGWeakAttribute`), and `resolvesImportedTypeNames` then does nothing. Swift names in
+    /// settings saved before it existed.
+    @Default(CImportedTypeNameSpelling.swiftName)
+    public var cImportedTypeNameSpelling: CImportedTypeNameSpelling
 
     public static let `default` = Self()
 }

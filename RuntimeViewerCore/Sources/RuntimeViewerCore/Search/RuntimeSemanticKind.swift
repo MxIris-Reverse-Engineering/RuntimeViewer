@@ -27,6 +27,10 @@ public enum RuntimeSemanticKind: String, Codable, Hashable, Sendable, CaseIterab
         case .numeric: self = .numeric
         case .argument: self = .argument
         case .error: self = .error
+        // Folded into `.keyword` rather than given a case of its own: this enum crosses the
+        // engine boundary, and a peer built before macros were marked could not decode one.
+        // Neither is a symbol, which is all a search asks of the kind.
+        case .macro: self = .keyword
         case .type: self = .type
         case .member: self = .member
         case .function: self = .function

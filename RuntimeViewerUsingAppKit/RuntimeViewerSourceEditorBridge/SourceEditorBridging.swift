@@ -185,6 +185,38 @@ public protocol SourceEditorBridging: NSObjectProtocol {
     /// Whether an expansion is shown under `identifier`. False again once the reader closed it
     /// with its dismiss button.
     func isInlineExpansionShown(identifier: String) -> Bool
+
+    /// Replaces the line annotations shown on the current source — Xcode's issue annotations, each
+    /// a message at the end of a line whose dropdown offers one action. `setSource` removes them
+    /// all, so call this after it, with ranges of that source. Performing an action calls
+    /// ``SourceEditorBridgingNavigationDelegate/sourceEditorBridge(_:didPerformActionOfLineAnnotationWithIdentifier:)``.
+    func showLineAnnotations(_ annotations: [SourceEditorBridgingLineAnnotation])
+}
+
+/// A note at the end of a line with one action, shown the way Xcode shows an issue: the message at
+/// the end of the line, and a dropdown on a click that offers the action, which the annotation's
+/// contextual menu offers too. A class, because `SourceEditorBridging` is an Objective-C protocol.
+@objc(RuntimeViewerSourceEditorBridgingLineAnnotation)
+public final class SourceEditorBridgingLineAnnotation: NSObject {
+    /// A UTF-16 range into the source last passed to `setSource`; the note sits at the end of the
+    /// line its start lies on.
+    public let characterRange: NSRange
+
+    public let message: String
+
+    /// The title of the action, on its button in the dropdown and in the contextual menu.
+    public let actionTitle: String
+
+    /// Handed back when the action is performed.
+    public let identifier: String
+
+    public init(characterRange: NSRange, message: String, actionTitle: String, identifier: String) {
+        self.characterRange = characterRange
+        self.message = message
+        self.actionTitle = actionTitle
+        self.identifier = identifier
+        super.init()
+    }
 }
 
 /// One gap of an inline expansion: the text it shows and the line it opens at. A class, because
@@ -299,6 +331,10 @@ public protocol SourceEditorBridgingNavigationDelegate: NSObjectProtocol {
         inInlineExpansionPartAt partIndex: Int,
         identifier: String
     ) -> [NSMenuItem]
+
+    /// The action of the line annotation shown under `identifier` was performed, from its dropdown
+    /// or its contextual menu.
+    func sourceEditorBridge(_ bridge: SourceEditorBridging, didPerformActionOfLineAnnotationWithIdentifier identifier: String)
 }
 
 /// Asked for the icon that leads each of the minimap's hover labels — the `[M]` in

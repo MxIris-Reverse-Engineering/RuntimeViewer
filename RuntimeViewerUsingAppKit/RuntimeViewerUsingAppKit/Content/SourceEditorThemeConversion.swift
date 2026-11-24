@@ -12,7 +12,7 @@ import Semantic
 /// dictionary means the unmapped keys keep working, and a future release adding a key does not
 /// produce a theme with a hole in it.
 enum SourceEditorThemeConversion {
-    /// The app's theme resolves every `SemanticType` to one of seven text styles, so seven
+    /// The app's theme resolves every `SemanticType` to one of eight text styles, so eight
     /// colors are all there are to distribute. The editor's theme has twenty-eight syntax keys.
     ///
     /// **Every one of the twenty-eight is written.** A key left unset keeps its color from
@@ -29,7 +29,12 @@ enum SourceEditorThemeConversion {
 
         "xcode.syntax.keyword": .keyword,
         "xcode.syntax.attribute": .keyword,
-        "xcode.syntax.preprocessor": .keyword,
+
+        // Xcode gives preprocessor statements and both kinds of macro one colour; the app's
+        // macros are an SDK header's (`NS_SWIFT_NAME`, `NS_REFINED_FOR_SWIFT`), which Xcode's
+        // index types as system macros.
+        "xcode.syntax.preprocessor": .macro,
+        "xcode.syntax.identifier.macro.system": .macro,
 
         "xcode.syntax.comment": .comment,
         "xcode.syntax.comment.doc": .comment,
@@ -57,10 +62,9 @@ enum SourceEditorThemeConversion {
         "xcode.syntax.identifier.function": .variable,
         "xcode.syntax.identifier.function.system": .variable,
 
-        // Nothing this app renders is a macro, so the pair is free to carry the error color —
-        // which otherwise has no key of its own.
+        // The app's macros all come from an SDK, so the project macro key is free to carry the
+        // error color — which otherwise has no key of its own.
         "xcode.syntax.identifier.macro": .error,
-        "xcode.syntax.identifier.macro.system": .error,
     ]
 
     /// The key a range of a given semantic type should be *assigned*.
@@ -76,6 +80,8 @@ enum SourceEditorThemeConversion {
             "xcode.syntax.comment"
         case .keyword:
             "xcode.syntax.keyword"
+        case .macro:
+            "xcode.syntax.identifier.macro.system"
         case .numeric:
             "xcode.syntax.number"
         case .error:
