@@ -1,18 +1,18 @@
 # Draft - 首次启动欢迎页与更新后的 What's New（接入 swift-onboardingkit）
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-24
 - **最后更新**: 2026-11-24
 - **所属愿景**: 无
-- **关联提案**: [0105 欢迎窗口](0105-welcome-window.md)（同在启动时出现的另一个窗口，本提案的页面以 sheet 挂在它上面）
+- **关联提案**: [0105 欢迎窗口](0105-welcome-window.md)（同在启动时出现的另一个窗口，它在前时本提案的页面显示在它前面）
 - **实现分支 / PR**: `feature/onboarding-pages`（worktree `.worktrees/RuntimeViewer-OnboardingPages`）
 - **配套文档**: 待定 —— 落地时登记实现说明 / 使用指南的链接
 - **网页版**: 同目录同名的 `.html`
 
 ## 摘要
 
-macOS App 接入 swift-onboardingkit（Apple 私有框架 OnBoardingKit 的 Swift 封装，App Store、Freeform、Shortcuts 的欢迎页与 "What's New" 页就是它画的），做两种一次性页面：新用户第一次启动时的**欢迎页**（RuntimeViewer 能做什么），以及升级到新的功能版本（`主版本.次版本`）后第一次启动时的 **What's New 页**（这一版的新功能）。页面以 sheet 挂在启动后第一个成为主窗口的窗口上（文档窗口或 0105 的欢迎窗口），点 Continue 关闭并记下「已看过这一版」；Help 菜单新增 What's New in RuntimeViewer，随时可再看。「这次启动该弹哪一页」由 RuntimeViewerAppCore 判断（可单测），页面内容是 AppCore 里的值，由 RuntimeViewerAppUI 画成 OnBoardingKit 的模板，App 里一个新的启动控制器负责弹出。swift-onboardingkit 改为公开仓库、改成弱链接私有框架后发布 `0.1.0`，RV 按 `from: "0.1.0"` 依赖它，只给 macOS 链接。
+macOS App 接入 swift-onboardingkit（Apple 私有框架 OnBoardingKit 的 Swift 封装，App Store、Freeform、Shortcuts 的欢迎页与 "What's New" 页就是它画的），做两种一次性页面：新用户第一次启动时的**欢迎页**（RuntimeViewer 能做什么），以及升级到新的功能版本（`主版本.次版本`）后第一次启动时的 **What's New 页**（这一版的新功能）。页面在文档窗口上是 sheet；0105 的欢迎窗口在前时（它是无边框窗口、不会成为主窗口），页面放在一个独立窗口里显示在它前面。点 Continue 关闭并记下「已看过这一版」；Help 菜单新增 What's New in RuntimeViewer，随时可再看。「这次启动该弹哪一页」由 RuntimeViewerAppCore 判断（可单测），页面内容是 AppCore 里的值，由 RuntimeViewerAppUI 画成 OnBoardingKit 的模板，App 里一个新的启动控制器负责弹出。swift-onboardingkit 改为公开仓库、改成弱链接私有框架后发布 `0.1.0`，RV 按 `from: "0.1.0"` 依赖它，只给 macOS 链接。
 
 ## 动机
 
@@ -60,12 +60,12 @@ macOS App 接入 swift-onboardingkit（Apple 私有框架 OnBoardingKit 的 Swif
      - 其余（同版本、降级、目录里没有这一版）→ 不弹。
    - `AppDefaults.lastPresentedOnboardingRelease: FeatureRelease?`：点 Continue 时写成当前功能版本。欢迎页也写当前版本，所以新用户不会紧接着再看一次同一版的 What's New。
 4. **`SettingsAccess` 记下这次读设置时有没有找到存储的设置**：`didFindStoredSettingsOnLoad`，`.loaded` 与 `.failed` 为 `true`（文件在，只是读坏了，也算老用户），`.noStoredData` 为 `false`。
-5. **AppUI 把页面画成 OnBoardingKit 的模板**：`OnboardingPage.makeTemplateContainerViewController(onContinue:)` 返回带一个 Continue 按钮的容器；系统上没有 OnBoardingKit（弱链接后类为 nil）时返回 `nil`，调用方就不弹，只记日志。Continue 先关掉页面（被 present 的就 `dismiss`，独立窗口里的就关窗），再调 `onContinue`。
+5. **AppUI 把页面画成 OnBoardingKit 的模板**：`OnboardingPage.makeTemplateContainerViewController(onContinue:)` 返回带一个 Continue 按钮的容器；系统上没有 OnBoardingKit（弱链接后类为 nil）时返回 `nil`，调用方就不弹，只记日志。Continue 先把页面从屏幕上拿掉（被 present 的就 `dismiss`，作为 sheet 窗口内容的就 `endSheet`，独立窗口里的就关窗），再调 `onContinue`。
 6. **App 里新增 `OnboardingController`**（`App/`）：
-   - `start()`：等设置读完，用 policy 算出这次要弹的页；有页就等第一个成为主窗口的文档窗口或欢迎窗口，以 sheet 挂在它的 `contentViewController` 上；Continue 时写 `AppDefaults` 的记录。
-   - `showWhatsNew()`：Help › What's New in RuntimeViewer 的动作，弹不超过当前版本的最新一页 What's New，不改记录；有主窗口就挂成它的 sheet，没有就用独立窗口。
-   - `WelcomeController` 加一个 `owns(_ window:)`，让控制器认得欢迎窗口。
-7. **AppDelegate 加两行**：`onboardingController.start()`，以及转发菜单动作的 `@objc func showWhatsNew(_:)`。`MainMenuController` 的 Help 菜单改成 `MainMenu.help { … }`，在「RuntimeViewer Help」之后加「What's New in RuntimeViewer」。
+   - `start()`：等设置读完，用 policy 算出这次要弹的页。主窗口已是文档窗口，就挂成它的 sheet；欢迎窗口在屏幕上，就放进一个独立窗口、显示在欢迎窗口前面；两者都没有，就等第一个成为主窗口的文档窗口或成为 key 的欢迎窗口。Continue 时写 `AppDefaults` 的记录。
+   - `showWhatsNew()`：Help › What's New in RuntimeViewer 的动作，弹不超过当前版本的最新一页 What's New，不改记录；主窗口是文档窗口就挂成它的 sheet，否则用独立窗口。页面已在屏幕上时不重复弹。
+   - `WelcomeController` 加 `owns(_ window:)` 与 `isShowingWindow`，让控制器认得欢迎窗口：`WelcomePanelController` 把 `window` 标成不可用，所以按窗口的 `windowController` 认。
+7. **AppDelegate 加三行**：`@Dependency(\.onboardingController)`、`onboardingController.start()`，以及转发菜单动作的 `@objc func showWhatsNew(_:)`。`MainMenuController` 的 Help 菜单改成 `MainMenu.help { … }`，在「RuntimeViewer Help」之后加「What's New in RuntimeViewer」。
 8. **目录必须写到当前版本**：AppCore 的测试读 `Configurations/Version.xcconfig`，目录里没有它的功能版本就失败。下一个功能版本（3.1）改版本号时必须同批写好 What's New。
 
 ### 非目标
@@ -101,11 +101,15 @@ macOS App 接入 swift-onboardingkit（Apple 私有框架 OnBoardingKit 的 Swif
 | `RuntimeViewerPackages/Sources/RuntimeViewerAppUI/App/OnboardingPage+TemplateContainer.swift` | 新增 | `makeTemplateContainerViewController(onContinue:)`、`isPresentable` | 画成 OnBoardingKit 模板 | 4 |
 | `RuntimeViewerPackages/Tests/RuntimeViewerAppUITests/OnboardingTemplateContainerTests.swift` | 新增 | 标题、按钮、Continue 的回调 | 第 4 步的测试 | 4 |
 | `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/OnboardingController.swift` · `OnboardingController` | 新增 | `start()`、`showWhatsNew()`、等主窗口、写记录 | 新的启动职责 | 5 |
-| `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/WelcomeController.swift` · `WelcomeController` | 修改 | 新增 `owns(_ window: NSWindow) -> Bool` | 让页面能挂在欢迎窗口上 | 5 |
+| `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/WelcomeController.swift` · `WelcomeController` | 修改 | 新增 `owns(_ window: NSWindow) -> Bool` 与 `isShowingWindow` | 让页面知道欢迎窗口在不在前面 | 5 |
 | `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/AppDelegate.swift` | 修改 | `@Dependency(\.onboardingController)`、`start()` 一行、`showWhatsNew(_:)` 一行 | 接入启动 | 5 |
-| `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/MainMenuController.swift` | 修改 | Help 菜单加「What's New in RuntimeViewer」 | 随时再看 | 5 |
-| `AGENTS.md`（根） | 修改 | *Dependency floors* 加 swift-onboardingkit 一句 | 依赖下限要写理由 | 6 |
-| `RuntimeViewerUsingAppKit/AGENTS.md` | 修改 | 生命周期控制器清单加 `OnboardingController`；写明新功能版本必须带 What's New | 规则落到受管目录 | 6 |
+| `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/MainMenuController.swift` | 修改 | Help 菜单加「What’s New in RuntimeViewer」 | 随时再看 | 5 |
+| `RuntimeViewerUsingAppKit/AGENTS.md` | 修改 | 生命周期控制器清单加 `OnboardingController`：弱链接要先查 `isPresentable`、新功能版本必须同批带 What's New | 规则落到受管目录 | 6 |
+| `Tuist/Package.swift` | 修改 | `productTypes` 把 `OnBoardingKit` 定为静态库、`COnBoardingKit` 钉回静态 framework；`localTestTargetSettings` 给 `RuntimeViewerAppUITests` 补链接参数 | Tuist 构建（实现中发现，见决策日志） | 2 |
+| `Tuist/ProjectDescriptionHelpers/OnBoardingKitLinking.swift` · `OnBoardingKitLinking` | 新增 | swift-onboardingkit 的链接参数与要重复它们的包测试名单 | 同上 | 2 |
+| `RuntimeViewerUsingAppKit/Project.swift` · `targetSettings(…)` | 修改 | 新参数 `linksOnBoardingKit`，App target 传 `true` | 同上 | 2 |
+| `Documentations/Guides/TuistDevelopment.md` | 修改 | 「已知的坑」加两条，「已知差异」提一句 | 同上 | 2 |
+| `Documentations/Glossary.md` | 修改 | 登记「功能版本（feature release）」 | 新术语 | 6 |
 | `Documentations/Evolutions/README.md`、`Documentations/README.md` | 修改 | 登记本提案 | 文档索引 | 6 |
 
 ## 架构图
@@ -136,7 +140,7 @@ RuntimeViewerPackages
 RuntimeViewerUsingAppKit (app target)
   App/
     + OnboardingController
-    ~ WelcomeController          (+ owns(_:))
+    ~ WelcomeController          (+ owns(_:), + isShowingWindow)
     ~ AppDelegate                (+ start(), + showWhatsNew(_:))
     ~ MainMenuController         (+ Help › What's New in RuntimeViewer)
 ```
@@ -157,18 +161,19 @@ applicationDidFinishLaunching
               catalog:              .runtimeViewer)
             ├─ nil ─► done
             └─ page
-                 └─ first window that becomes main
-                    (document window, or welcomeController.owns(window))
-                      └─ page.makeTemplateContainerViewController(onContinue:)
-                           ├─ nil (no OnBoardingKit) ─► log, done
-                           └─ window.contentViewController.presentAsSheet(...)
-                                └─ Continue ─► dismiss
-                                             ─► appDefaults.lastPresentedOnboardingRelease = currentRelease
+                 ├─ main window is a document window      ─► sheet on it
+                 ├─ welcomeController.isShowingWindow      ─► a window of its own, in front
+                 └─ neither ─► wait: a document window becomes main ─► sheet on it
+                                    or the Welcome window becomes key ─► a window of its own
+                      page.makeTemplateContainerViewController(onContinue:)
+                        ├─ nil (no OnBoardingKit) ─► log, done
+                        └─ Continue ─► dismiss / endSheet / close
+                                    ─► appDefaults.lastPresentedOnboardingRelease = currentRelease
 
 Help › What's New in RuntimeViewer
   └─ AppDelegate.showWhatsNew(_:) ─► onboardingController.showWhatsNew()
        └─ catalog.latestWhatsNewPage(upTo: currentRelease)
-            └─ sheet on NSApp.mainWindow, or a window of its own   (record unchanged)
+            └─ sheet on a document main window, or a window of its own   (record unchanged)
 ```
 
 ## 详细设计
@@ -374,9 +379,9 @@ extension DependencyValues {
 ```
 
 - 当前版本取 `Bundle.main` 的 `CFBundleShortVersionString`，解析不出就什么也不弹。
-- 等主窗口：先看 `NSApp.mainWindow`；不合适就观察 `NSWindow.didBecomeMainNotification`，第一个满足「`windowController?.document != nil` 或 `welcomeController.owns(window)`」且没有挂着 sheet 的窗口拿到页面后即移除观察。
-- 窗口没有 `contentViewController` 时退回独立窗口（`NSWindow(contentViewController:)`，居中显示）。
-- `showWhatsNew()` 不写记录；启动时那一页还挂着时再点菜单，不重复弹第二个。
+- 启动时：主窗口是文档窗口（`windowController?.document != nil`）就挂成它的 sheet；`welcomeController.isShowingWindow` 时放进独立窗口；都不是就同时观察 `didBecomeMainNotification` 与 `didBecomeKeyNotification`——欢迎窗口（Xcode 26 样式）是 `.borderless` 的 `NSWindow` 子类，只覆写了 `canBecomeKey`，永远不会成为 main——第一个成为 main 的文档窗口或成为 key 的欢迎窗口拿到页面，随即移除观察。
+- 独立窗口：`NSWindow(contentViewController:)`，`[.titled, .fullSizeContentView]`、标题栏透明、居中显示；没有关闭按钮，与 sheet 一样只有 Continue（回车）一个出口——别的方式关掉的页面不会记下版本，下次启动还会再弹。文档窗口已挂着别的 sheet、或没有 `contentViewController` 时也用它。
+- `showWhatsNew()` 不写记录；页面还在屏幕上时再点菜单，不重复弹第二个（`presentedContainer` 是弱引用，按它所在窗口是否可见判断）。
 
 ## 替代方案考量
 
@@ -387,13 +392,14 @@ extension DependencyValues {
 - **用 Sparkle 写进 defaults 的 `SUHasLaunchedBefore` 认老用户**：覆盖面更大（没改过设置的老用户也有），但那是 Sparkle 的内部键，而且由 `UpdaterService.start()` 写入，读的时机要排在它前面，容易被调整启动顺序时悄悄打破。不用。
 - **按完整版本号（含补丁）或构建号弹 What's New**：3.0.0 的 beta 都报 `3.0.0`，按构建号会每个 beta 弹一次；补丁版没有新功能可讲。按功能版本。
 - **从 `Changelogs/*.md` 解析内容**：条目是整句话，没有标题与符号，解析出来的列表没法读。手写一份。
-- **在独立窗口里弹，不挂 sheet**：Apple 的 App（App Store、Freeform）都挂在主窗口上；独立窗口会和欢迎窗口并排抢焦点。只在没有合适的主窗口时退回独立窗口。
+- **一律在独立窗口里弹，不挂 sheet**：Apple 的 App（App Store、Freeform）都挂在主窗口上。只在欢迎窗口在前、或没有合适的文档窗口时用独立窗口。
+- **挂成欢迎窗口的 sheet**（最初的方案）：欢迎窗口是无边框窗口、不会成为主窗口，sheet 会从它没有标题栏的上沿垂下来；`WelcomePanelController` 还把 `window` 与 `contentViewController` 标成不可用。改为在它前面放一个独立窗口。
 
 ## 影响
 
 ### 用户可见变化
 
-- 新用户第一次启动：欢迎窗口（或恢复的文档窗口）上滑出一页欢迎页，五行功能介绍，一个 Continue。
+- 新用户第一次启动：欢迎窗口前面出现一个独立窗口（打开的是文档窗口时，则在它上面滑出 sheet），显示欢迎页，五行功能介绍，一个 Continue。
 - 老用户升级到 3.0 后第一次启动：滑出 What's New in RuntimeViewer 3.0，六行新功能，一个 Continue。
 - Help 菜单在「RuntimeViewer Help」之后多一项「What's New in RuntimeViewer」，没有快捷键。
 - 其余操作不变；页面关掉之后不会再自动出现，直到下一个功能版本。
@@ -420,17 +426,17 @@ extension DependencyValues {
 
 ## 落地步骤
 
-1. **发布 swift-onboardingkit 0.1.0** —— 改动地图 swift-onboardingkit 四行
+1. ✅ **发布 swift-onboardingkit 0.1.0** —— 改动地图 swift-onboardingkit 四行
    - 行为：`swift test` 在那个包里照旧通过。
    - 行为：链接它的可执行文件里 OnBoardingKit 是 `LC_LOAD_WEAK_DYLIB`。
    - 行为：`gh repo view` 显示公开，`0.1.0` 的 tag 与 Release 存在。
-2. **接入依赖并实测构建** —— `Package.swift` 与四份锁文件
+2. ✅ **接入依赖并实测构建** —— `Package.swift`、四份锁文件，以及实现中补上的 Tuist 四行
    - 行为：在 Ultra 上 `RuntimeViewer-Debug.xcworkspace` 的 `RuntimeViewer macOS` 构建通过（Xcode 接受带 unsafe flags 的远端包）。
-   - 行为：构建出的 App 可执行文件里 OnBoardingKit 是弱链接。
-   - 行为：`./TuistScript.sh check` 通过，Tuist workspace 构建的 App 同样链接上 OnBoardingKit。
-   - 行为：iOS 与 visionOS 的 `RuntimeViewerPackages` 构建不受影响。
-   - 两项实测有一项不成立就停下，把现象和备选做法（例如在 App 的 xcconfig 里加链接参数、把它列进 Tuist 的源码依赖）报给用户，不自行换路。
-3. **AppCore 的判断与内容** —— `SettingsAccess`、`FeatureRelease`、`OnboardingPage`、`OnboardingCatalog`、`OnboardingPolicy`、`AppDefaults`、`SystemSymbol` 与三份测试
+   - 行为：构建出的 App 里 OnBoardingKit 是弱链接（Debug 构建在 `RuntimeViewer-Debug-arm64e.debug.dylib` 里）。
+   - 行为：`./TuistScript.sh check` 与 `warm` 通过，Tuist workspace 构建的 App 同样弱链接 OnBoardingKit。
+   - 行为：iOS App（`RuntimeViewer iOS`）的构建不受影响。
+   - 两项实测有一项不成立就停下，把现象和备选做法（例如在 App 的 xcconfig 里加链接参数、把它列进 Tuist 的源码依赖）报给用户，不自行换路。（实际：原生一项成立；Tuist 一项起初不成立，原因与项目里已有的两种 Tuist 绕行完全同类，照先例在 Tuist 一侧补上，没有换路，见决策日志。）
+3. ✅ **AppCore 的判断与内容** —— `SettingsAccess`、`FeatureRelease`、`OnboardingPage`、`OnboardingCatalog`、`OnboardingPolicy`、`AppDefaults`、`SystemSymbol` 与三份测试
    - 行为：`featureReleaseParsesMajorAndMinorOfMarketingVersion`（`3.0.0`、`3.0`、`3.0.1` → 3.0）
    - 行为：`featureReleaseRejectsVersionWithoutTwoNumbers`
    - 行为：`featureReleaseOrdersByMajorThenMinor`
@@ -445,16 +451,17 @@ extension DependencyValues {
    - 行为：`everyPageListsBetweenOneAndSixFeatures`
    - 行为：`storedSettingsDetectedWhenStoreHasData`、`…NotDetectedWhenStoreIsEmpty`、`…DetectedWhenStoredDataIsUnreadable`
    - 行为：`AppCoreBoundaryTests` 与 `SystemSymbolTests` 照旧通过。
-4. **AppUI 画页面** —— `OnboardingPage+TemplateContainer.swift` 与测试
+4. ✅ **AppUI 画页面** —— `OnboardingPage+TemplateContainer.swift` 与测试
+   - 行为：`systemHasOnBoardingKit`、`bulletListHasARowForEachFeature`
    - 行为：`templateContainerShowsPageTitle`
    - 行为：`templateContainerHasOnlyContinueButton`
    - 行为：`continueButtonCallsOnContinueOnce`
-5. **App 接入启动与菜单** —— `OnboardingController`、`WelcomeController.owns(_:)`、`AppDelegate`、`MainMenuController`
+5. ✅ **App 接入启动与菜单** —— `OnboardingController`、`WelcomeController.owns(_:)` 与 `isShowingWindow`、`AppDelegate`、`MainMenuController`（界面目视验收待用户做）
    - 行为：App 构建通过；`AppTargetBoundaryTests` 照旧通过（控制器不是 ViewModel）。
-   - 行为：Help 菜单里有「What's New in RuntimeViewer」。
+   - 行为：Help 菜单里有「What’s New in RuntimeViewer」。
    - 行为（由用户目视验收）：删掉 defaults 键与 `settings.json` 后启动看到欢迎页；保留 `settings.json` 再删 defaults 键看到 3.0 的 What's New；点 Continue 后重启不再出现。
-6. **文档** —— 两份 `AGENTS.md`、两份索引、本提案
-   - 行为：根 `AGENTS.md` 仍在 64 KiB 以内（见提案索引的暂缓项）。
+6. ✅ **文档** —— `RuntimeViewerUsingAppKit/AGENTS.md`、术语表、两份索引、本提案
+   - 行为：根 `AGENTS.md` 不再变大（它已超过 64 KiB，见提案索引的暂缓项）。
 
 **收尾时必须判断两件事**（判断结果写进决策日志，不允许沉默跳过）：
 
@@ -467,3 +474,11 @@ extension DependencyValues {
 |------|------|------|
 | 2026-11-24 | Created as Draft | 用户要求接入新建的 swift-onboardingkit。澄清一轮定了两件事：做首次启动欢迎页与更新后的 What's New 两种页面；swift-onboardingkit 改为公开仓库并发布 0.1.0，RV 按版本号依赖。 |
 | 2026-11-24 | Accepted | 用户批准，开始实现。功能分支 `feature/onboarding-pages` 从本地 `next` 切出；本地 `next` 上有别的会话尚未推送的提交，所以提案只在本地提交、不推送。 |
+| 2026-11-24 | 功能分支叠在本地 next 上 | 本地 `next` 有两个还没推到任何远端的提交：别的会话在本地合进来、等用户看过的 `feature/debug-app-icon`（合并提交），以及 Tuist 的一处修复（`fix(tuist): resolve again when a manifest or the local libraries change`）。功能分支从本地 `next` 切出，推送后这两个提交也出现在 `origin/feature/onboarding-pages` 上；`next` 本身没有推送。 |
+| 2026-11-24 | 第 1 步完成 | swift-onboardingkit 改为弱链接（`-Xlinker -weak_framework -Xlinker OnBoardingKit`，去掉 `.linkedFramework`），README 与它的 0001 决策日志同步；本机 `swift test` 两组共 20 个测试通过，两个测试包里 OnBoardingKit 都是 `LC_LOAD_WEAK_DYLIB`。仓库改为公开，打 tag `0.1.0` 并建 GitHub Release。 |
+| 2026-11-24 | 锁文件从全新目录解析 | 在 Ultra 上用全新的 scratch 与 DerivedData 对两个包（`swift package resolve`）与 Debug、Distribution 两个 workspace（`xcodebuild -resolvePackageDependencies`）解析，已有的 pin 全部保留，四份锁文件只多出 swift-onboardingkit 一条（`RuntimeViewerPackages` 的锁文件另换了 `originHash`）。`RuntimeViewerAppUITests` 也依赖 `OnBoardingKit`（只给 macOS），测试里要直接读模板的属性。 |
+| 2026-11-24 | 欢迎窗口在前时用独立窗口 | 偏离方案：方案原本让页面也挂成欢迎窗口的 sheet。读 UIFoundation 的 `WelcomePanelController` 发现，Xcode 26 样式的欢迎窗口是 `.borderless` 的 `NSWindow` 子类，只覆写了 `canBecomeKey`，永远不会成为 main，sheet 会从它没有标题栏的上沿垂下来；它还把 `window` 与 `contentViewController` 标成不可用。所以页面在文档窗口上仍是 sheet，欢迎窗口在前时放进一个独立窗口、显示在它前面；启动时等第一个成为 main 的文档窗口或成为 key 的欢迎窗口。`WelcomeController` 按窗口的 `windowController` 认出欢迎窗口（`owns(_:)`），另加 `isShowingWindow`。Continue 相应地也会结束 sheet 窗口（`endSheet`）。 |
+| 2026-11-24 | Tuist 一侧补两处 | 第 2 步的 Tuist 实测起初不成立，两个原因都在 Tuist 把包 target 变成 Xcode target 这件事上，原生构建与发版不受影响。① `tuist cache warm` 报 `OnBoardingKit` 与 `COnBoardingKit` 循环依赖：Swift target 编成的静态 `OnBoardingKit.framework` 与私有框架同名、排在搜索路径前面，ObjC target 的 `-weak_framework OnBoardingKit` 链到了它。与 UIFoundation 一模一样，照它在 `Tuist/Package.swift` 的 `productTypes` 里把 Swift target 定为静态库、ObjC target 钉回静态 framework。② App 链接时 `OBTemplateView` 等四个类未定义：Tuist 不把包 target 的链接参数传给链接它的二进制。照 `-ObjC`、`SymbolLanguageRegistration` 的先例，新建 `OnBoardingKitLinking`，App 与 `RuntimeViewerAppUITests` 重复这组参数。两处都属于项目已有的 Tuist 绕行，没有改方案，所以没有停下来问；记进 `TuistDevelopment.md`「已知的坑」。修好后 install、check、warm、构建全部通过，Tuist 编出的 App 同样是 `LC_LOAD_WEAK_DYLIB`。 |
+| 2026-11-24 | 独立窗口不带关闭按钮 | 自审时发现：独立窗口原本带关闭按钮，从那里关掉不会记下版本，下次启动又会弹。与 sheet 一样只留 Continue（回车）一个出口。 |
+| 2026-11-24 | 根 AGENTS.md 不加依赖下限 | 根 `AGENTS.md` 已约 73 KB，超过它自己定的 64 KiB 上限，不再往里加；swift-onboardingkit 下限的理由写在 `RuntimeViewerPackages/Package.swift` 的注释里，使用规则（先查 `isPresentable`、新功能版本同批写 What's New）写进 `RuntimeViewerUsingAppKit/AGENTS.md` 的生命周期控制器清单。「功能版本」登记进术语表。 |
+| 2026-11-24 | 实现完成，待用户看过后收尾 | 验证（都在 macOS 27.2、Xcode 27.2 上）：MacBook 上包级 `swift build --build-tests` 通过；`RuntimeViewerSettingsTests` 75 个全过；`RuntimeViewerAppCoreTests` 1098 个中 4 个失败，三个是既有记录里整包跑必红的（Call Hierarchy 超时、语料构建保持活动、Always Index 换 Engine），第四个 `SidebarImageListLoadWaitTests` 单独重跑通过；`RuntimeViewerAppUITests` 264 个只有既有必红的 `TitleActivityIndicatorTests` 一条失败。新增的五个套件全过。MacBook 显示器睡着时 AppUI 测试会卡死，点亮后重跑。Ultra 上原生 Debug workspace 构建 App、Tuist 的 install / check / warm / 构建、iOS App 构建全部通过，两种 App 里 OnBoardingKit 都是 `LC_LOAD_WEAK_DYLIB`。界面没有目视验收，留给用户。配套文章：不写——「新功能版本同批写 What's New」由测试强制、规则在 `RuntimeViewerUsingAppKit/AGENTS.md`，弱链接的用法在 swift-onboardingkit 的 README，Tuist 的两处绕行在 `TuistDevelopment.md`，没有别的调用方契约或下一任维护者会踩的决策。新术语：「功能版本」已登记进术语表。正式收尾时一并清理 Ultra 与 MacBook 上同名的 worktree `.worktrees/RuntimeViewer-OnboardingPages` 和 agent 构建目录（`/Volumes/DerivedData/Agents.noindex/claude/` 下名字带 `OnboardingPages` 的）。 |

@@ -85,6 +85,18 @@ final class WelcomeController: NSObject {
 
     // MARK: - Showing
 
+    /// Whether `window` is the Welcome window. `WelcomePanelController` hides its `window` property, so
+    /// this asks the window for its controller instead.
+    func owns(_ window: NSWindow) -> Bool {
+        guard let welcomePanel else { return false }
+        return window.windowController === welcomePanel
+    }
+
+    /// Whether the Welcome window is on screen.
+    var isShowingWindow: Bool {
+        NSApp.windows.contains { owns($0) && $0.isVisible }
+    }
+
     /// Window › Welcome to RuntimeViewer.
     func showWindow() {
         let welcomePanel = welcomePanel ?? makeWelcomePanel()

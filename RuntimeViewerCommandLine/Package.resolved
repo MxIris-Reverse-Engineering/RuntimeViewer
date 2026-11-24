@@ -533,6 +533,15 @@
       }
     },
     {
+      "identity" : "swift-onboardingkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Mx-Iris/swift-onboardingkit",
+      "state" : {
+        "revision" : "a27ac9cfb274e637f0bc6e6422edbedd1655ce16",
+        "version" : "0.1.0"
+      }
+    },
+    {
       "identity" : "swift-perception",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-perception",

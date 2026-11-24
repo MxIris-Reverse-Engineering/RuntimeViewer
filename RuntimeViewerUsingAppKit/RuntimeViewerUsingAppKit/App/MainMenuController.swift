@@ -24,8 +24,28 @@ final class MainMenuController {
                 editorMenuItem()
             }
             windowMenuItem()
-            MainMenu.help()
+            helpMenuItem()
         }
+    }
+
+    // MARK: - Help
+
+    /// The standard Help menu with What's New in RuntimeViewer after RuntimeViewer Help
+    /// (proposal `onboarding-pages`).
+    private func helpMenuItem() -> NSMenuItem {
+        MainMenu.help { builder in
+            builder.insertItems(after: .Help.applicationHelp) {
+                whatsNewItem()
+            }
+        }
+    }
+
+    private func whatsNewItem() -> NSMenuItem {
+        NSMenuItem(
+            "What’s New in RuntimeViewer",
+            action: #selector(AppDelegate.showWhatsNew(_:)),
+            keyEquivalent: "",
+        )
     }
 
     // MARK: - Application

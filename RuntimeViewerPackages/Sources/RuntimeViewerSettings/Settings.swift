@@ -108,6 +108,13 @@ public final class SettingsAccess {
         self.store = store
     }
 
+    /// Whether the last ``load()`` or ``loadSynchronously()`` found stored
+    /// settings, readable or not. Only someone who has used the app before has
+    /// them, so this is how a first launch is told apart without storing a
+    /// flag of its own that could disagree with the file. It describes the
+    /// load, not the store: a save afterwards does not change it.
+    public private(set) var didFindStoredSettingsOnLoad = false
+
     /// Reads the stored settings into the model and runs the one-shot data
     /// migrations behind it. The macOS app calls this once at launch, before
     /// anything reads a value.
@@ -118,7 +125,7 @@ public final class SettingsAccess {
     /// reordering launch could have left every page showing defaults, and the
     /// first edit would then have written those defaults over the stored file.
     public func load() async {
-        logLoadOutcome(await store.load())
+        recordLoadOutcome(await store.load())
         runMigrations()
     }
 
@@ -132,17 +139,21 @@ public final class SettingsAccess {
     public func loadSynchronously() {
         // Resolves to the store's synchronous load() overload — this method
         // is not async, so the compiler cannot pick the async one.
-        logLoadOutcome(store.load())
+        recordLoadOutcome(store.load())
         runMigrations()
     }
 
-    private func logLoadOutcome(_ outcome: SettingsStore<Settings>.LoadOutcome) {
+    private func recordLoadOutcome(_ outcome: SettingsStore<Settings>.LoadOutcome) {
         switch outcome {
         case .loaded:
+            didFindStoredSettingsOnLoad = true
             #log(.debug, "Settings loaded successfully.")
         case .noStoredData:
+            didFindStoredSettingsOnLoad = false
             #log(.debug, "No saved settings found, using defaults.")
         case .failed(let error):
+            // The file is there, only unreadable: someone has used the app.
+            didFindStoredSettingsOnLoad = true
             #log(.debug, "Failed to load settings, using defaults. (\(error, privacy: .public))")
         }
     }

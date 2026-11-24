@@ -56,13 +56,15 @@ let manuallyOrderedTargetSettings: SettingsDictionary = [
 /// `Configurations/<directory>`: each configuration's own file where the native target has one,
 /// `Shared.xcconfig` otherwise, plus `packageLinkingSettings`. A target whose dependencies reach
 /// MachOSwiftSection sets `linksMachOSwiftSection`, which also loads the two symbol language
-/// registrations whole (`SymbolLanguageRegistration` in Tuist/ProjectDescriptionHelpers).
-/// `additionalSettings` apply to every configuration, `debugAdditionalSettings` to Debug and
-/// Debug-arm64e only.
+/// registrations whole (`SymbolLanguageRegistration` in Tuist/ProjectDescriptionHelpers); one whose
+/// dependencies reach RuntimeViewerAppUI sets `linksOnBoardingKit`, which repeats swift-onboardingkit's
+/// linker flags (`OnBoardingKitLinking`). `additionalSettings` apply to every configuration,
+/// `debugAdditionalSettings` to Debug and Debug-arm64e only.
 func targetSettings(
     directory: String,
     configurationsWithOwnFile: Set<String> = ["Debug", "Debug-arm64e", "Release"],
     linksMachOSwiftSection: Bool = false,
+    linksOnBoardingKit: Bool = false,
     additionalSettings: SettingsDictionary = [:],
     debugAdditionalSettings: SettingsDictionary = [:]
 ) -> Settings {
@@ -70,9 +72,12 @@ func targetSettings(
         let fileName = configurationsWithOwnFile.contains(configuration) ? configuration : "Shared"
         return .relativeToManifest("../Configurations/\(directory)/\(fileName).xcconfig")
     }
-    let linkingSettings: SettingsDictionary = linksMachOSwiftSection
+    var linkingSettings: SettingsDictionary = linksMachOSwiftSection
         ? ["OTHER_LDFLAGS": .array(["$(inherited)", "-ObjC"] + SymbolLanguageRegistration.linkerFlags)]
         : packageLinkingSettings
+    if linksOnBoardingKit, case .array(let linkerFlags)? = linkingSettings["OTHER_LDFLAGS"] {
+        linkingSettings["OTHER_LDFLAGS"] = .array(linkerFlags + OnBoardingKitLinking.linkerFlags)
+    }
     return .settings(
         base: valuesFromConfigurationFiles
             .merging(linkingSettings) { $1 }
@@ -227,6 +232,7 @@ let project = Project(
             settings: targetSettings(
                 directory: "RuntimeViewerUsingAppKit",
                 linksMachOSwiftSection: true,
+                linksOnBoardingKit: true,
                 additionalSettings: manuallyOrderedTargetSettings.merging(productNameFromConfigurationFiles) { $1 }
             )
         ),

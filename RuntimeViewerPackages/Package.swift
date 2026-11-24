@@ -292,6 +292,20 @@ let package = Package(
             ),
         ),
 
+        // The welcome page and What's New (RuntimeViewerAppUI, macOS only). 0.1.0 is the first
+        // release, and the first that links the private OnBoardingKit framework weakly, so the app
+        // still launches on a system without it.
+        .package(
+            local: .package(
+                path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("swift-onboardingkit"),
+                isRelative: true,
+            ),
+            remote: .package(
+                url: "https://github.com/Mx-Iris/swift-onboardingkit",
+                from: "0.1.0",
+            ),
+        ),
+
         .package(
             url: "https://github.com/SnapKit/SnapKit",
             from: "6.0.0",
@@ -489,6 +503,7 @@ let package = Package(
                 .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
                 .product(name: "UIFoundation", package: "UIFoundation"),
                 .product(name: "AppKitPlus", package: "AppKitPlus-Release", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "OnBoardingKit", package: "swift-onboardingkit", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "DependenciesMacros", package: "swift-dependencies"),
             ],
             // The symbols of the image kinds (CustomSymbol), taken from Xcode.
@@ -663,6 +678,7 @@ let package = Package(
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
                 .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
                 .product(name: "AppKitPlus", package: "AppKitPlus-Release", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "OnBoardingKit", package: "swift-onboardingkit", condition: .when(platforms: appkitPlatforms)),
             ],
         ),
 
