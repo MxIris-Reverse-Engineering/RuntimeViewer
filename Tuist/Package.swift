@@ -93,10 +93,17 @@ let localUpstreamDependencies: [PackageDescription.Package.Dependency] = localUp
         // whole in-package closure, so the two Objective-C targets are pinned back by target name: as
         // static libraries their headers go to the shared include/ directory, which the binary cache
         // then packs into both of their XCFrameworks.
+        //
+        // swift-onboardingkit's Swift target shares its name with Apple's private OnBoardingKit.framework,
+        // which its Objective-C target links weakly: as a static framework of that name it is found first
+        // on the search path, so the Objective-C target links the Swift one that depends on it, and the
+        // cache warm-up fails on the dependency cycle. Same fix, same pin for the Objective-C target.
         productTypes: [
             "UIFoundation": .staticLibrary,
             "UIFoundationAppleInternalObjC": .staticFramework,
             "UIFoundationCarbonInternal": .staticFramework,
+            "OnBoardingKit": .staticLibrary,
+            "COnBoardingKit": .staticFramework,
         ],
         // A package that declares no limits counts as supporting every platform. Tuist then gives a
         // local package's test target the union of its dependencies' platforms, which includes iOS as

@@ -241,7 +241,7 @@ Agent 运行时用 `TUIST_SCRIPT_ROOT=/Volumes/DerivedData/Agents.noindex/<agent
   `DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING` 关掉。
 - daemon 由构建阶段脚本拷进 `Contents/Library/LaunchServices/` 并重签名，原生是 Copy Files 阶段。
 - 第三方包的 `.strings` 复制时不做校验，与 Xcode 自带的 SwiftPM 集成一致。
-- 包的 target 是 Tuist 生成的普通 Xcode target（UIFoundation 的 Swift target 是静态库，其余默认静态
+- 包的 target 是 Tuist 生成的普通 Xcode target（UIFoundation 与 swift-onboardingkit 的 Swift target 是静态库，其余默认静态
   framework），原生构建里是 SwiftPM 的产物、每个 target 整块链接。这里靠 `-ObjC` 把定义了类型、extension 或
   ObjC 类的成员都拉进来（见「已知的坑」），只剩没人引用、也不定义类型的成员不进 App（两个符号语言注册例外，
   整块链进去）；构建目录的布局也不同。
@@ -307,6 +307,10 @@ Agent 运行时用 `TUIST_SCRIPT_ROOT=/Volumes/DerivedData/Agents.noindex/<agent
 - **UIFoundation 编成静态库**：同名静态 framework 会顶替 AppKit 转导出的私有 `UIFoundation.framework`，
   App 链接时 NSFont 等全部找不到。它的两个 ObjC target 按名字钉回静态 framework，否则缓存的
   xcframework 互相塞了对方的头文件。
+- **swift-onboardingkit 的 Swift target 也编成静态库**：它叫 `OnBoardingKit`，与它的 ObjC target 弱链接的私有
+  `OnBoardingKit.framework` 同名。编成静态 framework 时，同名产物排在搜索路径前面，ObjC target 的
+  `-weak_framework OnBoardingKit` 就链到了依赖它的 Swift target 上，预热报两者循环依赖（2026-11-24 实测）。
+  ObjC target `COnBoardingKit` 照 UIFoundation 的做法钉回静态 framework。
 - **`CAPSTONE_HAS_AARCH64` 手动补上**：Tuist 丢掉只以 trait 为条件的设置；不补的话 Swift 包装编不过，
   C 库能编过但没有任何架构可用。`check` 第 4 项防它再次发生。
 - **预热要带 `--cache-profile development`**（`TuistScript.sh warm` 已经带上）：`tuist cache warm` 不读 `Tuist.swift`
