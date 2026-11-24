@@ -75,6 +75,9 @@ public final class AppDefaults: @unchecked Sendable {
         _bookmarkMigrationCompleted = UserDefault(key: userDefaultsNamespace.key("bookmarkMigrationCompleted"), defaultValue: false, suite: userDefaults)
         _bookmarkScopeMigrationCompleted = UserDefault(key: userDefaultsNamespace.key("bookmarkScopeMigrationCompleted"), defaultValue: false, suite: userDefaults)
         _namingWordCloudPreferences = UserDefault(key: userDefaultsNamespace.key("namingWordCloudPreferences"), defaultValue: NamingWordCloudPreferences(), suite: userDefaults)
+        #if os(macOS)
+        _lastPresentedOnboardingRelease = UserDefault(key: userDefaultsNamespace.key("lastPresentedOnboardingRelease"), defaultValue: nil, suite: userDefaults)
+        #endif
 
         if let storageDirectoryURL {
             _imageBookmarksByScope = ResilientFileStorage(wrappedValue: [:], "imageBookmarksByScope", directoryURL: storageDirectoryURL)
@@ -137,6 +140,14 @@ public final class AppDefaults: @unchecked Sendable {
     /// all of its windows. See `NamingWordCloudPreferences`.
     @UserDefault
     public var namingWordCloudPreferences: NamingWordCloudPreferences
+
+    #if os(macOS)
+    /// The feature release of the last onboarding page — the welcome page or What's New — the user
+    /// continued from; `nil` until the first. See `OnboardingPolicy`. Deleting the key
+    /// (`defaults delete <bundle identifier> lastPresentedOnboardingRelease`) shows a page again.
+    @UserDefault
+    public var lastPresentedOnboardingRelease: FeatureRelease?
+    #endif
 
     @UserDefault
     private var bookmarkMigrationCompleted: Bool

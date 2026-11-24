@@ -31,4 +31,14 @@ public enum SystemSymbol: String, CaseIterable, Sendable {
     case exclamationmarkCircle = "exclamationmark.circle"
     case archivebox
     case shippingbox
+
+    // Onboarding pages (`OnboardingCatalog`; also `sparkles`, `magnifyingglass`, `arrowTriangleBranch`)
+    case handWave = "hand.wave"
+    case squareStack3dUp = "square.stack.3d.up"
+    case arrowRightCircle = "arrow.right.circle"
+    case appConnectedToAppBelowFill = "app.connected.to.app.below.fill"
+    case terminal
+    case folder
+    case curlybraces
+    case rectangleSplit2x1 = "rectangle.split.2x1"
 }
