@@ -376,7 +376,7 @@ extension DependencyValues {
 
 - 当前版本取 `Bundle.main` 的 `CFBundleShortVersionString`，解析不出就什么也不弹。
 - 启动时：主窗口是文档窗口（`windowController?.document != nil`）就挂成它的 sheet；`welcomeController.isShowingWindow` 时放进独立窗口；都不是就同时观察 `didBecomeMainNotification` 与 `didBecomeKeyNotification`——欢迎窗口（Xcode 26 样式）是 `.borderless` 的 `NSWindow` 子类，只覆写了 `canBecomeKey`，永远不会成为 main——第一个成为 main 的文档窗口或成为 key 的欢迎窗口拿到页面，随即移除观察。
-- 独立窗口：`NSWindow(contentViewController:)`，`[.titled, .closable, .fullSizeContentView]`、标题栏透明、居中显示。文档窗口已挂着别的 sheet、或没有 `contentViewController` 时也用它。
+- 独立窗口：`NSWindow(contentViewController:)`，`[.titled, .fullSizeContentView]`、标题栏透明、居中显示；没有关闭按钮，与 sheet 一样只有 Continue（回车）一个出口——别的方式关掉的页面不会记下版本，下次启动还会再弹。文档窗口已挂着别的 sheet、或没有 `contentViewController` 时也用它。
 - `showWhatsNew()` 不写记录；页面还在屏幕上时再点菜单，不重复弹第二个（`presentedContainer` 是弱引用，按它所在窗口是否可见判断）。
 
 ## 替代方案考量

@@ -153,8 +153,10 @@ final class OnboardingController {
         if let documentWindow, documentWindow.attachedSheet == nil, let contentViewController = documentWindow.contentViewController {
             contentViewController.presentAsSheet(container)
         } else {
+            // No close button, as a sheet has none: Continue (Return) is the one way out, and it records
+            // the release, so a page closed any other way would come back on the next launch.
             let window = NSWindow(contentViewController: container)
-            window.styleMask = [.titled, .closable, .fullSizeContentView]
+            window.styleMask = [.titled, .fullSizeContentView]
             window.titlebarAppearsTransparent = true
             window.titleVisibility = .hidden
             window.isReleasedWhenClosed = false
