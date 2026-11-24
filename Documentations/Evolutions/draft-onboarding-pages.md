@@ -105,6 +105,10 @@ macOS App 接入 swift-onboardingkit（Apple 私有框架 OnBoardingKit 的 Swif
 | `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/AppDelegate.swift` | 修改 | `@Dependency(\.onboardingController)`、`start()` 一行、`showWhatsNew(_:)` 一行 | 接入启动 | 5 |
 | `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/MainMenuController.swift` | 修改 | Help 菜单加「What’s New in RuntimeViewer」 | 随时再看 | 5 |
 | `RuntimeViewerUsingAppKit/AGENTS.md` | 修改 | 生命周期控制器清单加 `OnboardingController`：弱链接要先查 `isPresentable`、新功能版本必须同批带 What's New | 规则落到受管目录 | 6 |
+| `Tuist/Package.swift` | 修改 | `productTypes` 把 `OnBoardingKit` 定为静态库、`COnBoardingKit` 钉回静态 framework；`localTestTargetSettings` 给 `RuntimeViewerAppUITests` 补链接参数 | Tuist 构建（实现中发现，见决策日志） | 2 |
+| `Tuist/ProjectDescriptionHelpers/OnBoardingKitLinking.swift` · `OnBoardingKitLinking` | 新增 | swift-onboardingkit 的链接参数与要重复它们的包测试名单 | 同上 | 2 |
+| `RuntimeViewerUsingAppKit/Project.swift` · `targetSettings(…)` | 修改 | 新参数 `linksOnBoardingKit`，App target 传 `true` | 同上 | 2 |
+| `Documentations/Guides/TuistDevelopment.md` | 修改 | 「已知的坑」加两条，「已知差异」提一句 | 同上 | 2 |
 | `Documentations/Glossary.md` | 修改 | 登记「功能版本（feature release）」 | 新术语 | 6 |
 | `Documentations/Evolutions/README.md`、`Documentations/README.md` | 修改 | 登记本提案 | 文档索引 | 6 |
 
@@ -426,13 +430,13 @@ extension DependencyValues {
    - 行为：`swift test` 在那个包里照旧通过。
    - 行为：链接它的可执行文件里 OnBoardingKit 是 `LC_LOAD_WEAK_DYLIB`。
    - 行为：`gh repo view` 显示公开，`0.1.0` 的 tag 与 Release 存在。
-2. **接入依赖并实测构建** —— `Package.swift` 与四份锁文件
+2. ✅ **接入依赖并实测构建** —— `Package.swift`、四份锁文件，以及实现中补上的 Tuist 四行
    - 行为：在 Ultra 上 `RuntimeViewer-Debug.xcworkspace` 的 `RuntimeViewer macOS` 构建通过（Xcode 接受带 unsafe flags 的远端包）。
-   - 行为：构建出的 App 可执行文件里 OnBoardingKit 是弱链接。
-   - 行为：`./TuistScript.sh check` 通过，Tuist workspace 构建的 App 同样链接上 OnBoardingKit。
-   - 行为：iOS 与 visionOS 的 `RuntimeViewerPackages` 构建不受影响。
-   - 两项实测有一项不成立就停下，把现象和备选做法（例如在 App 的 xcconfig 里加链接参数、把它列进 Tuist 的源码依赖）报给用户，不自行换路。
-3. **AppCore 的判断与内容** —— `SettingsAccess`、`FeatureRelease`、`OnboardingPage`、`OnboardingCatalog`、`OnboardingPolicy`、`AppDefaults`、`SystemSymbol` 与三份测试
+   - 行为：构建出的 App 里 OnBoardingKit 是弱链接（Debug 构建在 `RuntimeViewer-Debug-arm64e.debug.dylib` 里）。
+   - 行为：`./TuistScript.sh check` 与 `warm` 通过，Tuist workspace 构建的 App 同样弱链接 OnBoardingKit。
+   - 行为：iOS App（`RuntimeViewer iOS`）的构建不受影响。
+   - 两项实测有一项不成立就停下，把现象和备选做法（例如在 App 的 xcconfig 里加链接参数、把它列进 Tuist 的源码依赖）报给用户，不自行换路。（实际：原生一项成立；Tuist 一项起初不成立，原因与项目里已有的两种 Tuist 绕行完全同类，照先例在 Tuist 一侧补上，没有换路，见决策日志。）
+3. ✅ **AppCore 的判断与内容** —— `SettingsAccess`、`FeatureRelease`、`OnboardingPage`、`OnboardingCatalog`、`OnboardingPolicy`、`AppDefaults`、`SystemSymbol` 与三份测试
    - 行为：`featureReleaseParsesMajorAndMinorOfMarketingVersion`（`3.0.0`、`3.0`、`3.0.1` → 3.0）
    - 行为：`featureReleaseRejectsVersionWithoutTwoNumbers`
    - 行为：`featureReleaseOrdersByMajorThenMinor`
@@ -447,15 +451,16 @@ extension DependencyValues {
    - 行为：`everyPageListsBetweenOneAndSixFeatures`
    - 行为：`storedSettingsDetectedWhenStoreHasData`、`…NotDetectedWhenStoreIsEmpty`、`…DetectedWhenStoredDataIsUnreadable`
    - 行为：`AppCoreBoundaryTests` 与 `SystemSymbolTests` 照旧通过。
-4. **AppUI 画页面** —— `OnboardingPage+TemplateContainer.swift` 与测试
+4. ✅ **AppUI 画页面** —— `OnboardingPage+TemplateContainer.swift` 与测试
+   - 行为：`systemHasOnBoardingKit`、`bulletListHasARowForEachFeature`
    - 行为：`templateContainerShowsPageTitle`
    - 行为：`templateContainerHasOnlyContinueButton`
    - 行为：`continueButtonCallsOnContinueOnce`
-5. **App 接入启动与菜单** —— `OnboardingController`、`WelcomeController.owns(_:)` 与 `isShowingWindow`、`AppDelegate`、`MainMenuController`
+5. ✅ **App 接入启动与菜单** —— `OnboardingController`、`WelcomeController.owns(_:)` 与 `isShowingWindow`、`AppDelegate`、`MainMenuController`（界面目视验收待用户做）
    - 行为：App 构建通过；`AppTargetBoundaryTests` 照旧通过（控制器不是 ViewModel）。
    - 行为：Help 菜单里有「What’s New in RuntimeViewer」。
    - 行为（由用户目视验收）：删掉 defaults 键与 `settings.json` 后启动看到欢迎页；保留 `settings.json` 再删 defaults 键看到 3.0 的 What's New；点 Continue 后重启不再出现。
-6. **文档** —— `RuntimeViewerUsingAppKit/AGENTS.md`、术语表、两份索引、本提案
+6. ✅ **文档** —— `RuntimeViewerUsingAppKit/AGENTS.md`、术语表、两份索引、本提案
    - 行为：根 `AGENTS.md` 不再变大（它已超过 64 KiB，见提案索引的暂缓项）。
 
 **收尾时必须判断两件事**（判断结果写进决策日志，不允许沉默跳过）：
@@ -473,4 +478,7 @@ extension DependencyValues {
 | 2026-11-24 | 第 1 步完成 | swift-onboardingkit 改为弱链接（`-Xlinker -weak_framework -Xlinker OnBoardingKit`，去掉 `.linkedFramework`），README 与它的 0001 决策日志同步；本机 `swift test` 两组共 20 个测试通过，两个测试包里 OnBoardingKit 都是 `LC_LOAD_WEAK_DYLIB`。仓库改为公开，打 tag `0.1.0` 并建 GitHub Release。 |
 | 2026-11-24 | 锁文件从全新目录解析 | 在 Ultra 上用全新的 scratch 与 DerivedData 对两个包（`swift package resolve`）与 Debug、Distribution 两个 workspace（`xcodebuild -resolvePackageDependencies`）解析，已有的 pin 全部保留，四份锁文件只多出 swift-onboardingkit 一条（`RuntimeViewerPackages` 的锁文件另换了 `originHash`）。`RuntimeViewerAppUITests` 也依赖 `OnBoardingKit`（只给 macOS），测试里要直接读模板的属性。 |
 | 2026-11-24 | 欢迎窗口在前时用独立窗口 | 偏离方案：方案原本让页面也挂成欢迎窗口的 sheet。读 UIFoundation 的 `WelcomePanelController` 发现，Xcode 26 样式的欢迎窗口是 `.borderless` 的 `NSWindow` 子类，只覆写了 `canBecomeKey`，永远不会成为 main，sheet 会从它没有标题栏的上沿垂下来；它还把 `window` 与 `contentViewController` 标成不可用。所以页面在文档窗口上仍是 sheet，欢迎窗口在前时放进一个独立窗口、显示在它前面；启动时等第一个成为 main 的文档窗口或成为 key 的欢迎窗口。`WelcomeController` 按窗口的 `windowController` 认出欢迎窗口（`owns(_:)`），另加 `isShowingWindow`。Continue 相应地也会结束 sheet 窗口（`endSheet`）。 |
+| 2026-11-24 | Tuist 一侧补两处 | 第 2 步的 Tuist 实测起初不成立，两个原因都在 Tuist 把包 target 变成 Xcode target 这件事上，原生构建与发版不受影响。① `tuist cache warm` 报 `OnBoardingKit` 与 `COnBoardingKit` 循环依赖：Swift target 编成的静态 `OnBoardingKit.framework` 与私有框架同名、排在搜索路径前面，ObjC target 的 `-weak_framework OnBoardingKit` 链到了它。与 UIFoundation 一模一样，照它在 `Tuist/Package.swift` 的 `productTypes` 里把 Swift target 定为静态库、ObjC target 钉回静态 framework。② App 链接时 `OBTemplateView` 等四个类未定义：Tuist 不把包 target 的链接参数传给链接它的二进制。照 `-ObjC`、`SymbolLanguageRegistration` 的先例，新建 `OnBoardingKitLinking`，App 与 `RuntimeViewerAppUITests` 重复这组参数。两处都属于项目已有的 Tuist 绕行，没有改方案，所以没有停下来问；记进 `TuistDevelopment.md`「已知的坑」。修好后 install、check、warm、构建全部通过，Tuist 编出的 App 同样是 `LC_LOAD_WEAK_DYLIB`。 |
+| 2026-11-24 | 独立窗口不带关闭按钮 | 自审时发现：独立窗口原本带关闭按钮，从那里关掉不会记下版本，下次启动又会弹。与 sheet 一样只留 Continue（回车）一个出口。 |
 | 2026-11-24 | 根 AGENTS.md 不加依赖下限 | 根 `AGENTS.md` 已约 73 KB，超过它自己定的 64 KiB 上限，不再往里加；swift-onboardingkit 下限的理由写在 `RuntimeViewerPackages/Package.swift` 的注释里，使用规则（先查 `isPresentable`、新功能版本同批写 What's New）写进 `RuntimeViewerUsingAppKit/AGENTS.md` 的生命周期控制器清单。「功能版本」登记进术语表。 |
+| 2026-11-24 | 实现完成，待用户看过后收尾 | 验证（都在 macOS 27.2、Xcode 27.2 上）：MacBook 上包级 `swift build --build-tests` 通过；`RuntimeViewerSettingsTests` 75 个全过；`RuntimeViewerAppCoreTests` 1098 个中 4 个失败，三个是既有记录里整包跑必红的（Call Hierarchy 超时、语料构建保持活动、Always Index 换 Engine），第四个 `SidebarImageListLoadWaitTests` 单独重跑通过；`RuntimeViewerAppUITests` 264 个只有既有必红的 `TitleActivityIndicatorTests` 一条失败。新增的五个套件全过。MacBook 显示器睡着时 AppUI 测试会卡死，点亮后重跑。Ultra 上原生 Debug workspace 构建 App、Tuist 的 install / check / warm / 构建、iOS App 构建全部通过，两种 App 里 OnBoardingKit 都是 `LC_LOAD_WEAK_DYLIB`。界面没有目视验收，留给用户。配套文章：不写——「新功能版本同批写 What's New」由测试强制、规则在 `RuntimeViewerUsingAppKit/AGENTS.md`，弱链接的用法在 swift-onboardingkit 的 README，Tuist 的两处绕行在 `TuistDevelopment.md`，没有别的调用方契约或下一任维护者会踩的决策。新术语：「功能版本」已登记进术语表。正式收尾时一并清理 Ultra 与 MacBook 上同名的 worktree `.worktrees/RuntimeViewer-OnboardingPages` 和 agent 构建目录（`/Volumes/DerivedData/Agents.noindex/claude/` 下名字带 `OnboardingPages` 的）。 |
