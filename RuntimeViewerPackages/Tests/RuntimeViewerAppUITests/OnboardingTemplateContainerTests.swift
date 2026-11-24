@@ -30,47 +30,12 @@ struct OnboardingTemplateContainerTests {
         return try #require(viewController as? OBTemplateContainerViewController)
     }
 
-    private static let sheetWidth: CGFloat = 482
-    private static let shortestSheetHeight: CGFloat = 546
-    private static let tallestSheetHeight: CGFloat = 600
-
-    @Test("with no parent window the page is as large as OnBoardingKit's own sheet without one")
-    func sizeWithoutParentWindow() {
-        let size = OnboardingPage.templateContainerSize(forParentWindowSize: nil)
-
-        #expect(size == NSSize(width: Self.sheetWidth, height: Self.shortestSheetHeight))
-    }
-
-    @Test("on a short window the page keeps OnBoardingKit's shortest sheet height")
-    func sizeOnShortParentWindow() {
-        let size = OnboardingPage.templateContainerSize(forParentWindowSize: NSSize(width: 800, height: 500))
-
-        #expect(size == NSSize(width: Self.sheetWidth, height: Self.shortestSheetHeight))
-    }
-
-    @Test("on a tall window the page stops at OnBoardingKit's tallest sheet height")
-    func sizeOnTallParentWindow() {
-        let size = OnboardingPage.templateContainerSize(forParentWindowSize: NSSize(width: 1200, height: 900))
-
-        #expect(size == NSSize(width: Self.sheetWidth, height: Self.tallestSheetHeight))
-    }
-
-    @Test("in between, the page is 88 % as tall as its window")
-    func sizeOnMediumParentWindow() {
-        let size = OnboardingPage.templateContainerSize(forParentWindowSize: NSSize(width: 1000, height: 650))
-        let expectedHeight: CGFloat = 572
-        let heightError = abs(size.height - expectedHeight)
-
-        #expect(size.width == Self.sheetWidth)
-        #expect(heightError < 0.001)
-    }
-
-    /// The template is created with a zero frame; translating its autoresizing mask, it holds itself — and
-    /// the container, and any window made from it — at 0 × 0. Nothing is put on screen.
+    /// With swift-onboardingkit 0.1.0 the page opened as a 0 × 0 window or sheet: the template held itself,
+    /// the container and the window at its zero frame. Nothing is put on screen.
     @Test("a window made from the page is the page's size, and the template fills it")
     func windowMadeFromContainerHasPageSize() throws {
         let container = try Self.makeContainer()
-        let expectedSize = OnboardingPage.templateContainerSize(forParentWindowSize: nil)
+        let expectedSize = OBTemplateContainerViewController.sheetSize(forParentWindowSize: nil)
 
         let window = NSWindow(contentViewController: container)
         window.isReleasedWhenClosed = false
@@ -97,7 +62,7 @@ struct OnboardingTemplateContainerTests {
         parentViewController.view = NSView(frame: NSRect(origin: .zero, size: parentWindowSize))
         parentWindow.contentViewController = parentViewController
         let container = try Self.makeContainer(parentWindowSize: parentWindow.frame.size)
-        let expectedSize = OnboardingPage.templateContainerSize(forParentWindowSize: parentWindow.frame.size)
+        let expectedSize = OBTemplateContainerViewController.sheetSize(forParentWindowSize: parentWindow.frame.size)
 
         parentViewController.presentAsSheet(container)
         defer { parentViewController.dismiss(container) }
