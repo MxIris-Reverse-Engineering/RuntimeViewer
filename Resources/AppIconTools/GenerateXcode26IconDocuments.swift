@@ -4,7 +4,7 @@
 //
 //     swift Resources/AppIconTools/GenerateXcode26IconDocuments.swift [--dry-run]
 //
-// Run it from the repository root after editing either original, and commit both sides.
+// Run it from the repository root after editing any original, and commit both sides.
 //
 // Why two documents exist at all: Xcode 26's actool cannot open an Icon Composer 27 document.
 // A top-level "features" key makes it fail with `Could not open "AppIconBeta.icon"` and an
@@ -13,10 +13,11 @@
 // `specular`, a layer's `blend-mode`) it parses and ignores, so "features" is the only key that
 // has to go.
 //
-// So AppIcon.icon and AppIconBeta.icon are the Icon Composer 27 originals — the ones to open and
-// edit — and AppIconXcode26.icon and AppIconBetaXcode26.icon are their generated counterparts
-// with "features" stripped. The app target's RUNTIME_VIEWER_APP_ICON_NAME selects between them
-// by XCODE_VERSION_MAJOR; see Configurations/RuntimeViewerUsingAppKit/Debug.xcconfig.
+// So AppIcon.icon, AppIconBeta.icon and AppIconDebug.icon are the Icon Composer 27 originals —
+// the ones to open and edit — and AppIconXcode26.icon, AppIconBetaXcode26.icon and
+// AppIconDebugXcode26.icon are their generated counterparts with "features" stripped. The app
+// target's RUNTIME_VIEWER_APP_ICON_NAME selects between them by XCODE_VERSION_MAJOR; see
+// Configurations/RuntimeViewerUsingAppKit/Debug.xcconfig.
 //
 // The Catalyst helper's CatalystHelperIcon.icon gets the same treatment. It sits in the helper's
 // own synchronized folder, RuntimeViewerUsingAppKit/RuntimeViewerCatalystHelper, rather than
@@ -85,6 +86,7 @@ func generate(original originalName: String, variant variantName: String, in dir
 do {
     try generate(original: "AppIcon", variant: "AppIconXcode26")
     try generate(original: "AppIconBeta", variant: "AppIconBetaXcode26")
+    try generate(original: "AppIconDebug", variant: "AppIconDebugXcode26")
     try generate(
         original: "CatalystHelperIcon",
         variant: "CatalystHelperIconXcode26",

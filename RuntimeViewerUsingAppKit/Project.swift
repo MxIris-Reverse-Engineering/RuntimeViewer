@@ -159,6 +159,8 @@ let project = Project(
                 "../Resources/AppIconBeta.icon",
                 "../Resources/AppIconXcode26.icon",
                 "../Resources/AppIconBetaXcode26.icon",
+                "../Resources/AppIconDebug.icon",
+                "../Resources/AppIconDebugXcode26.icon",
             ],
             buildableFolders: [
                 .folder("RuntimeViewerUsingAppKit", exceptions: .exceptions([.exception(excluded: ["Info.plist"])])),

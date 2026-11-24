@@ -326,24 +326,32 @@ COMMON_XCODEBUILD_SETTINGS=(
     "RUNTIME_VIEWER_GIT_COMMIT=$GIT_COMMIT"
 )
 
-# Pre-release builds ship the BETA-badged icon. All four Icon Composer documents under
+# Pre-release builds ship the BETA-badged icon. All six Icon Composer documents under
 # Resources/ are resources of the app target; RUNTIME_VIEWER_APP_ICON_BASE_NAME reaches the app
 # target's ASSETCATALOG_COMPILER_APPICON_NAME through the xcconfig, which appends the toolchain
 # variant suffix, and ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS=NO (already set in the
 # project) keeps the unselected ones out of the bundle. Overriding
 # ASSETCATALOG_COMPILER_APPICON_NAME directly would also hit RuntimeViewerCatalystHelper, which
 # has no beta variant of its own icon.
+#
+# Off the beta channel the configuration's xcconfig picks the base name, and this restates it:
+# Debug.xcconfig (which Debug-arm64e includes) takes the DEBUG-badged AppIconDebug, Release
+# takes AppIcon. Nothing is overridden for it; a --configuration Debug rehearsal only has to
+# expect it.
 MAIN_APP_XCODEBUILD_SETTINGS=("${COMMON_XCODEBUILD_SETTINGS[@]}")
 APP_ICON_BASE_NAME="AppIcon"
 if [[ "$CHANNEL" == "beta" ]]; then
     APP_ICON_BASE_NAME="AppIconBeta"
     MAIN_APP_XCODEBUILD_SETTINGS+=("RUNTIME_VIEWER_APP_ICON_BASE_NAME=$APP_ICON_BASE_NAME")
+elif [[ "$CONFIGURATION" == Debug* ]]; then
+    APP_ICON_BASE_NAME="AppIconDebug"
 fi
 
 # Restates the xcconfig's toolchain rule independently, so that the exported-bundle check below
 # catches a build whose icon did not resolve the way this archive expects. Xcode 26's actool
 # cannot open an Icon Composer 27 document — it fails with `Could not open` and writes nothing —
-# so builds under it get the generated AppIconXcode26 / AppIconBetaXcode26 documents instead.
+# so builds under it get the generated AppIconXcode26 / AppIconBetaXcode26 /
+# AppIconDebugXcode26 documents instead.
 XCODE_MAJOR_VERSION=$(xcodebuild -version 2>/dev/null | sed -n '1s/^Xcode \([0-9]*\).*/\1/p')
 APP_ICON_VARIANT_SUFFIX=""
 if [[ "$XCODE_MAJOR_VERSION" == "26" ]]; then

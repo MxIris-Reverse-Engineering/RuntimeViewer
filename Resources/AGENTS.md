@@ -1,22 +1,24 @@
 # AGENTS.md — the app icons
 
-Four Icon Composer documents sit under `Resources/`, all four in the app target's Resources build
+Six Icon Composer documents sit under `Resources/`, all six in the app target's Resources build
 phase. Two axes pick the one that ships, and both reach `ASSETCATALOG_COMPILER_APPICON_NAME`
 through `RUNTIME_VIEWER_APP_ICON_NAME` in the app's Debug / Release xcconfigs:
 
-- **Channel** — `AppIcon` versus `AppIconBeta`, the latter being the former plus a BETA badge
-  lifted from Xcode's own icon. `ArchiveScript.sh` overrides `RUNTIME_VIEWER_APP_ICON_BASE_NAME`
-  with `AppIconBeta` when the release channel is `beta` (inferred from a `-beta` / `-RC` /
-  `-alpha` version tag); everything else — local Debug builds included — gets `AppIcon`. The
-  indirection exists because a plain `ASSETCATALOG_COMPILER_APPICON_NAME=` override on the
-  `xcodebuild` command line reaches every target in the scheme, including
-  `RuntimeViewerCatalystHelper`, whose icon is its own `CatalystHelperIcon` document and has no beta
-  variant.
+- **Configuration and channel** — `AppIcon`, `AppIconBeta` or `AppIconDebug`: the second is the
+  first plus a BETA badge lifted from Xcode's own icon, the third the same badge reading DEBUG.
+  `Debug.xcconfig` — and `Debug-arm64e.xcconfig`, which includes it — sets
+  `RUNTIME_VIEWER_APP_ICON_BASE_NAME` to `AppIconDebug`, so a development build is told apart from an
+  installed release; `Release.xcconfig` sets `AppIcon`. `ArchiveScript.sh` overrides it with
+  `AppIconBeta` when the release channel is `beta` (inferred from a `-beta` / `-RC` / `-alpha`
+  version tag), whatever the configuration. The indirection exists because a plain
+  `ASSETCATALOG_COMPILER_APPICON_NAME=` override on the `xcodebuild` command line reaches every target
+  in the scheme, including `RuntimeViewerCatalystHelper`, whose icon is its own `CatalystHelperIcon`
+  document and has neither a beta nor a debug variant.
 - **Toolchain** — the originals versus their `Xcode26` variants. **Xcode 26's actool cannot open
   an Icon Composer 27 document at all**: a top-level `"features"` key makes it fail with
   `Could not open "…"` and write no output whatsoever — no icns, no `Assets.car`, no partial
   `Info.plist`. A build under Xcode 26 therefore gets `AppIconXcode26.icon` /
-  `AppIconBetaXcode26.icon`, selected by
+  `AppIconBetaXcode26.icon` / `AppIconDebugXcode26.icon`, selected by
   `RUNTIME_VIEWER_APP_ICON_VARIANT_$(XCODE_VERSION_MAJOR)`, which is undefined for 2700 and
   later — so every Xcode after 26 gets the originals.
 
@@ -26,9 +28,9 @@ outranks every xcconfig, so a literal there pins one icon for both channels and 
 is what happened from 5d16aad6 until the 2026-09-23 fix: no variant and no beta badge was ever picked.
 The App Icon field in the target's General tab edits that target-level setting, so leave it alone.
 
-**Edit the originals, then regenerate the pair in the same commit.** `AppIcon.icon` and
-`AppIconBeta.icon` are the Icon Composer 27 documents to open and edit; `AppIconXcode26.icon` and
-`AppIconBetaXcode26.icon` come out of
+**Edit the originals, then regenerate the variants in the same commit.** `AppIcon.icon`,
+`AppIconBeta.icon` and `AppIconDebug.icon` are the Icon Composer 27 documents to open and edit;
+`AppIconXcode26.icon`, `AppIconBetaXcode26.icon` and `AppIconDebugXcode26.icon` come out of
 `swift Resources/AppIconTools/GenerateXcode26IconDocuments.swift`, run from the repository root.
 The same script produces the Catalyst helper's pair, below. Background: evolution 0020.
 
@@ -38,12 +40,21 @@ The same script produces the Catalyst helper's pair, below. Background: evolutio
 target, so they are its resources without any file reference in the project — and never the app's.
 The toolchain rule lives in the helper's own xcconfig, `Configurations/RuntimeViewerCatalystHelper/Shared.xcconfig`:
 `ASSETCATALOG_COMPILER_APPICON_NAME` expands
-`RUNTIME_VIEWER_CATALYST_HELPER_ICON_VARIANT_$(XCODE_VERSION_MAJOR)`. It has no beta variant. Its
-three lower groups and their assets are copies of `AppIcon.icon`'s, so an edit to the shared layers
-goes into `AppIcon.icon`, `AppIconBeta.icon` and `CatalystHelperIcon.icon` alike, then the variants
-are regenerated. The badge's two layers come out of
-`swift Resources/AppIconTools/GenerateCatalystBadgeLayers.swift <the .icon's Assets directory>`;
+`RUNTIME_VIEWER_CATALYST_HELPER_ICON_VARIANT_$(XCODE_VERSION_MAJOR)`. It has no beta or debug
+variant. Its three lower groups and their assets are copies of `AppIcon.icon`'s, so an edit to the
+shared layers goes into `AppIcon.icon`, `AppIconBeta.icon`, `AppIconDebug.icon` and
+`CatalystHelperIcon.icon` alike, then the variants are regenerated. The badge's two layers come out of
+`swift Resources/AppIconTools/GenerateBadgeLayers.swift catalyst <the .icon's Assets directory>`;
 its group settings are the BETA badge's. Background: `Documentations/Evolutions/0028-catalyst-helper-icon.md`.
+
+**The Debug builds' icon is the app's plus a DEBUG badge, drawn the same way.** `AppIconDebug.icon`
+is `AppIconBeta.icon` with the badge's two layers swapped for `DebugLozenge.svg` and
+`DebugWordmark.svg` (and named `Debug Lozenge` / `Debug Wordmark`); every group setting, colour and
+translation is the BETA badge's. The layers come out of
+`swift Resources/AppIconTools/GenerateBadgeLayers.swift debug Resources/AppIconDebug.icon/Assets`.
+That script draws every word badge from a preset — the word, its cap height, the padding either side
+— and its comments record why each preset has the values it has; `--cap-height` tries other sizes
+before one is settled. Background: `Documentations/Evolutions/draft-debug-app-icon.md`.
 
 **The app has a symbol drawn after the icon, and the two change together.** `runtimeviewer` in the app's
 `Assets.xcassets` (`RuntimeViewerSymbols.runtimeViewer`) is Xcode's project-icon frame with the icon's
@@ -71,7 +82,8 @@ system composites it: the 824-point body at (100, 100) on a 1024 canvas, over a 
 824-pixel `ictool` Dark render over the existing file at +100+100 — measured against the system's
 own rendering, that differs in under half a percent of the body's pixels, all on the rim.
 
-**The badge borrows Xcode's shapes, not its colours.** Both SVGs come from Xcode's own `.icon`, but the
+**The BETA badge borrows Xcode's shapes, not its colours** — and the CATALYST and DEBUG badges, drawn
+after it, inherit both choices. Both of BETA's SVGs come from Xcode's own `.icon`, but the
 pale glass lozenge was replaced by the disc's near-black with a white wordmark, matching the
 dark-plate-carrying-white-content pairing of the rest of the icon. Before touching that group: Xcode's
 wordmark layer uses the `multiply` blend mode, which renders white as *nothing at all* — the whole group
@@ -88,8 +100,8 @@ Five things to know before editing any of them:
   each end, which the outline has to reproduce.
   `Documentations/ResolvedIssues/2026-09-21-icon-strokes-rendered-as-fills.md`
 - **Four visible groups is a hard ceiling** — `actool` rejects a fifth with
-  `Too many visible groups`. `AppIconBeta.icon` and `CatalystHelperIcon.icon` already use all
-  four, so adding a layer group means merging two existing ones first.
+  `Too many visible groups`. `AppIconBeta.icon`, `AppIconDebug.icon` and `CatalystHelperIcon.icon`
+  already use all four, so adding a layer group means merging two existing ones first.
 - **An SVG layer's viewBox units and a bitmap layer's pixels are the same unit.** Every layer
   here uses an 824-unit viewBox at `scale: 1.3`, which is what the original 824-pixel bitmap
   foreground occupied.
