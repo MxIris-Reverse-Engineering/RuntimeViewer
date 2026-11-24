@@ -32,8 +32,7 @@ public enum SystemSymbol: String, CaseIterable, Sendable {
     case archivebox
     case shippingbox
 
-    // Onboarding pages (`OnboardingCatalog`; also `sparkles`, `magnifyingglass`, `arrowTriangleBranch`)
-    case handWave = "hand.wave"
+    // Onboarding pages (`OnboardingCatalog`; also `magnifyingglass`, `arrowTriangleBranch`)
     case squareStack3dUp = "square.stack.3d.up"
     case arrowRightCircle = "arrow.right.circle"
     case appConnectedToAppBelowFill = "app.connected.to.app.below.fill"

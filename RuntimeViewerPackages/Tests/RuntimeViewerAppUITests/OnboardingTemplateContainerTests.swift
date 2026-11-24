@@ -15,7 +15,6 @@ struct OnboardingTemplateContainerTests {
         kind: .whatsNew(FeatureRelease(major: 3, minor: 0)),
         title: "What’s New in RuntimeViewer 3.0",
         bodyText: "Body text",
-        symbol: .sparkles,
         features: [
             .init("Find Navigator", description: "Search every indexed interface.", symbol: .magnifyingglass),
             .init("Editor Panes", description: "Split the content area.", symbol: .rectangleSplit2x1),
@@ -96,6 +95,37 @@ struct OnboardingTemplateContainerTests {
 
         #expect(sheetWindow.contentRect(forFrameRect: sheetWindow.frame).size == expectedSize)
         #expect(try #require(container.templateView).frame.size == expectedSize)
+    }
+
+    @Test("the page takes the App Store's style: centered, its rows' symbols in the accent color")
+    func pageTakesAppStoreStyle() {
+        let templatePage = Self.page.templatePage(parentWindowSize: nil)
+
+        #expect(templatePage.layout == .centered)
+        #expect(templatePage.featureTintColor == .controlAccentColor)
+        #expect(templatePage.size == OBTemplateContainerViewController.sheetSize(forParentWindowSize: nil))
+    }
+
+    @Test("a What's New page has no image above its title")
+    func whatsNewPageHasNoImage() throws {
+        let templateView = try #require(try Self.makeContainer().templateView)
+
+        #expect(Self.page.templatePage(parentWindowSize: nil).image == nil)
+        #expect(templateView.topImageSymbolName == nil)
+        #expect(templateView.topImage == nil)
+    }
+
+    @Test("the welcome page shows the app's icon, 128 points square")
+    func welcomePageShowsAppIcon() throws {
+        var welcomePage = Self.page
+        welcomePage.kind = .welcome
+        welcomePage.image = .appIcon
+
+        guard case .image(let icon) = welcomePage.templatePage(parentWindowSize: nil).image else {
+            Issue.record("The welcome page has no image of its own")
+            return
+        }
+        #expect(icon.size == NSSize(width: OnboardingPage.appIconSide, height: OnboardingPage.appIconSide))
     }
 
     @Test("this system has OnBoardingKit")

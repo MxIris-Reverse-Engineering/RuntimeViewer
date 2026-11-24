@@ -35,7 +35,7 @@ extension OnboardingCatalog {
             kind: .welcome,
             title: "Welcome to RuntimeViewer",
             bodyText: "Read the Objective-C, Swift and C++ interfaces of the images on your Mac, in other processes and on your devices.",
-            symbol: .handWave,
+            image: .appIcon,
             features: [
                 .init("Every Interface", description: "Browse the Objective-C, Swift and C++ objects of any image, printed with Xcode’s syntax highlighting.", symbol: .squareStack3dUp),
                 .init("Jump Through Types", description: "Click a type in an interface to open it, and go back the way you came.", symbol: .arrowRightCircle),
@@ -48,7 +48,6 @@ extension OnboardingCatalog {
             FeatureRelease(major: 3, minor: 0): OnboardingPage(
                 kind: .whatsNew(FeatureRelease(major: 3, minor: 0)),
                 title: "What’s New in RuntimeViewer 3.0",
-                symbol: .sparkles,
                 features: [
                     .init("Find Navigator", description: "Search the interfaces of every indexed image, find types with their hierarchy, and find members.", symbol: .magnifyingglass),
                     .init("Cross References", description: "See who calls a method, what it calls and which functions use a type.", symbol: .arrowTriangleBranch),

@@ -19,14 +19,47 @@ extension OnboardingPage {
     /// The title of the page's one button.
     static let continueButtonTitle = "Continue"
 
-    /// The page as OnBoardingKit's template — its symbol, title, body text and a bullet list of its
-    /// features — in the framework's container, with one Continue button that answers Return.
+    /// The side of the app's icon above the welcome page's title, the size the App Store gives its own.
+    static let appIconSide: CGFloat = 128
+
+    /// The page as swift-onboardingkit's page value, in the App Store's style: the centered layout (68-point
+    /// side margins, the image centered above the text) and the rows' symbols in the accent color. Its size is
+    /// the one OnBoardingKit gives its own sheets (`OBTemplateContainerViewController.sheetSize(forParentWindowSize:)`:
+    /// 482 points wide, 88 % as tall as the parent window but 546 to 600 points, 546 with none).
     ///
-    /// The container asks for the size OnBoardingKit gives its own sheets
-    /// (`OBTemplateContainerViewController.sheetSize(forParentWindowSize:)`: 482 points wide, 88 % as tall
-    /// as the parent window but 546 to 600 points, 546 with none) as its `preferredContentSize`, so a
-    /// window made from it (`NSWindow(contentViewController:)`) or a sheet it is presented as opens at
-    /// that size, and the template fills it.
+    /// - Parameter parentWindowSize: The frame size of the window the page is going to be a sheet of, or
+    ///   `nil` for a page in a window of its own.
+    @MainActor
+    func templatePage(parentWindowSize: NSSize?) -> OBTemplatePage {
+        OBTemplatePage(
+            title: title,
+            bodyText: bodyText,
+            image: image.map(Self.templateImage(for:)),
+            features: features.map { feature in
+                OBTemplatePartBulletList.Item(feature.title, description: feature.description, systemImage: feature.symbol.rawValue)
+            },
+            featureTintColor: .controlAccentColor,
+            layout: .centered,
+            size: OBTemplateContainerViewController.sheetSize(forParentWindowSize: parentWindowSize)
+        )
+    }
+
+    @MainActor
+    private static func templateImage(for image: Image) -> OBTemplatePage.Image {
+        switch image {
+        case .appIcon:
+            // A copy: the named application icon is the one the rest of the app shows, and the page sizes it.
+            let icon = (NSImage(named: NSImage.applicationIconName)?.copy() as? NSImage) ?? NSImage()
+            icon.size = NSSize(width: appIconSide, height: appIconSide)
+            return .image(icon)
+        case .symbol(let symbol):
+            return .systemImage(symbol.rawValue)
+        }
+    }
+
+    /// The page in OnBoardingKit's container, assembled by swift-onboardingkit from ``templatePage(parentWindowSize:)``,
+    /// with one Continue button that answers Return. A window made from it (`NSWindow(contentViewController:)`) or a
+    /// sheet it is presented as opens at the page's size.
     ///
     /// Continue takes the container off screen however it was shown — dismissed when a view controller
     /// presented it, its sheet ended when it is the content of a sheet window, its window closed otherwise —
@@ -41,26 +74,13 @@ extension OnboardingPage {
         onContinue: @escaping @MainActor () -> Void
     ) -> NSViewController? {
         guard Self.isPresentable else { return nil }
-        let templateView = OBTemplateView(title: title, bodyText: bodyText, systemImage: symbol.rawValue) {
-            for feature in features {
-                OBTemplatePartBulletList.Item(feature.title, description: feature.description, systemImage: feature.symbol.rawValue)
-            }
-        }
-        // The initializers give the template the standard type, whose 175-point side margins are meant for a
-        // whole window: in a 482-point sheet they leave the text a column about 130 points wide. The centered
-        // type has 68-point margins, and keeps its bullet list's rows 344 points wide, the width that leaves.
-        // The template reads its type when it first draws.
-        templateView.templateType = .centered
-        templateView.bulletList?.templateType = .centered
-        let container = OBTemplateContainerViewController(
-            templateView: templateView,
+        return OBTemplateContainerViewController(
+            page: templatePage(parentWindowSize: parentWindowSize),
             primaryButton: .init(Self.continueButtonTitle) { controller in
                 Self.takeOffScreen(controller)
                 onContinue()
             }
         )
-        container.preferredContentSize = OBTemplateContainerViewController.sheetSize(forParentWindowSize: parentWindowSize)
-        return container
     }
 
     @MainActor
