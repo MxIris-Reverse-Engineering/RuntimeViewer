@@ -22,9 +22,63 @@ struct OnboardingTemplateContainerTests {
         ]
     )
 
-    private static func makeContainer(onContinue: @escaping @MainActor () -> Void = {}) throws -> OBTemplateContainerViewController {
-        let viewController = try #require(page.makeTemplateContainerViewController(onContinue: onContinue))
+    private static func makeContainer(
+        parentWindowSize: NSSize? = nil,
+        onContinue: @escaping @MainActor () -> Void = {}
+    ) throws -> OBTemplateContainerViewController {
+        let viewController = try #require(page.makeTemplateContainerViewController(parentWindowSize: parentWindowSize, onContinue: onContinue))
         return try #require(viewController as? OBTemplateContainerViewController)
+    }
+
+    private static let sheetWidth: CGFloat = 482
+    private static let shortestSheetHeight: CGFloat = 546
+    private static let tallestSheetHeight: CGFloat = 600
+
+    @Test("with no parent window the page is as large as OnBoardingKit's own sheet without one")
+    func sizeWithoutParentWindow() {
+        let size = OnboardingPage.templateContainerSize(forParentWindowSize: nil)
+
+        #expect(size == NSSize(width: Self.sheetWidth, height: Self.shortestSheetHeight))
+    }
+
+    @Test("on a short window the page keeps OnBoardingKit's shortest sheet height")
+    func sizeOnShortParentWindow() {
+        let size = OnboardingPage.templateContainerSize(forParentWindowSize: NSSize(width: 800, height: 500))
+
+        #expect(size == NSSize(width: Self.sheetWidth, height: Self.shortestSheetHeight))
+    }
+
+    @Test("on a tall window the page stops at OnBoardingKit's tallest sheet height")
+    func sizeOnTallParentWindow() {
+        let size = OnboardingPage.templateContainerSize(forParentWindowSize: NSSize(width: 1200, height: 900))
+
+        #expect(size == NSSize(width: Self.sheetWidth, height: Self.tallestSheetHeight))
+    }
+
+    @Test("in between, the page is 88 % as tall as its window")
+    func sizeOnMediumParentWindow() {
+        let size = OnboardingPage.templateContainerSize(forParentWindowSize: NSSize(width: 1000, height: 650))
+        let expectedHeight: CGFloat = 572
+        let heightError = abs(size.height - expectedHeight)
+
+        #expect(size.width == Self.sheetWidth)
+        #expect(heightError < 0.001)
+    }
+
+    /// The template builds its subviews only when it first draws, so a container left at the size its
+    /// `loadView` gives it is 0 × 0, and so is a window or sheet made from it.
+    @Test("a window made from the page is the page's size, before anything draws")
+    func windowMadeFromContainerHasPageSize() throws {
+        let container = try Self.makeContainer()
+        let expectedSize = OnboardingPage.templateContainerSize(forParentWindowSize: nil)
+
+        let window = NSWindow(contentViewController: container)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        window.layoutIfNeeded()
+
+        #expect(container.view.frame.size == expectedSize)
+        #expect(window.contentRect(forFrameRect: window.frame).size == expectedSize)
     }
 
     @Test("this system has OnBoardingKit")

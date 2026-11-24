@@ -141,7 +141,11 @@ final class OnboardingController {
     /// - Parameter release: What Continue records, or `nil` to record nothing.
     private func present(_ page: OnboardingPage, onSheetOf documentWindow: NSWindow?, recording release: FeatureRelease?) {
         guard presentedContainer?.viewIfLoaded?.window?.isVisible != true else { return }
-        guard let container = page.makeTemplateContainerViewController(onContinue: { [weak self] in
+        let sheetParent = documentWindow.flatMap { window in
+            window.attachedSheet == nil && window.contentViewController != nil ? window : nil
+        }
+        // The page is sized for where it shows: a sheet takes its height from the window it hangs off.
+        guard let container = page.makeTemplateContainerViewController(parentWindowSize: sheetParent?.frame.size, onContinue: { [weak self] in
             guard let self, let release else { return }
             appDefaults.lastPresentedOnboardingRelease = release
         }) else {
@@ -150,7 +154,7 @@ final class OnboardingController {
         }
         presentedContainer = container
 
-        if let documentWindow, documentWindow.attachedSheet == nil, let contentViewController = documentWindow.contentViewController {
+        if let contentViewController = sheetParent?.contentViewController {
             contentViewController.presentAsSheet(container)
         } else {
             // No close button, as a sheet has none: Continue (Return) is the one way out, and it records

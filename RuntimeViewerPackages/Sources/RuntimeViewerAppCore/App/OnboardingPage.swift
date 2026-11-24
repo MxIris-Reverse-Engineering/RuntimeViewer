@@ -3,7 +3,7 @@
 import Foundation
 
 /// One onboarding page — the welcome page or a What's New page — as values: what OnBoardingKit's
-/// template shows. RuntimeViewerAppUI draws it (`makeTemplateContainerViewController(onContinue:)`).
+/// template shows. RuntimeViewerAppUI draws it (`makeTemplateContainerViewController(parentWindowSize:onContinue:)`).
 public struct OnboardingPage: Equatable, Sendable {
     public enum Kind: Hashable, Sendable {
         /// Shown once, to someone who has never used the app.
