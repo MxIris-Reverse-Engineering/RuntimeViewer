@@ -63,6 +63,7 @@ Debug 与 Debug-arm64e 构建出来的 App（`RuntimeViewer-Debug.app`、`Runtim
 | `Resources/AppIconDebug.icon/Assets/DebugLozenge.svg`、`DebugWordmark.svg` | 新增 | `GenerateBadgeLayers.swift debug` 生成 | 角标两层 | 2 |
 | `Resources/AppIconDebugXcode26.icon/` | 新增 | `GenerateXcode26IconDocuments.swift` 生成 | Xcode 26 的 actool 打不开原件 | 2 |
 | `Resources/AppIconTools/GenerateXcode26IconDocuments.swift` | 修改 | 加一行 `generate(original: "AppIconDebug", variant: "AppIconDebugXcode26")`，头注释提到它 | 变体与原件同批生成 | 2 |
+| `CatalystHelperIconXcode26.icon/Assets/Catalyst*.svg` | 修改（只改注释） | 重新生成变体时从原件复制过来，头注释随之换成新脚本名 | 变体与原件保持一致 | 2 |
 | `Configurations/RuntimeViewerUsingAppKit/Debug.xcconfig` | 修改 | `RUNTIME_VIEWER_APP_ICON_BASE_NAME = AppIconDebug`；注释改为「配置与渠道两维」 | Debug / Debug-arm64e 选 DEBUG 图标 | 3 |
 | `Configurations/RuntimeViewerUsingAppKit/Release.xcconfig` | 修改 | 只改注释：「every other build keeps AppIcon」改成说明 Debug 配置用 AppIconDebug | 注释与事实一致 | 3 |
 | `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.xcodeproj/project.xcproj` | 修改 | `files` 加 `AppIconDebug.icon`、`AppIconDebugXcode26.icon` 两行，资源成员 | actool 只认资源阶段里的文档，漏了会静默产出无图标的包 | 3 |
@@ -226,10 +227,11 @@ fi
    - 行为：`debugPresetWritesLozengeAndWordmarkIntoGivenAssetsDirectory`
    - 行为：`debugCandidatesAt136And120And108AreRenderedForReview`（候选写到 agent 临时目录，不进仓库；用户选定字高后写进预设）
    - 结果：CATALYST 两层的路径数据与已提交的逐字节相同，只有文件头注释里的脚本名随改名变了；三档候选的尺寸见决策日志
-2. **新文档与 Xcode 26 变体** —— 第 3–6 行
+2. **新文档与 Xcode 26 变体**（已完成）—— 第 3–6 行
    - 行为：`appIconDebugDiffersFromAppIconBetaOnlyInBadgeLayers`
    - 行为：`xcode26VariantOfAppIconDebugHasNoFeaturesKey`
    - 行为：`debugIconRendersInDefaultDarkAndTintedAppearances`
+   - 结果：`ictool` 渲染了原件与变体的 Default、Dark、TintedLight、TintedDark、ClearLight、ClearDark 与 design generation 26，全部正常；变体与原件只差 `features`，素材逐字节相同
 3. **选择规则、工程登记与发版校验** —— 第 7–11 行
    - 行为：`debugAndDebugArm64eResolveAppIconDebug`
    - 行为：`releaseStillResolvesAppIcon`
