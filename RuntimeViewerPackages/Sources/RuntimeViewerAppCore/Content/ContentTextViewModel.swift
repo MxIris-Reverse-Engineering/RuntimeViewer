@@ -189,7 +189,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         let marksCImportedTypeNames: Bool
         #if canImport(AppKit) && !targetEnvironment(macCatalyst)
         marksAttachedMacros = settings.editor.showsMacroExpansionsInline
-        marksCImportedTypeNames = settings.editor.showsCImportedTypeNameNotes
+        marksCImportedTypeNames = settings.editor.showsCImportedTypeNameTags
         // Resolve the dependency once. `Observable.tracking` re-arms on a
         // main-queue hop where the dependency context is no longer available.
         // This is `ViewModel`'s own `settings`, already resolved by `super.init`
@@ -477,31 +477,35 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         )
     }
 
-    /// What the SourceEditor pane says beside each C-imported type the fetched interface declares
-    /// under two names (proposal `c-imported-type-name-spelling` in MachOSwiftSection): the name it
-    /// does not print, and the switch to it. A declared name whose UTF-8 range does not fall on
-    /// character boundaries of the text is left out.
-    nonisolated static func cImportedTypeNameNotes(of fetchedInterface: FetchedInterface) -> [CImportedTypeNameNote] {
+    /// The tag the SourceEditor pane shows after each C-imported type the fetched interface declares
+    /// under two names (proposal `c-imported-type-name-spelling` in MachOSwiftSection): the name the
+    /// text does not print, which a click switches to. A declared name whose UTF-8 range does not
+    /// fall on character boundaries of the text is left out.
+    nonisolated static func cImportedTypeNameTags(of fetchedInterface: FetchedInterface) -> [CImportedTypeNameTag] {
         guard !fetchedInterface.cImportedTypeNames.isEmpty else { return [] }
         let text = fetchedInterface.interfaceString.string
         return fetchedInterface.cImportedTypeNames.compactMap { names in
             guard let range = characterRange(ofUTF8Range: names.nameUTF8Range, in: text) else { return nil }
             switch fetchedInterface.cImportedTypeNameSpelling {
             case .swiftName:
-                return CImportedTypeNameNote(range: range, message: "Imported from C as \(names.cName)", actionTitle: "Show C Names")
+                return CImportedTypeNameTag(range: range, label: "C name", name: names.cName, toolTip: "Show C Names")
             case .cName:
-                return CImportedTypeNameNote(range: range, message: "Imported to Swift as \(names.swiftName)", actionTitle: "Show Swift Names")
+                return CImportedTypeNameTag(range: range, label: "Swift name", name: names.swiftName, toolTip: "Show Swift Names")
             }
         }
     }
 
-    /// A note beside a C-imported type's declared name: its other name, and the switch to the
-    /// spelling that prints it.
-    public struct CImportedTypeNameNote: Sendable, Equatable {
-        /// The declared name, in UTF-16 offsets of the text.
+    /// A tag after a C-imported type's declaration: its other name, which a click on the tag
+    /// switches every pane to.
+    public struct CImportedTypeNameTag: Sendable, Equatable {
+        /// The declared name, in UTF-16 offsets of the text; the tag sits after the end of its line.
         public let range: NSRange
-        public let message: String
-        public let actionTitle: String
+        /// Which name the tag holds: `C name`, `Swift name`.
+        public let label: String
+        /// The name the text does not print: `AGWeakAttribute`.
+        public let name: String
+        /// What a click does.
+        public let toolTip: String
     }
 
     /// Each `// ` line of `text` as a note: the marker, then the prose.
@@ -599,8 +603,8 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         /// right-click menu on a type link (Copy Name).
         @Init(default: Signal<RuntimeObjectActionRequest>.empty())
         public let runtimeObjectActionRequested: Signal<RuntimeObjectActionRequest>
-        /// The switch of a C-imported type's note chosen: every pane prints imported type names the
-        /// other way (`SwiftGenerationOptions.cImportedTypeNameSpelling`).
+        /// A C-imported type's tag clicked: every pane prints imported type names the other way
+        /// (`SwiftGenerationOptions.cImportedTypeNameSpelling`).
         @Init(default: Signal<Void>.empty())
         public let cImportedTypeNameSpellingToggled: Signal<Void>
     }

@@ -61,7 +61,7 @@ final class GenerationOptionsViewController: BaseViewController<GenerationOption
             .checkbox(title: "Print Enum Layout", keyPath: \.swiftInterfaceOptions.printEnumLayout),
             .checkbox(title: "Synthesize Opaque Type", keyPath: \.swiftInterfaceOptions.synthesizeOpaqueType),
             // `AnyWeakAttribute` or `__C.AGWeakAttribute` (proposal c-imported-type-name-spelling in
-            // MachOSwiftSection); the content pane's line annotations switch it too.
+            // MachOSwiftSection); the content pane's tags after such types switch it too.
             .enumOption(title: "Imported Type Names", labels: ["Swift", "C"], keyPath: \.swiftInterfaceOptions.cImportedTypeNameSpelling),
             // `__C.X` under its module and Swift name, from the SDK (proposal swift-type-indexing-package).
             // Does nothing while Imported Type Names is C.

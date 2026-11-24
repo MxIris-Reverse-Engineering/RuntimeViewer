@@ -186,34 +186,53 @@ public protocol SourceEditorBridging: NSObjectProtocol {
     /// with its dismiss button.
     func isInlineExpansionShown(identifier: String) -> Bool
 
-    /// Replaces the line annotations shown on the current source — Xcode's issue annotations, each
-    /// a message at the end of a line whose dropdown offers one action. `setSource` removes them
-    /// all, so call this after it, with ranges of that source. Performing an action calls
-    /// ``SourceEditorBridgingNavigationDelegate/sourceEditorBridge(_:didPerformActionOfLineAnnotationWithIdentifier:)``.
-    func showLineAnnotations(_ annotations: [SourceEditorBridgingLineAnnotation])
+    /// Replaces the line-end tags shown on the current source: tags drawn a space past the end of a
+    /// line, the way comment tags are drawn, that the reader can click. `setSource` removes them all,
+    /// so call this after it, with ranges of that source. A click calls
+    /// ``SourceEditorBridgingNavigationDelegate/sourceEditorBridge(_:didClickLineEndTagWithIdentifier:)``.
+    ///
+    /// Nothing is added to the text: a tag is drawn beside it, so copying and finding never see it.
+    func showLineEndTags(_ tags: [SourceEditorBridgingLineEndTag])
 }
 
-/// A note at the end of a line with one action, shown the way Xcode shows an issue: the message at
-/// the end of the line, and a dropdown on a click that offers the action, which the annotation's
-/// contextual menu offers too. A class, because `SourceEditorBridging` is an Objective-C protocol.
-@objc(RuntimeViewerSourceEditorBridgingLineAnnotation)
-public final class SourceEditorBridgingLineAnnotation: NSObject {
-    /// A UTF-16 range into the source last passed to `setSource`; the note sits at the end of the
+/// A tag a space past the end of a line that the reader can click, drawn as a comment tag is: a
+/// capsule in a note's fill holding a label in a note's label colour and a value after it, in the
+/// comment font. Over it the pointer is a pointing hand, the capsule darkens and the tool tip says
+/// what a click does. A class, because `SourceEditorBridging` is an Objective-C protocol.
+@objc(RuntimeViewerSourceEditorBridgingLineEndTag)
+public final class SourceEditorBridgingLineEndTag: NSObject {
+    /// A UTF-16 range into the source last passed to `setSource`; the tag sits after the end of the
     /// line its start lies on.
     public let characterRange: NSRange
 
-    public let message: String
+    /// What the fact is: `C name`.
+    public let label: String
 
-    /// The title of the action, on its button in the dropdown and in the contextual menu.
-    public let actionTitle: String
+    /// The fact: `AGWeakAttribute`.
+    public let value: String
 
-    /// Handed back when the action is performed.
+    /// The colour `value` is drawn in.
+    public let valueStyle: SourceEditorBridgingCommentRunStyle
+
+    /// What a click does, shown while the pointer rests on the tag.
+    public let toolTip: String?
+
+    /// Handed back when the tag is clicked.
     public let identifier: String
 
-    public init(characterRange: NSRange, message: String, actionTitle: String, identifier: String) {
+    public init(
+        characterRange: NSRange,
+        label: String,
+        value: String,
+        valueStyle: SourceEditorBridgingCommentRunStyle,
+        toolTip: String?,
+        identifier: String
+    ) {
         self.characterRange = characterRange
-        self.message = message
-        self.actionTitle = actionTitle
+        self.label = label
+        self.value = value
+        self.valueStyle = valueStyle
+        self.toolTip = toolTip
         self.identifier = identifier
         super.init()
     }
@@ -332,9 +351,8 @@ public protocol SourceEditorBridgingNavigationDelegate: NSObjectProtocol {
         identifier: String
     ) -> [NSMenuItem]
 
-    /// The action of the line annotation shown under `identifier` was performed, from its dropdown
-    /// or its contextual menu.
-    func sourceEditorBridge(_ bridge: SourceEditorBridging, didPerformActionOfLineAnnotationWithIdentifier identifier: String)
+    /// The line-end tag shown under `identifier` was clicked.
+    func sourceEditorBridge(_ bridge: SourceEditorBridging, didClickLineEndTagWithIdentifier identifier: String)
 }
 
 /// Asked for the icon that leads each of the minimap's hover labels — the `[M]` in

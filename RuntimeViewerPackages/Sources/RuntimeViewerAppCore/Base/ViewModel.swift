@@ -55,7 +55,7 @@ open class ViewModel<Route: Routable>: NSObject, ViewModelProtocol {
         mergedOptions.transformer = settings.transformer
         mergedOptions.marksCommentStructure = settings.editor.drawsCommentTags
         mergedOptions.marksAttachedMacros = settings.editor.showsMacroExpansionsInline
-        mergedOptions.marksCImportedTypeNames = settings.editor.showsCImportedTypeNameNotes
+        mergedOptions.marksCImportedTypeNames = settings.editor.showsCImportedTypeNameTags
         #else
         mergedOptions.transformer = .init()
         #endif
@@ -83,10 +83,10 @@ extension Settings.Editor {
         return true
     }
 
-    /// Whether the content pane can say beside a C-imported type's declaration what its other name
-    /// is, with a switch to it, and so asks the engine for the names: only SourceEditor can, with
-    /// Xcode's line annotations, in a build that can run it.
-    var showsCImportedTypeNameNotes: Bool {
+    /// Whether the content pane can show after a C-imported type's declaration a tag with its other
+    /// name that switches to it, and so asks the engine for the names: only SourceEditor can, in a
+    /// build that can run it.
+    var showsCImportedTypeNameTags: Bool {
         guard case .available = SourceEditorFrameworks.availability else { return false }
         return true
     }

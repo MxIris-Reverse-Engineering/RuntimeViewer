@@ -323,7 +323,7 @@ struct InlineExpansionTests {
 
         func sourceEditorBridge(_ bridge: SourceEditorBridging, didCommandClickTokenIn characterRange: NSRange) {}
 
-        func sourceEditorBridge(_ bridge: SourceEditorBridging, didPerformActionOfLineAnnotationWithIdentifier identifier: String) {}
+        func sourceEditorBridge(_ bridge: SourceEditorBridging, didClickLineEndTagWithIdentifier identifier: String) {}
 
         func sourceEditorBridge(_ bridge: SourceEditorBridging, contextualMenuItemsForTokenIn characterRange: NSRange) -> [NSMenuItem] {
             []

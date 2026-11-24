@@ -445,7 +445,8 @@ final class CommentDecorationController {
         CATransaction.commit()
     }
 
-    private static func cgColor(_ color: NSColor, in appearance: NSAppearance) -> CGColor {
+    /// `color` as `appearance` resolves it. Also what the line-end tags are coloured with.
+    static func cgColor(_ color: NSColor, in appearance: NSAppearance) -> CGColor {
         var resolved = color.cgColor
         appearance.performAsCurrentDrawingAppearance {
             resolved = color.cgColor
@@ -547,6 +548,8 @@ extension CommentDecorationController {
         var horizontalPadding: CGFloat
         /// What raises the lines that hold tags; nil leaves them as tall as their text.
         var lineRaise: LineRaise?
+        /// What the editor draws comments in, which the line-end tags draw their own text in.
+        var commentFont: NSFont
 
         /// Until the app's first appearance arrives no line is raised: the comment font is not
         /// known yet, and a raise measured against another font would not centre the text.
@@ -564,7 +567,8 @@ extension CommentDecorationController {
             cornerRadius: 4,
             strokeWidth: 0,
             horizontalPadding: 4,
-            lineRaise: nil
+            lineRaise: nil,
+            commentFont: .monospacedSystemFont(ofSize: NSFont.systemFontSize(for: .small), weight: .regular)
         )
 
         func fill(for style: SourceEditorBridgingCommentTagStyle) -> NSColor {
@@ -575,11 +579,15 @@ extension CommentDecorationController {
             strokeWidth > 0 ? strokes[style] : nil
         }
 
+        func textColor(for run: Run) -> NSColor {
+            textColor(for: run.style, inTagOf: run.tagStyle)
+        }
+
         /// A label takes the colour of the tag it lies in; one outside every tag, the note's. A
         /// key takes one colour whatever its tag.
-        func textColor(for run: Run) -> NSColor {
-            switch run.style {
-            case .label: labels[run.tagStyle ?? .note] ?? labels[.note] ?? .secondaryLabelColor
+        func textColor(for style: SourceEditorBridgingCommentRunStyle, inTagOf tagStyle: SourceEditorBridgingCommentTagStyle?) -> NSColor {
+            switch style {
+            case .label: labels[tagStyle ?? .note] ?? labels[.note] ?? .secondaryLabelColor
             case .key: key
             case .value: value
             case .type: type
@@ -934,7 +942,8 @@ extension CommentDecorationController.TagAppearance {
             cornerRadius: appearance.cornerRadius,
             strokeWidth: appearance.strokeWidth,
             horizontalPadding: appearance.horizontalPadding,
-            lineRaise: CommentDecorationController.LineRaise(commentFont: appearance.commentFont, spacing: appearance.tagLineSpacing)
+            lineRaise: CommentDecorationController.LineRaise(commentFont: appearance.commentFont, spacing: appearance.tagLineSpacing),
+            commentFont: appearance.commentFont
         )
     }
 }

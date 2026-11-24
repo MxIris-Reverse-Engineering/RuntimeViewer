@@ -50,7 +50,7 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
 
     private let generatedInterfaceToggledRelay = PublishRelay<SelectionRoute.Destination>()
 
-    /// The switch of a C-imported type's line annotation chosen.
+    /// A C-imported type's tag clicked.
     private let cImportedTypeNameSpellingToggledRelay = PublishRelay<Void>()
 
     /// `viewDidChangeEffectiveAppearance` is an `NSView` callback, not an `NSViewController`
@@ -226,14 +226,16 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
         )
         lastShownSource = source
         awaitsHighlightedFirstRender = false
-        // The other name of each C-imported type the text declares, at the end of its declaration,
-        // with the switch to it (proposal c-imported-type-name-spelling in MachOSwiftSection).
-        bridge.showLineAnnotations(interface.cImportedTypeNameNotes.enumerated().map { noteIndex, note in
-            SourceEditorBridgingLineAnnotation(
-                characterRange: note.range,
-                message: note.message,
-                actionTitle: note.actionTitle,
-                identifier: String(noteIndex)
+        // The other name of each C-imported type the text declares, in a tag after its declaration
+        // that switches to it (proposal c-imported-type-name-spelling in MachOSwiftSection).
+        bridge.showLineEndTags(interface.cImportedTypeNameTags.enumerated().map { tagIndex, tag in
+            SourceEditorBridgingLineEndTag(
+                characterRange: tag.range,
+                label: tag.label,
+                value: tag.name,
+                valueStyle: .type,
+                toolTip: tag.toolTip,
+                identifier: String(tagIndex)
             )
         })
         for showableExpansion in reopenedExpansions {
@@ -466,8 +468,8 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
 // MARK: - Navigation
 
 extension ContentSourceEditorViewController: SourceEditorBridgingNavigationDelegate {
-    /// Every note offers the same switch, so which one it was does not matter.
-    func sourceEditorBridge(_ bridge: SourceEditorBridging, didPerformActionOfLineAnnotationWithIdentifier identifier: String) {
+    /// Every tag is the same switch, so which one it was does not matter.
+    func sourceEditorBridge(_ bridge: SourceEditorBridging, didClickLineEndTagWithIdentifier identifier: String) {
         cImportedTypeNameSpellingToggledRelay.accept(())
     }
 

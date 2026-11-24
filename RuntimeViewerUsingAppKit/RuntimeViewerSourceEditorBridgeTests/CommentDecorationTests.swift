@@ -702,8 +702,9 @@ private final class TestCommentTagAppearance: NSObject, SourceEditorBridgingComm
 
 /// Reads back the cursor rects a view adds, which AppKit offers no way to do: for the length of
 /// `body`, the view's class answers `addCursorRect(_:cursor:)` by noting the rect and then adding
-/// it as `NSView` would. The class is left answering it exactly as `NSView` does.
-private enum CursorRectRecorder {
+/// it as `NSView` would. The class is left answering it exactly as `NSView` does. Also what the
+/// line-end tags' pointing hands are read back with.
+enum CursorRectRecorder {
     static func cursorRects(addedBy view: NSView, during body: () -> Void) -> [(rect: CGRect, cursor: NSCursor)] {
         let selector = #selector(NSView.addCursorRect(_:cursor:))
         guard let inheritedMethod = class_getInstanceMethod(NSView.self, selector) else { return [] }

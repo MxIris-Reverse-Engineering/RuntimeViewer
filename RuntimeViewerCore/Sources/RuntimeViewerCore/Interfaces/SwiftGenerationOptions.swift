@@ -35,7 +35,7 @@ public struct SwiftGenerationOptions: Sendable, Equatable, Hashable {
         /// The C name every mangled reference carries: `__C.AGWeakAttribute`.
         case cName
 
-        /// The other spelling, which the content pane's line annotation switches to.
+        /// The other spelling, which a click on the content pane's tag switches to.
         public var toggled: Self {
             switch self {
             case .swiftName: .cName

@@ -56,10 +56,10 @@ public struct ContentInterface: Sendable, Identifiable {
     /// empty when the engine sent none. The `NSTextView` pane does not read them.
     public let macroExpansions: [ContentTextViewModel.MacroExpansion]
 
-    /// What the SourceEditor pane says beside each C-imported type this text declares under two
+    /// The tag the SourceEditor pane shows after each C-imported type this text declares under two
     /// names, ascending by location; empty when the engine sent none. The `NSTextView` pane does not
     /// read them.
-    public let cImportedTypeNameNotes: [ContentTextViewModel.CImportedTypeNameNote]
+    public let cImportedTypeNameTags: [ContentTextViewModel.CImportedTypeNameTag]
 
     init(
         id: ID = ID(),
@@ -69,7 +69,7 @@ public struct ContentInterface: Sendable, Identifiable {
         declaredMemberLines: [DeclaredMemberLine],
         commentDecorations: InterfaceCommentDecorations? = nil,
         macroExpansions: [ContentTextViewModel.MacroExpansion] = [],
-        cImportedTypeNameNotes: [ContentTextViewModel.CImportedTypeNameNote] = []
+        cImportedTypeNameTags: [ContentTextViewModel.CImportedTypeNameTag] = []
     ) {
         self.id = id
         self.runtimeObject = runtimeObject
@@ -78,7 +78,7 @@ public struct ContentInterface: Sendable, Identifiable {
         self.declaredMemberLines = declaredMemberLines
         self.commentDecorations = commentDecorations
         self.macroExpansions = macroExpansions
-        self.cImportedTypeNameNotes = cImportedTypeNameNotes
+        self.cImportedTypeNameTags = cImportedTypeNameTags
     }
 
     /// The text without its semantic runs.
@@ -139,7 +139,7 @@ extension ContentInterface {
                 InterfaceCommentDecorations(structure: $0, interfaceString: semanticString)
             },
             macroExpansions: ContentTextViewModel.renderedMacroExpansions(of: fetchedInterface),
-            cImportedTypeNameNotes: ContentTextViewModel.cImportedTypeNameNotes(of: fetchedInterface)
+            cImportedTypeNameTags: ContentTextViewModel.cImportedTypeNameTags(of: fetchedInterface)
         )
     }
 
