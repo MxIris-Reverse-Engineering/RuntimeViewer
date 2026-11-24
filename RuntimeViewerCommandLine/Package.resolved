@@ -168,8 +168,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
-        "branch" : "feature/swift-type-indexing-package",
-        "revision" : "86a5d39da194a83d6c75b700e940107e39bc8bfe"
+        "branch" : "feature/c-imported-type-name-spelling",
+        "revision" : "6c06d2d1f6c0ec6d28c07e4975bbd8c516d7c257"
       }
     },
     {
