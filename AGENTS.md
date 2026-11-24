@@ -291,8 +291,9 @@ they were set.
 
 ## App Icon
 
-The app has four Icon Composer documents under `Resources/` — `AppIcon.icon`, `AppIconBeta.icon` and
-their generated `Xcode26` variants — and the Mac Catalyst helper has a pair of its own in
+The app has six Icon Composer documents under `Resources/` — `AppIcon.icon`, `AppIconBeta.icon` (the
+beta channel's), `AppIconDebug.icon` (the Debug configurations') and their generated `Xcode26` variants —
+and the Mac Catalyst helper has a pair of its own in
 `RuntimeViewerUsingAppKit/RuntimeViewerCatalystHelper/`. **Read `Resources/AGENTS.md` before changing any
 of them, or the build settings that pick one**: a target-level value silently pins a single icon, `actool`
 fails without an error, and Icon Composer's SVG pipeline ignores `stroke`.
