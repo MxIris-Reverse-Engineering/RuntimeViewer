@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>Draft - 首次启动欢迎页与更新后的 What's New（接入 swift-onboardingkit）</title>
+<title>0108 - 首次启动欢迎页与更新后的 What's New（接入 swift-onboardingkit）</title>
 <style>
 /* Evolution proposal page, shared style (style A, "Apple documentation").
    Copy this whole <style> block verbatim. Page-specific rules, if any, go only
@@ -160,13 +160,13 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <div class="page">
 
 <header class="doc-header">
-  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">Draft</span></p>
-  <h1><span class="proposal-number">Draft</span> 首次启动欢迎页与更新后的 What's New（接入 swift-onboardingkit）</h1>
+  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">0108</span></p>
+  <h1><span class="proposal-number">0108</span> 首次启动欢迎页与更新后的 What's New（接入 swift-onboardingkit）</h1>
   <dl class="meta">
-    <div><dt>状态</dt><dd><span class="status status-in-progress">In Progress</span></dd></div>
+    <div><dt>状态</dt><dd><span class="status status-implemented">Implemented</span></dd></div>
     <div><dt>最后更新</dt><dd>2026-11-24</dd></div>
     <div><dt>项目类型</dt><dd>App</dd></div>
-    <div><dt>原文</dt><dd><code>draft-onboarding-pages.md</code></dd></div>
+    <div><dt>原文</dt><dd><code>0108-onboarding-pages.md</code></dd></div>
   </dl>
 </header>
 
@@ -196,8 +196,8 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 
 <section id="decide">
   <h2>要你定</h2>
-  <div class="callout">
-    <p class="callout-title">实现已完成，等你目视验收</p>
+  <div class="callout callout-note">
+    <p class="callout-title">没有待定的事：2026-11-24 已落地，界面经用户目视验收。想再看页面时：</p>
     <ol>
       <li>删掉 defaults 键 <code>lastPresentedOnboardingRelease</code> 与 <code>settings.json</code> 后启动：欢迎窗口前出现欢迎页。</li>
       <li>保留 <code>settings.json</code>、只删 defaults 键后启动：出现 What's New in RuntimeViewer 3.0；点 Continue 后重启不再出现。</li>
@@ -535,6 +535,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
           <tr><td class="numeric">2026-11-24</td><td>修法移进 swift-onboardingkit 0.1.1</td><td>用户决定改库。库的容器便利构造器关掉模板视图的开关、默认要求框架自家 sheet 的尺寸，新增 <code>sheetSize(forParentWindowSize:)</code>，发布 <code>0.1.1</code>。RV 下限抬到 <code>from: "0.1.1"</code>，四份锁文件只改这一条 pin，删掉自己那份公式与开关；公式测试移到库里，RV 留窗口与 sheet 两条集成测试。</td></tr>
           <tr><td class="numeric">2026-11-24</td><td>页面用居中模板类型</td><td>正文挤在中间约 130pt 宽的一列：构造器给的标准类型每边留 175pt 边距，是给整窗口页面用的。改用居中类型（每边 68pt、列表行宽 344，正好配 482 宽的页面），模板与列表都设；新增宽度测试，去掉修复时标题宽 136、测试变红。库的 README 示例同样如此，改不改库待用户定。</td></tr>
           <tr><td class="numeric">2026-11-24</td><td>改用库的页面值，取 App Store 样式</td><td>用户嫌居中版式难看，先用 demo 比较样式，再要求把「数据组装成控制器」搬进 swift-onboardingkit（库的提案 0002，发布 <code>0.2.0</code>），随后选定 App Store 的样式：What's New 不放顶部图片、模板与列表都居中、列表符号用强调色，欢迎页放 128pt 的 App 图标。RV 的页面值把顶部符号改成可选的 <code>image</code>，AppUI 映射成 <code>OBTemplatePage</code> 交给库组装；下限抬到 <code>0.2.0</code>，删掉不再用的 <code>handWave</code>。</td></tr>
+          <tr><td class="numeric">2026-11-24</td><td>落地为 0108，Implemented</td><td>用户看过 App Store 样式的页面后同意收尾。编号取本地与远端 <code>next</code>、<code>main</code> 上最大的 0107 加一。验证沿用上一行在 Ultra 上对功能分支的结果，本地 <code>next</code> 的合并结果由用户目视时构建。没有后续项；仍不写配套文章（框架行为在 swift-onboardingkit 的实现说明与提案 0002）；没有新术语。本地 <code>next</code> 上还有别的会话没推送的提交，<code>next</code> 暂不推送，远端功能分支保留到那时。</td></tr>
         </tbody>
       </table>
       </div>

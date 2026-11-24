@@ -573,7 +573,7 @@ shape it has.
   pages are `OnboardingCatalog.runtimeViewer`, and Continue records the release in `AppDefaults`. A sheet on a
   document window; in a window of its own in front of the Welcome window, which is borderless and never becomes
   main. **A version bump to a new feature release adds its What's New in the same commit**:
-  `OnboardingCatalogTests` fails until then. Background: `Documentations/Evolutions/draft-onboarding-pages.md`
+  `OnboardingCatalogTests` fails until then. Background: `Documentations/Evolutions/0108-onboarding-pages.md`
 - `CommandLineHostController` — makes the running app the CLI host: asks a standalone host to leave on launch, serves the socket, removes its files on quit
 - `SettingsLifecycleController` — loads the settings at launch and flushes them at termination (root `AGENTS.md`, *Settings Integration*); once they are read it starts RuntimeViewerAppCore's `RuntimeEngineManagerSettingsFollower`, which the iOS apps start too. The read is asynchronous: a launch-time decision that hangs on a setting checks `isLoaded` and otherwise awaits `waitUntilLoaded()`
 - `RuntimeDerivedDataController` — the app's side of derived data: gives the Indexing settings page its `DerivedDataClient` (location, size, Show in Finder, delete) and asks before the application menu's Delete Derived Data… deletes it (root `AGENTS.md`, *Derived data*)
