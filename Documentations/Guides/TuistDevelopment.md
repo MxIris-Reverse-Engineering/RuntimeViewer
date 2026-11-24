@@ -2,7 +2,7 @@
 
 - **面向**: 在本仓库做日常开发、想让第三方依赖走二进制缓存的人；改原生工程的 target、依赖、嵌入方式或构建设置的人（同步规则）
 - **对应提案**: [0053](../Evolutions/0053-tuist-coexistence.md)；本地依赖模式见 [0082](../Evolutions/0082-tuist-local-dependencies.md)
-- **最后更新**: 2026-11-20
+- **最后更新**: 2026-11-24
 
 `RuntimeViewer-Tuist.xcworkspace` 是构建 macOS App 的第二条路，只供日常开发。它由
 `./TuistScript.sh` 用 Tuist 生成，和原生工程用同样的 target、同样的源码、同一批
@@ -51,7 +51,7 @@ Xcode 27 解析出 `swift-issue-reporting` 2.1），锁文件就和原生的对�
 | 跑测试 | scheme `RuntimeViewer Tests`：四个本地包的全部测试 target 加 `RuntimeViewerSourceEditorBridgeTests` |
 | 命令行构建（同 `RunScript.sh` 的参数） | `./TuistScript.sh build [--configuration Debug-arm64e] [--launch]` |
 | 本地包里增删了源文件 | `./TuistScript.sh generate`（Tuist 转换包时按 glob 展开文件；只改已有文件不用） |
-| 改了某个 `Package.swift`（依赖、target、设置） | `./TuistScript.sh install`，再 `generate` |
+| 改了某个 `Package.swift`（依赖、target、设置） | `./TuistScript.sh generate`：清单变了，它先自己重新 `install` |
 | 依赖升级 | `./UpdatePackagesScript.sh`（顺带跑一次 `./TuistScript.sh install`），再 `./TuistScript.sh warm`（只重编变了的）；只动了那四个从源码编的包时，`generate` 就够了 |
 | 让另一个第三方包也从源码编 | 它的库与宏 target 加进 `Tuist.swift` 的 `sourceDependencyTargetNames`，它的 checkout 目录名加进 `TuistScript.sh` 的 `SOURCE_DEPENDENCIES`，再 `generate`。先确认没有留在缓存里的第三方包依赖它：那种情况 Tuist 怎么处理没有实测 |
 | 换了 Xcode 版本 | `./TuistScript.sh warm` |
@@ -110,8 +110,8 @@ Xcode 可能打开的是这个工程而不是 `Package.swift`；双击 `Package.
 ```
 
 - **哪几个库、从哪取**：本地 workspace 从检出旁边取的那几个，也就是它的 `group:../<名字>` 成员，现在是
-  MachOKit、MachOKitExtensions、MachOObjCSection、MachOSwiftSection、swift-demangling、swift-semantic-string；
-  本地 workspace 加了库，这里自动跟上。默认从检出的上一级目录取，worktree 里就是 `.worktrees/` 下那组链接，与本地
+  MachOKit、MachOKitExtensions、MachOObjCSection、MachOSwiftSection、swift-demangling、swift-semantic-string、
+  swift-type-indexing；本地 workspace 加了库，这里自动跟上，下一条命令先重新 `install`。默认从检出的上一级目录取，worktree 里就是 `.worktrees/` 下那组链接，与本地
   workspace 相同。打开时设了 `TUIST_LOCAL_UPSTREAM_CHECKOUTS`，就改从它指的目录取：每个库一个子目录，名字与包名
   相同（SwiftPM 按目录名认包）。
 - **效果**：`Tuist/Package.swift` 按路径声明这几个库，顶替依赖图里所有按 URL 声明的同名包。它们从本地源码编，
@@ -119,10 +119,11 @@ Xcode 可能打开的是这个工程而不是 `Package.swift`；双击 `Package.
   这几个库的编译警告照常显示。
 - **模式会记住**：记在 `Tuist/.local-dependencies`（已忽略），之后不带参数的 `install`、`generate`、`build` 都沿用；
   每条命令开头都打印当前用的是哪种依赖。
-- **切换会重新解析**：两种模式各有一份依赖 checkout（见「存放位置」），但共用 `Tuist/Package.resolved`，所以
-  切换后、以及上一次解析用的是另一种模式时，命令会先重新 `install`。本地模式下锁文件比对跳过这几个库。
-- **库的 `Package.swift` 改了**（加依赖、加 target）：`./TuistScript.sh install` 再 `generate`，和四个本地包一样；
-  增删了源文件只要 `generate`。
+- **什么时候重新解析**：两种模式各有一份依赖 checkout（见「存放位置」），但共用 `Tuist/Package.resolved`。
+  脚本每次 `install` 后记下模式，以及这几样内容的摘要：`Tuist/Package.swift`、四个本地包的 `Package.swift`、
+  Debug workspace 的锁文件，本地模式下再加本地取的是哪几个库和它们各自的 `Package.swift`。之后的命令发现模式或摘要
+  不同，就先重新 `install`。所以切换模式、库的清单加了依赖或 target、本地 workspace 加了库，都不用手动 `install`；
+  增删源文件只要 `generate`。本地模式下锁文件比对跳过这几个库。
 - **`warm` 与 `check` 总在远程模式下做**，做完按记住的模式重新生成：其余第三方依赖的二进制两种模式通用，`check`
   对照的原生工程用的也是钉住的版本。在本地模式下跑它们，前后各要重新解析一次依赖。
 - **没有包的测试**：这个模式下不映射四个本地包的测试 target，也没有 `RuntimeViewer Tests` scheme。Tuist 的

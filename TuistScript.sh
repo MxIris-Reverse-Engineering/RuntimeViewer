@@ -34,9 +34,10 @@
 # that stand in for every other declaration of them, so they build from their checkouts, uncommitted
 # edits included, and everything else still comes from the cache. The mode holds for the commands
 # after the one that switched it ($LOCAL_DEPENDENCIES_MARKER records it), and each mode has its own
-# dependency checkouts; switching resolves again. The libraries are taken from the directory above
-# the checkout, `.worktrees/` for a worktree, where that workspace finds them too, or from the
-# directory TUIST_LOCAL_UPSTREAM_CHECKOUTS names when the mode is switched on. That mode has no tests
+# dependency checkouts; switching resolves again, and so does any command after a manifest, the
+# Debug workspace's lock file or the set of those libraries changed. The libraries are taken from the
+# directory above the checkout, `.worktrees/` for a worktree, where that workspace finds them too, or
+# from the directory TUIST_LOCAL_UPSTREAM_CHECKOUTS names when the mode is switched on. That mode has no tests
 # of the local packages: Tuist would map the libraries' tests as well and rejects one of them. `warm`
 # and `check` always work on the remote packages, the binaries being the same for both modes, and
 # generate in the recorded mode on the way out.
@@ -544,26 +545,55 @@ install_dependencies() {
     fi
 }
 
-# What $INSTALLED_DEPENDENCIES_STAMP says once the current mode's dependencies are resolved.
+# What $INSTALLED_DEPENDENCIES_STAMP says once the current mode's dependencies are resolved: the mode
+# on the first line, then a digest of what decides what `tuist install` resolves.
 installed_dependencies_description() {
     if [[ "$CURRENT_DEPENDENCY_MODE" == local ]]; then
         echo "local $LOCAL_DEPENDENCIES_DIRECTORY"
     else
         echo "remote"
     fi
+    resolution_inputs_digest
 }
 
-# Resolves the dependencies unless they were last resolved for the current mode. A checkout without
-# the stamp was resolved before the local mode existed, which means for the remote packages.
+# A digest of the inputs of `tuist install`: Tuist/Package.swift, the four local packages' manifests,
+# the Debug workspace's lock file the install starts from and, in the local mode, the libraries taken
+# from their checkouts with their own manifests. SwiftPM's state is only as new as the last install:
+# a package one of those manifests gains, or a library added to $LOCAL_WORKSPACE, reaches Tuist only
+# through another install, and `tuist generate` fails before it with "`<product>` is not a valid
+# configured external dependency".
+resolution_inputs_digest() {
+    local input_paths=("Tuist/Package.swift" "$NATIVE_PACKAGE_RESOLVED") package_name
+    for package_name in "${LOCAL_PACKAGES[@]}"; do
+        input_paths+=("$package_name"/Package*.swift)
+    done
+    if [[ "$CURRENT_DEPENDENCY_MODE" == local ]]; then
+        for package_name in "${LOCAL_UPSTREAM_PACKAGES[@]}"; do
+            input_paths+=("$LOCAL_DEPENDENCIES_DIRECTORY/$package_name"/Package*.swift)
+        done
+    fi
+    # The paths count as well as the contents: a library added to the local mode changes the digest
+    # even when its manifest happens to equal another's.
+    { printf '%s\n' "${input_paths[@]}"; cat "${input_paths[@]}"; } | shasum -a 256 | cut -d ' ' -f 1
+}
+
+# Resolves the dependencies unless they were last resolved for the current mode and the same
+# manifests. A checkout without the stamp was resolved before the local mode existed, which means for
+# the remote packages.
 ensure_dependencies() {
-    local installed
+    local installed expected installed_mode
     installed="$(cat "$INSTALLED_DEPENDENCIES_STAMP" 2>/dev/null || true)"
+    expected="$(installed_dependencies_description)"
+    installed_mode="${installed%%$'\n'*}"
     if [[ ! -d "$DEPENDENCIES_DIRECTORY/checkouts" ]]; then
         install_dependencies
     elif [[ -z "$installed" && "$CURRENT_DEPENDENCY_MODE" == remote ]]; then
         return 0
-    elif [[ "$installed" != "$(installed_dependencies_description)" ]]; then
-        log "$TUIST_PACKAGE_RESOLVED was last resolved for the ${installed%% *} dependencies"
+    elif [[ "$installed_mode" != "${expected%%$'\n'*}" ]]; then
+        log "$TUIST_PACKAGE_RESOLVED was last resolved for the ${installed_mode%% *} dependencies"
+        install_dependencies
+    elif [[ "$installed" != "$expected" ]]; then
+        log "a manifest, the Debug workspace's lock file or the libraries taken locally changed since the last install"
         install_dependencies
     fi
 }
