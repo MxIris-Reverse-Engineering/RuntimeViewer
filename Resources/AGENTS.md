@@ -54,7 +54,7 @@ translation is the BETA badge's. The layers come out of
 `swift Resources/AppIconTools/GenerateBadgeLayers.swift debug Resources/AppIconDebug.icon/Assets`.
 That script draws every word badge from a preset — the word, its cap height, the padding either side
 — and its comments record why each preset has the values it has; `--cap-height` tries other sizes
-before one is settled. Background: `Documentations/Evolutions/draft-debug-app-icon.md`.
+before one is settled. Background: `Documentations/Evolutions/0110-debug-app-icon.md`.
 
 **The app has a symbol drawn after the icon, and the two change together.** `runtimeviewer` in the app's
 `Assets.xcassets` (`RuntimeViewerSymbols.runtimeViewer`) is Xcode's project-icon frame with the icon's

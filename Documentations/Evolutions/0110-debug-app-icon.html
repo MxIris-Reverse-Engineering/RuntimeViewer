@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>Draft - Debug 构建的图标：主图标加 DEBUG 角标</title>
+<title>0110 - Debug 构建的图标：主图标加 DEBUG 角标</title>
 <style>
 /* Evolution proposal page, shared style (style A, "Apple documentation").
    Copy this whole <style> block verbatim. Page-specific rules, if any, go only
@@ -160,13 +160,13 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <div class="page">
 
 <header class="doc-header">
-  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">Draft</span></p>
-  <h1><span class="proposal-number">Draft</span> Debug 构建的图标：主图标加 DEBUG 角标</h1>
+  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">0110</span></p>
+  <h1><span class="proposal-number">0110</span> Debug 构建的图标：主图标加 DEBUG 角标</h1>
   <dl class="meta">
-    <div><dt>状态</dt><dd><span class="status status-in-progress">In Progress</span></dd></div>
-    <div><dt>最后更新</dt><dd>2026-11-24</dd></div>
+    <div><dt>状态</dt><dd><span class="status status-implemented">Implemented</span></dd></div>
+    <div><dt>最后更新</dt><dd>2026-11-25</dd></div>
     <div><dt>项目类型</dt><dd>App</dd></div>
-    <div><dt>原文</dt><dd><code>draft-debug-app-icon.md</code></dd></div>
+    <div><dt>原文</dt><dd><code>0110-debug-app-icon.md</code></dd></div>
   </dl>
 </header>
 
@@ -285,7 +285,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
       <tr><td><code>ArchiveScript.sh</code></td><td><span class="tag tag-changed">修改</span></td><td>非 beta 渠道按 <code>$CONFIGURATION</code> 取基名（<code>Debug*</code> → <code>AppIconDebug</code>）；注释四份 → 六份</td><td><code>--configuration Debug</code> 演练时校验不误报</td><td class="numeric">3</td></tr>
       <tr><td><code>Resources/AGENTS.md</code></td><td><span class="tag tag-changed">修改</span></td><td>六份文档、配置一维、共享图层名单、脚本新名字与用法</td><td>规则文件与事实一致</td><td class="numeric">4</td></tr>
       <tr><td><code>AGENTS.md</code> · App Icon</td><td><span class="tag tag-changed">修改</span></td><td>四份 → 六份，点出 AppIconDebug</td><td>同上</td><td class="numeric">4</td></tr>
-      <tr><td><code>Documentations/Evolutions/draft-debug-app-icon.md</code> / <code>.html</code></td><td><span class="tag tag-added">新增</span></td><td>本提案与网页版</td><td>提案制</td><td class="numeric">0</td></tr>
+      <tr><td><code>Documentations/Evolutions/0110-debug-app-icon.md</code> / <code>.html</code>（草案时叫 <code>draft-debug-app-icon</code>）</td><td><span class="tag tag-added">新增</span></td><td>本提案与网页版</td><td>提案制</td><td class="numeric">0</td></tr>
       <tr><td><code>Documentations/Evolutions/README.md</code>、<code>Documentations/README.md</code></td><td><span class="tag tag-changed">修改</span></td><td>登记草案；落地时改编号</td><td>文档索引</td><td class="numeric">0 / 4</td></tr>
     </tbody>
   </table>
@@ -410,7 +410,7 @@ fi</code></pre>
 <section id="log">
   <h2>决策日志</h2>
   <details>
-    <summary>7 条，最近一条：实现完成，待用户看过后收尾</summary>
+    <summary>8 条，最近一条：落地为 0110</summary>
     <div class="details-body">
       <div class="table-wrap">
       <table>
@@ -423,6 +423,7 @@ fi</code></pre>
           <tr><td class="numeric">2026-11-24</td><td>脚本加 <code>--cap-height</code> 参数</td><td>渲染候选要多次改字高，临时覆盖比反复改预设常量干净；以后调整任何角标的字高也用得上</td></tr>
           <tr><td class="numeric">2026-11-24</td><td>DEBUG 字高定为 120</td><td>渲染了 136 / 120 / 108 三档（64 像素下都可辨认）：136 角标宽 718、盖住放大镜下半圈；108 与 BETA 同宽（570）但字明显比 BETA 小；120 角标约 634 × 229，覆盖面与 BETA 接近。用户选了推荐的 120</td></tr>
           <tr><td class="numeric">2026-11-24</td><td>实现完成，待用户看过后收尾</td><td>四步都已提交并推送功能分支。文档判断：不需要使用指南或实现说明，用法与约束写进了 <code>Resources/AGENTS.md</code>，字高与留白的取舍写在 <code>GenerateBadgeLayers.swift</code> 的注释里；没有新术语</td></tr>
+          <tr><td class="numeric">2026-11-25</td><td>落地为 0110</td><td>用户要求把 RuntimeViewer 还没收尾的工作全部收尾。本提案与 Xcode 27 工程格式那份草案随 <code>next</code> 的同一次推送，按进入 <code>next</code> 的先后取号：0109 是 Xcode 27 工程格式，0110 是本提案；状态改为 Implemented。验证沿用第 3 步 11-24 在 Ultra 上的结果；合进 <code>next</code> 之后，含本功能的整棵树又在 Ultra 上经 Tuist 编过一次 App，退出码 0，产物带 <code>AppIconDebug</code>。文档判断不变：不配使用指南或实现说明，没有新术语。始终没有实际跑一次 <code>ArchiveScript.sh --configuration Debug</code> 归档</td></tr>
         </tbody>
       </table>
       </div>

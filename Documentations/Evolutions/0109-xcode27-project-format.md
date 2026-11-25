@@ -1,10 +1,11 @@
-# Draft - 原生工程改用 Xcode 27 的新工程格式
+# 0109 - 原生工程改用 Xcode 27 的新工程格式
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **创建日期**: 2026-11-16
-- **最后更新**: 2026-11-16
+- **最后更新**: 2026-11-25
 - **所属愿景**: 无
-- **实现分支 / PR**: 未定
+- **实现分支 / PR**: 直接提交在 `next` 上（`build: save the native projects in Xcode 27's project.xcproj format`）
+- **配套文档**: 无 —— 两种格式怎么读写在 `Documentations/Guides/TuistDevelopment.md`，规则写在根 `AGENTS.md`
 
 ## 摘要
 
@@ -77,3 +78,4 @@ Xcode 把复制进 App 的产物按 target 名去找，所以命令行工具的 
 | 2026-11-16 | 用户批准，状态改为 In Progress | — |
 | 2026-11-16 | 换算写成独立的 `Tuist/ReadNativeProject.py`，不内联进 `TuistScript.sh` | `check` 与导航栏重排是两段各自独立的内联 Python，都要用它；独立成一个文件只写一份，接口与 `plutil` 相同，两处只换一个调用 |
 | 2026-11-16 | AppKit 工程级的 `COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS` 与 `DEVELOPMENT_TEAM` 挪进工程级 xcconfig，纳入本提案 | 这两条是 11-14 写进工程文件的，`check` 在 `next` 上已经因此失败；不挪走的话，适配后的 `check` 仍然过不了 |
+| 2026-11-25 | 落地为 0109，状态改为 Implemented | 实现 11-16 已直接提交在 `next` 上并推送，提案一直停在 In Progress。用户要求把 RuntimeViewer 还没收尾的工作全部收尾，本提案与 DEBUG 角标图标那份草案随 `next` 的同一次推送按进入 `next` 的先后取号：0109 是本提案，0110 是 DEBUG 角标图标。此后的改动都在新格式上做，`TuistScript.sh check` 11-24 在 Ultra 上又通过一次。文档判断：不配使用指南或实现说明，两种格式怎么读已写进 `Documentations/Guides/TuistDevelopment.md`；没有新术语 |

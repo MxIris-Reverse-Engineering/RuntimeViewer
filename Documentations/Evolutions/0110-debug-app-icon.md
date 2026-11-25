@@ -1,13 +1,13 @@
-# Draft - Debug 构建的图标：主图标加 DEBUG 角标
+# 0110 - Debug 构建的图标：主图标加 DEBUG 角标
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-11-24
-- **最后更新**: 2026-11-24
+- **最后更新**: 2026-11-25
 - **所属愿景**: 无
 - **关联提案**: [0020 App 图标按 Icon Composer 版本分两份文档](0020-icon-composer-document-variants.md)、[0028 Catalyst helper 的图标](0028-catalyst-helper-icon.md)
 - **实现分支 / PR**: `feature/debug-app-icon`（worktree `.worktrees/RuntimeViewer-DebugAppIcon`）
-- **配套文档**: 待定 —— 落地时登记实现说明 / 使用指南的链接
+- **配套文档**: 无 —— 用法与约束在 `Resources/AGENTS.md`，字高与留白的取舍在 `GenerateBadgeLayers.swift` 的注释里
 - **网页版**: 同目录同名的 `.html`
 
 ## 摘要
@@ -71,7 +71,7 @@ Debug 与 Debug-arm64e 构建出来的 App（`RuntimeViewer-Debug.app`、`Runtim
 | `ArchiveScript.sh` | 修改 | 非 beta 渠道时按 `$CONFIGURATION` 取基名（`Debug*` → `AppIconDebug`）；注释「All four」→ 六份 | `--configuration Debug` 演练时校验不误报 | 3 |
 | `Resources/AGENTS.md` | 修改 | 四份 → 六份；「渠道」一维补上配置；共享图层要一起改的名单加 AppIconDebug；生成脚本改名与用法 | 规则文件与事实一致 | 4 |
 | `AGENTS.md`（根目录）· App Icon 一节 | 修改 | 「four Icon Composer documents」→ 六份，点出 AppIconDebug | 同上 | 4 |
-| `Documentations/Evolutions/draft-debug-app-icon.md` / `.html` | 新增 | 本提案与网页版 | 提案制 | 0 |
+| `Documentations/Evolutions/0110-debug-app-icon.md` / `.html`（草案时叫 `draft-debug-app-icon`） | 新增 | 本提案与网页版 | 提案制 | 0 |
 | `Documentations/Evolutions/README.md`、`Documentations/README.md` | 修改 | 登记草案；落地时改编号 | 文档索引 | 0 / 4 |
 
 ## 架构图
@@ -259,3 +259,4 @@ fi
 | 2026-11-24 | 脚本加 `--cap-height` 参数 | 渲染候选要多次改字高，临时覆盖比反复改预设常量干净；以后调整任何角标的字高也用得上 |
 | 2026-11-24 | DEBUG 字高定为 120 | 渲染了 136 / 120 / 108 三档（64 像素下都可辨认）：136 角标宽 718、盖住放大镜下半圈；108 与 BETA 同宽（570）但字明显比 BETA 小；120 角标约 634 × 229，覆盖面与 BETA 接近。用户选了推荐的 120 |
 | 2026-11-24 | 实现完成，待用户看过后收尾 | 四步都已提交并推送功能分支。文档判断：不需要使用指南或实现说明，用法与约束写进了 `Resources/AGENTS.md`，字高与留白的取舍写在 `GenerateBadgeLayers.swift` 的注释里；没有新术语 |
+| 2026-11-25 | 落地为 0110 | 用户要求把 RuntimeViewer 还没收尾的工作全部收尾。本提案与 Xcode 27 工程格式那份草案随 `next` 的同一次推送，按进入 `next` 的先后取号：0109 是 Xcode 27 工程格式，0110 是本提案；状态改为 Implemented。验证沿用第 3 步 11-24 在 Ultra 上的结果；合进 `next` 之后，含本功能的整棵树又在 Ultra 上经 Tuist 编过一次 App，退出码 0，产物带 `AppIconDebug`。文档判断不变：不配使用指南或实现说明，没有新术语。始终没有实际跑一次 `ArchiveScript.sh --configuration Debug` 归档 |

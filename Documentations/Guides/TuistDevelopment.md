@@ -168,7 +168,7 @@ Xcode 可能打开的是这个工程而不是 `Package.swift`；双击 `Package.
 `./TuistScript.sh check` 先重新生成 workspace，再逐项核对，任何一项不符就以非零退出码结束并列出原因：
 
 > 原生工程存成 Xcode 27 的 `project.xcproj` 格式（见提案
-> [`draft-xcode27-project-format`](../Evolutions/draft-xcode27-project-format.md)）。`check` 与生成后照原生
+> [0109](../Evolutions/0109-xcode27-project-format.md)）。`check` 与生成后照原生
 > 工程重排导航栏，都经 `Tuist/ReadNativeProject.py` 读原生工程：它把 `project.xcproj` 换算成 `plutil` 读
 > `project.pbxproj` 得到的那种对象表；工程里仍是 `project.pbxproj` 时直接交给 `plutil`。两种格式都认。
 

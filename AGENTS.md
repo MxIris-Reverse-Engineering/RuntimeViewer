@@ -191,7 +191,7 @@ project file, which outranks the xcconfig and which the Tuist project below does
 **The three native projects are saved in Xcode 27's `project.xcproj` format**, which replaced
 `project.pbxproj` and which no earlier Xcode opens. The only tool that reads a project file itself,
 `TuistScript.sh`, does so through `Tuist/ReadNativeProject.py`, which reads either format. Background:
-`Documentations/Evolutions/draft-xcode27-project-format.md`.
+`Documentations/Evolutions/0109-xcode27-project-format.md`.
 
 **`RuntimeViewer-Tuist.xcworkspace` is a second, development-only way to build the macOS app.**
 Tuist generates it from `Tuist.swift`, `Workspace.swift`, `Tuist/Package.swift` and
