@@ -3,7 +3,7 @@
 - **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-11-24
-- **最后更新**: 2026-11-24
+- **最后更新**: 2026-11-25
 - **所属愿景**: 无
 - **关联提案**: [0105 欢迎窗口](0105-welcome-window.md)（同在启动时出现的另一个窗口，它在前时本提案的页面显示在它前面）
 - **实现分支 / PR**: `feature/onboarding-pages`（已合进 `next`）
@@ -12,7 +12,7 @@
 
 ## 摘要
 
-macOS App 接入 swift-onboardingkit（Apple 私有框架 OnBoardingKit 的 Swift 封装，App Store、Freeform、Shortcuts 的欢迎页与 "What's New" 页就是它画的），做两种一次性页面：新用户第一次启动时的**欢迎页**（RuntimeViewer 能做什么），以及升级到新的功能版本（`主版本.次版本`）后第一次启动时的 **What's New 页**（这一版的新功能）。页面在文档窗口上是 sheet；0105 的欢迎窗口在前时（它是无边框窗口、不会成为主窗口），页面放在一个独立窗口里显示在它前面。点 Continue 关闭并记下「已看过这一版」；Help 菜单新增 What's New in RuntimeViewer，随时可再看。「这次启动该弹哪一页」由 RuntimeViewerAppCore 判断（可单测），页面内容是 AppCore 里的值，由 RuntimeViewerAppUI 画成 OnBoardingKit 的模板，App 里一个新的启动控制器负责弹出。swift-onboardingkit 改为公开仓库、改成弱链接私有框架后发布 `0.1.0`，修 0 × 0 页面时再发 `0.1.1`（容器自己定好尺寸），再发 `0.2.0`（页面值 `OBTemplatePage`，由库组装成控制器）；RV 按 `from: "0.2.0"` 依赖它，只给 macOS 链接，页面取 App Store 的样式（居中版式、功能行符号用强调色，What's New 不带图片，欢迎页顶部是 128pt 的 App 图标）。
+macOS App 接入 swift-onboardingkit（Apple 私有框架 OnBoardingKit 的 Swift 封装，App Store、Freeform、Shortcuts 的欢迎页与 "What's New" 页就是它画的），做两种一次性页面：新用户第一次启动时的**欢迎页**（RuntimeViewer 能做什么），以及升级到新的功能版本（`主版本.次版本`）后第一次启动时的 **What's New 页**（这一版的新功能）。页面在文档窗口上是 sheet；0105 的欢迎窗口在前时（它是无边框窗口、不会成为主窗口），页面放在一个独立窗口里显示在它前面。点 Continue 关闭并记下「已看过这一版」；Help 菜单新增 What's New in RuntimeViewer，随时可再看。「这次启动该弹哪一页」由 RuntimeViewerAppCore 判断（可单测），页面内容是 AppCore 里的值，由 RuntimeViewerAppUI 画成 OnBoardingKit 的模板，App 里一个新的启动控制器负责弹出。swift-onboardingkit 改为公开仓库、改成弱链接私有框架后发布 `0.1.0`，修 0 × 0 页面时再发 `0.1.1`（容器自己定好尺寸），再发 `0.2.0`（页面值 `OBTemplatePage`，由库组装成控制器）、`0.2.1`（功能行图标的尺寸）；RV 按 `from: "0.2.1"` 依赖它，只给 macOS 链接，页面取 App Store 的样式（居中版式、功能行符号用强调色，What's New 不带图片，欢迎页顶部是 128pt 的 App 图标）。
 
 ## 动机
 
@@ -49,7 +49,7 @@ macOS App 接入 swift-onboardingkit（Apple 私有框架 OnBoardingKit 的 Swif
 ## 提议方案
 
 1. **swift-onboardingkit 发布 `0.1.0`**：链接改成弱链接（`-weak_framework OnBoardingKit`），README 的安装写法改成 `from: "0.1.0"`，在它的提案 0001 决策日志里记一笔；仓库改为公开；打 tag `0.1.0`（Mx-Iris 库的 tag 不带 `v`，同 UIFoundation）并建 GitHub Release。
-2. **RV 依赖它**：`RuntimeViewerPackages/Package.swift` 照既有写法声明 `swift-onboardingkit`（本地候选指向 `Personal/Library/macOS/swift-onboardingkit`，远端 `from: "0.1.0"`，修 0 × 0 页面时抬到 `0.1.1`，改用页面值时抬到 `0.2.0`），`RuntimeViewerAppUI` 依赖 `OnBoardingKit` product，条件 `.when(platforms: appkitPlatforms)`。更新受版本控制的锁文件：`RuntimeViewerPackages`、`RuntimeViewerCommandLine` 两个包的，以及 Debug、Distribution 两个 workspace 的。
+2. **RV 依赖它**：`RuntimeViewerPackages/Package.swift` 照既有写法声明 `swift-onboardingkit`（本地候选指向 `Personal/Library/macOS/swift-onboardingkit`，远端 `from: "0.1.0"`，修 0 × 0 页面时抬到 `0.1.1`，改用页面值时抬到 `0.2.0`，修功能行图标时抬到 `0.2.1`），`RuntimeViewerAppUI` 依赖 `OnBoardingKit` product，条件 `.when(platforms: appkitPlatforms)`。更新受版本控制的锁文件：`RuntimeViewerPackages`、`RuntimeViewerCommandLine` 两个包的，以及 Debug、Distribution 两个 workspace 的。
 3. **「功能版本」与判断放在 AppCore**（全部 `#if os(macOS)`）：
    - `FeatureRelease`：`主版本.次版本`，可比较、可编码，从 marketing version 解析。
    - `OnboardingPage`：一页的内容，值类型——标题、正文、顶部图片（`Image?`：App 图标或某个 `SystemSymbol`，可以没有）、功能行（标题、描述、`SystemSymbol`），以及它是欢迎页还是哪一版的 What's New。
@@ -85,7 +85,7 @@ macOS App 接入 swift-onboardingkit（Apple 私有框架 OnBoardingKit 的 Swif
 | swift-onboardingkit `README.md` | 修改 | 安装写法改 `from: "0.1.0"`；「Things to know」加一条弱链接与可用性检查 | 公开发布后的用法 | 1 |
 | swift-onboardingkit `Documentations/Evolutions/0001-…md`（与 `.html`） | 修改 | 决策日志加一行：改弱链接、公开、发布 0.1.0 | 那边的决策留档 | 1 |
 | GitHub `Mx-Iris/swift-onboardingkit` | 修改 | 可见性改公开；tag `0.1.0` 与 Release | RV 是公开仓库 | 1 |
-| `RuntimeViewerPackages/Package.swift` | 修改 | 声明 `swift-onboardingkit`（本地候选 + `from: "0.2.0"`）；`RuntimeViewerAppUI` 依赖 `OnBoardingKit`，只给 macOS | 接入依赖 | 2 |
+| `RuntimeViewerPackages/Package.swift` | 修改 | 声明 `swift-onboardingkit`（本地候选 + `from: "0.2.1"`）；`RuntimeViewerAppUI` 依赖 `OnBoardingKit`，只给 macOS | 接入依赖 | 2 |
 | `RuntimeViewerPackages/Package.resolved`、`RuntimeViewerCommandLine/Package.resolved`、`RuntimeViewer-Debug.xcworkspace/…/Package.resolved`、`RuntimeViewer-Distribution.xcworkspace/…/Package.resolved` | 修改 | 加 swift-onboardingkit 的 pin，其余 pin 不动 | 锁文件随依赖变 | 2 |
 | `RuntimeViewerPackages/Sources/RuntimeViewerSettings/Settings.swift` · `SettingsAccess` | 修改 | 新增 `didFindStoredSettingsOnLoad`，在 `logLoadOutcome(_:)` 里记 | 认新用户，不另存布尔值 | 3 |
 | `RuntimeViewerPackages/Tests/RuntimeViewerSettingsTests/SettingsStoredSettingsDetectionTests.swift` | 新增 | 无数据、有数据、坏数据三种 | 第 3 步的测试 | 3 |
@@ -502,3 +502,4 @@ extension DependencyValues {
 | 2026-11-24 | 页面用居中模板类型 | 用户看过修好尺寸的页面：正文挤在中间约 130pt 宽的一列。原因是构造器给模板的标准类型每边留 175pt 边距，是给整窗口页面用的。反编译模板的边距与列表行宽规则后，改用居中类型（每边 68pt、列表行宽 344，正好配 482 宽的页面），模板与列表都设；新增「标题与列表占页面宽度的六成以上」的测试，去掉这两行时标题宽 136、测试变红。swift-onboardingkit 的 README 示例用的也是标准类型，同样会挤成一列，是否改库待用户定。 |
 | 2026-11-24 | 改用库的页面值，取 App Store 样式 | 用户看过居中版式后嫌难看（图标居中、文字靠左，空隙大），先要一个 demo 自己比较样式，再要求把 demo 里「数据组装成控制器」的部分搬进 swift-onboardingkit，封装成结构化数据、不暴露视图与控制器的属性（库的提案 0002，发布 `0.2.0`）。随后选定 App Store 的样式：反汇编 App Store 得知它的 What's New 模板不带图片、模板与列表都是居中类型、列表符号用 App 的强调色，欢迎页放 128pt 的 App 图标。RV 的页面值把顶部符号改成可选的 `image`（App 图标或符号），What's New 不放图片、欢迎页放 App 图标；AppUI 映射成 `OBTemplatePage` 交给库组装，不再自己设模板类型与尺寸。下限抬到 `0.2.0`，四份锁文件只改这条 pin；`SystemSymbol.handWave` 不再使用，删掉。验证（Ultra）：全新目录下包级构建、引导页相关测试（设置检测 3 个、AppUI 引导页 11 个、AppCore 引导页与功能版本 15 个）全过；CommandLine 包与 Debug、Distribution 两个 workspace 在全新目录下解析，锁文件不被改写；原生 Debug-arm64e 构建 App 通过，解析到 0.2.0。界面仍待用户目视。 |
 | 2026-11-24 | 落地为 0108，Implemented | 用户看过 App Store 样式的页面后同意收尾。编号取本地与远端 `next`、`main` 上最大的 0107 加一。验证沿用上一行在 Ultra 上对功能分支最终代码的结果；本地 `next` 的合并结果没有另跑测试，用户目视时构建的就是它。没有拆出的后续项。配套文章：仍不写——理由同「实现完成」一行，后来几次修改的框架行为（尺寸公式、版式边距、组装顺序）写在 swift-onboardingkit 的实现说明与提案 0002 里，RV 一侧只剩把页面值映射成 `OBTemplatePage`。新术语：「功能版本」已登记，后来的修改没有引入新术语。本地 `next` 上还有别的会话没推送的提交，所以 `next` 暂不推送，远端的功能分支保留到 `next` 推上去为止。 |
+| 2026-11-25 | 修 What's New 功能行的图标，下限抬到 0.2.1 | 用户在 What's New 上看到每行的符号压在标题上。原因在 swift-onboardingkit 0.2.0：页面默认的行距 `.default` 被写回列表，盖掉了框架给新列表的 `large`，每行图标成了 0 × 0 的框（IDA 反编译 27.2 的 OnBoardingKit 查明，库的测试修复前先红）。库发 `0.2.1` 修复，RV 的下限与四份锁文件跟着抬，代码不变。原因记在库的实现说明。 |

@@ -164,7 +164,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
   <h1><span class="proposal-number">0108</span> 首次启动欢迎页与更新后的 What's New（接入 swift-onboardingkit）</h1>
   <dl class="meta">
     <div><dt>状态</dt><dd><span class="status status-implemented">Implemented</span></dd></div>
-    <div><dt>最后更新</dt><dd>2026-11-24</dd></div>
+    <div><dt>最后更新</dt><dd>2026-11-25</dd></div>
     <div><dt>项目类型</dt><dd>App</dd></div>
     <div><dt>原文</dt><dd><code>0108-onboarding-pages.md</code></dd></div>
   </dl>
@@ -191,7 +191,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
   <h2>摘要</h2>
   <p>macOS App 接入 swift-onboardingkit（Apple 私有框架 OnBoardingKit 的 Swift 封装，App Store、Freeform、Shortcuts 的欢迎页与 "What's New" 页就是它画的），做两种一次性页面：新用户第一次启动时的<strong>欢迎页</strong>，以及升级到新的功能版本（<code>主版本.次版本</code>）后第一次启动时的 <strong>What's New 页</strong>。</p>
   <p>页面在文档窗口上是 sheet；0105 的欢迎窗口在前时（它是无边框窗口、不会成为主窗口），页面放在一个独立窗口里显示在它前面。点 Continue 关闭并记下「已看过这一版」；Help 菜单新增 What's New in RuntimeViewer，随时可再看。「这次启动该弹哪一页」由 RuntimeViewerAppCore 判断（可单测），页面内容是 AppCore 里的值，由 RuntimeViewerAppUI 画成 OnBoardingKit 的模板，App 里一个新的启动控制器负责弹出。</p>
-  <p>swift-onboardingkit 改为公开仓库、改成弱链接私有框架后发布 <code>0.1.0</code>，修 0 × 0 页面时再发 <code>0.1.1</code>（容器自己定好尺寸），随后发 <code>0.2.0</code>（页面写成值、由容器组装）；RV 按 <code>from: "0.2.0"</code> 依赖它，页面取 App Store 的样式，只给 macOS 链接。</p>
+  <p>swift-onboardingkit 改为公开仓库、改成弱链接私有框架后发布 <code>0.1.0</code>，修 0 × 0 页面时再发 <code>0.1.1</code>（容器自己定好尺寸），随后发 <code>0.2.0</code>（页面写成值、由容器组装）；再发 <code>0.2.1</code>（功能行图标的尺寸）；RV 按 <code>from: "0.2.1"</code> 依赖它，页面取 App Store 的样式，只给 macOS 链接。</p>
 </section>
 
 <section id="decide">
@@ -296,7 +296,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
       <tr><td>swift-onboardingkit <code>README.md</code></td><td><span class="tag tag-changed">修改</span></td><td>安装写法改 <code>from: "0.1.0"</code>；「Things to know」加弱链接与可用性检查</td><td>公开发布后的用法</td><td class="numeric">1</td></tr>
       <tr><td>swift-onboardingkit <code>Documentations/Evolutions/0001-…md</code>（与 <code>.html</code>）</td><td><span class="tag tag-changed">修改</span></td><td>决策日志加一行：改弱链接、公开、发布 0.1.0</td><td>那边的决策留档</td><td class="numeric">1</td></tr>
       <tr><td>GitHub <code>Mx-Iris/swift-onboardingkit</code></td><td><span class="tag tag-changed">修改</span></td><td>可见性改公开；tag <code>0.1.0</code> 与 Release</td><td>RV 是公开仓库</td><td class="numeric">1</td></tr>
-      <tr><td><code>RuntimeViewerPackages/Package.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>声明 <code>swift-onboardingkit</code>（本地候选 + <code>from: "0.2.0"</code>）；<code>RuntimeViewerAppUI</code> 依赖 <code>OnBoardingKit</code>，只给 macOS</td><td>接入依赖</td><td class="numeric">2</td></tr>
+      <tr><td><code>RuntimeViewerPackages/Package.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>声明 <code>swift-onboardingkit</code>（本地候选 + <code>from: "0.2.1"</code>）；<code>RuntimeViewerAppUI</code> 依赖 <code>OnBoardingKit</code>，只给 macOS</td><td>接入依赖</td><td class="numeric">2</td></tr>
       <tr><td><code>RuntimeViewerPackages</code>、<code>RuntimeViewerCommandLine</code> 与 Debug、Distribution 两个 workspace 的 <code>Package.resolved</code></td><td><span class="tag tag-changed">修改</span></td><td>加 swift-onboardingkit 的 pin，其余 pin 不动</td><td>锁文件随依赖变</td><td class="numeric">2</td></tr>
       <tr><td><code>RuntimeViewerSettings/Settings.swift</code> · <code>SettingsAccess</code></td><td><span class="tag tag-changed">修改</span></td><td>新增 <code>didFindStoredSettingsOnLoad</code>，在 <code>logLoadOutcome(_:)</code> 里记</td><td>认新用户，不另存布尔值</td><td class="numeric">3</td></tr>
       <tr><td><code>RuntimeViewerSettingsTests/SettingsStoredSettingsDetectionTests.swift</code></td><td><span class="tag tag-added">新增</span></td><td>无数据、有数据、坏数据三种</td><td>第 3 步的测试</td><td class="numeric">3</td></tr>
@@ -536,6 +536,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
           <tr><td class="numeric">2026-11-24</td><td>页面用居中模板类型</td><td>正文挤在中间约 130pt 宽的一列：构造器给的标准类型每边留 175pt 边距，是给整窗口页面用的。改用居中类型（每边 68pt、列表行宽 344，正好配 482 宽的页面），模板与列表都设；新增宽度测试，去掉修复时标题宽 136、测试变红。库的 README 示例同样如此，改不改库待用户定。</td></tr>
           <tr><td class="numeric">2026-11-24</td><td>改用库的页面值，取 App Store 样式</td><td>用户嫌居中版式难看，先用 demo 比较样式，再要求把「数据组装成控制器」搬进 swift-onboardingkit（库的提案 0002，发布 <code>0.2.0</code>），随后选定 App Store 的样式：What's New 不放顶部图片、模板与列表都居中、列表符号用强调色，欢迎页放 128pt 的 App 图标。RV 的页面值把顶部符号改成可选的 <code>image</code>，AppUI 映射成 <code>OBTemplatePage</code> 交给库组装；下限抬到 <code>0.2.0</code>，删掉不再用的 <code>handWave</code>。</td></tr>
           <tr><td class="numeric">2026-11-24</td><td>落地为 0108，Implemented</td><td>用户看过 App Store 样式的页面后同意收尾。编号取本地与远端 <code>next</code>、<code>main</code> 上最大的 0107 加一。验证沿用上一行在 Ultra 上对功能分支的结果，本地 <code>next</code> 的合并结果由用户目视时构建。没有后续项；仍不写配套文章（框架行为在 swift-onboardingkit 的实现说明与提案 0002）；没有新术语。本地 <code>next</code> 上还有别的会话没推送的提交，<code>next</code> 暂不推送，远端功能分支保留到那时。</td></tr>
+          <tr><td class="numeric">2026-11-25</td><td>修 What's New 功能行的图标，下限抬到 0.2.1</td><td>用户在 What's New 上看到每行的符号压在标题上。原因在 swift-onboardingkit 0.2.0：页面默认的行距 <code>.default</code> 被写回列表，盖掉了框架给新列表的 <code>large</code>，每行图标成了 0 × 0 的框（IDA 反编译 27.2 的 OnBoardingKit 查明，库的测试修复前先红）。库发 <code>0.2.1</code> 修复，RV 的下限与四份锁文件跟着抬，代码不变。原因记在库的实现说明。</td></tr>
         </tbody>
       </table>
       </div>

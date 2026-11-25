@@ -292,9 +292,11 @@ let package = Package(
             ),
         ),
 
-        // The welcome page and What's New (RuntimeViewerAppUI, macOS only). 0.2.0 is the first
-        // release with `OBTemplatePage`, the page as values that the container assembles, which the
-        // pages are drawn from. 0.1.1 was the first whose container opens at the size of the
+        // The welcome page and What's New (RuntimeViewerAppUI, macOS only). 0.2.1 is the first
+        // release whose page keeps the feature rows' 40-point icons: with 0.2.0 a page left at the
+        // default spacing gave every row a zero-size icon, and its symbol was drawn over the title.
+        // 0.2.0 brought `OBTemplatePage`, the page as values that the container assembles, which
+        // the pages are drawn from. 0.1.1 was the first whose container opens at the size of the
         // framework's own sheets (with 0.1.0 the page's window was 0 × 0), and 0.1.0, the first
         // release, already links the private OnBoardingKit framework weakly, so the app still
         // launches on a system without it.
@@ -305,7 +307,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/swift-onboardingkit",
-                from: "0.2.0",
+                from: "0.2.1",
             ),
         ),
 
