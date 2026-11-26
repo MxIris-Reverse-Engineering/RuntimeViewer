@@ -122,6 +122,10 @@ struct CrossReferenceQuery {
             // Data a function reads, not code it reaches: the wire has no
             // target for them yet, and the app does not show them.
             return []
+        case .selector:
+            // A selector handed on rather than sent (MachOSwiftSection
+            // proposal cross-reference-recall-gaps): not shown yet.
+            return []
         }
     }
 
@@ -748,6 +752,11 @@ private struct CallerMatcher: Sendable {
              .objectiveCInstanceVariable, .cString, .constantString:
             // Never filed under a caller key.
             return nil
+        case .selector:
+            // Filed under the selector's key beside its sends, but a
+            // selector handed on rather than sent is not shown yet
+            // (MachOSwiftSection proposal cross-reference-recall-gaps).
+            return nil
         }
         return RuntimeCrossReference(
             referencingFunction: referencingFunction,
@@ -958,6 +967,8 @@ extension CrossReferenceQuery {
             return (.selector(name: selector, receiverClassName: receiverClassName), "send \(selector)" + (receiverClassName.map { " to \($0)" } ?? ""))
         case .superMessageSend(let selector, _):
             return (.selector(name: selector, receiverClassName: nil), "send super \(selector)")
+        case .selector(let selector):
+            return (.selector(name: selector, receiverClassName: nil), "selector \(selector)")
         case .objectiveCClass(let name, _):
             let displayName = CrossReferenceNaming.displayName(forClassName: name)
             return (.type(name: displayName, object: nil), "class \(displayName)")
