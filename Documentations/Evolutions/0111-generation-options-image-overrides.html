@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>Draft - Generation Options 搬进设置，并可按 engine + 镜像逐项覆盖</title>
+<title>0111 - Generation Options 搬进设置，并可按 engine + 镜像逐项覆盖</title>
 <style>
 /* Evolution proposal page, shared style (style A, "Apple documentation").
    Copy this whole <style> block verbatim. Page-specific rules, if any, go only
@@ -160,13 +160,13 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <div class="page">
 
 <header class="doc-header">
-  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">Draft</span></p>
-  <h1><span class="proposal-number">Draft</span> Generation Options 搬进设置，并可按 engine + 镜像逐项覆盖</h1>
+  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">0111</span></p>
+  <h1><span class="proposal-number">0111</span> Generation Options 搬进设置，并可按 engine + 镜像逐项覆盖</h1>
   <dl class="meta">
-    <div><dt>状态</dt><dd><span class="status status-in-progress">In Progress</span></dd></div>
+    <div><dt>状态</dt><dd><span class="status status-implemented">Implemented</span></dd></div>
     <div><dt>最后更新</dt><dd>2026-11-26</dd></div>
     <div><dt>项目类型</dt><dd>App</dd></div>
-    <div><dt>原文</dt><dd><code>draft-generation-options-image-overrides.md</code></dd></div>
+    <div><dt>原文</dt><dd><code>0111-generation-options-image-overrides.md</code></dd></div>
   </dl>
 </header>
 
@@ -198,7 +198,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <section id="decide">
   <h2>要你定</h2>
   <div class="callout">
-    <p class="callout-title">已批准（2026-11-26）。两个设计问题已定：</p>
+    <p class="callout-title">已落地（2026-11-26）。两个设计问题当时定为：</p>
     <ol>
       <li>覆盖粒度：逐项覆盖。</li>
       <li>窗口入口：Editor 菜单打开 sheet，工具栏按钮删除。</li>
@@ -504,6 +504,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
         <li><code>DocumentState.imagePathForGenerationOptions</code>：聚焦标签的对象所在镜像或镜像页的镜像，空标签退到 <code>currentImageNode?.path</code>。</li>
         <li>菜单项标题：有镜像时 <code>Generation Options for “&lt;镜像名&gt;”…</code>，没有时 <code>Generation Options for This Image…</code> 并灰掉。</li>
         <li><code>ImageGenerationOptionsViewModel</code> 的 Input：改值、还原一项、全部还原、打开全局、完成；Output：标题、副标题、生效选项、被覆盖的选项、能否全部还原。订阅 <code>settings.generationOptions</code>，设置页同时改全局时立刻跟着变。</li>
+        <li>sheet 最高到所在窗口内容区的高度减 40pt（至少 240pt）；放不下时选项区滚动，标题与按钮不动。</li>
         <li>ViewController 从清单生成行；固定按钮用 <code>rx.click</code>，动态行的控件汇进 <code>PublishRelay</code>；Done 触发 <code>.dismiss</code>。</li>
       </ul>
     </div>
@@ -611,7 +612,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <section id="log">
   <h2>决策日志</h2>
   <details>
-    <summary>13 条，最近一条：实现完成，待用户看过后收尾</summary>
+    <summary>15 条，最近一条：Implemented，落地为 0111</summary>
     <div class="details-body">
       <div class="table-wrap">
       <table>
@@ -630,6 +631,8 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
           <tr><td class="numeric">2026-11-26</td><td>sheet 的勾选框只在点击时发改动</td><td>绑定初值若发出，会把与默认值不同的全局选项记成覆盖；改用 <code>rx.click</code>。</td></tr>
           <tr><td class="numeric">2026-11-26</td><td>实现完成，待用户看过后收尾</td><td>Ultra 上三个包的测试与 macOS、iOS 两个 App 的编译都过；整包跑的红都是已知红灯或负载超时（单独重跑全过）。界面没有目视。</td></tr>
           <tr><td class="numeric">2026-11-26</td><td>文档判断</td><td>不另写指南；新术语「镜像覆盖」登记进术语表；CLI 指南与插件 skill 已同步。</td></tr>
+          <tr><td class="numeric">2026-11-26</td><td>sheet 不超过窗口高度</td><td>用户看过后指出 sheet 比窗口还高：选项区放进滚动视图，高度取所需高度与窗口可用高度中较小的那个（窗口内容区减 40pt，至少 240pt）。</td></tr>
+          <tr><td class="numeric">2026-11-26</td><td>Implemented，落地为 0111</td><td>合进 <code>next</code>。暂缓两项：CLI 与 MCP 按镜像套用覆盖；sheet 打开后主窗口变矮时跟着缩。</td></tr>
         </tbody>
       </table>
       </div>

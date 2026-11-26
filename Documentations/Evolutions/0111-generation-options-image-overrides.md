@@ -1,13 +1,13 @@
-# Draft - Generation Options 搬进设置，并可按 engine + 镜像逐项覆盖
+# 0111 - Generation Options 搬进设置，并可按 engine + 镜像逐项覆盖
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-11-26
 - **最后更新**: 2026-11-26
 - **所属愿景**: 无
 - **关联提案**: [0067](0067-exported-declarations-filter.md)、[0068](0068-exported-objc-declarations-filter.md)、[0104](0104-multiline-type-formatting.md)（往 Generation Options 里加过选项的三份）；[0085](0085-filter-scope-memory.md)（按 engine + 镜像记住 Filter Scope 的先例）；[0029](0029-find-navigator.md)（Find 语料按选项投影）
 - **实现分支 / PR**: `feature/generation-options-image-overrides`
-- **配套文档**: 待定 —— 落地时登记实现说明 / 使用指南的链接
+- **配套文档**: 无 —— 解析规则在 `Settings.GenerationOptionsSettings` 与 `Settings.GenerationOption` 的文档注释里（见决策日志「文档判断」）
 - **网页版**: 同目录同名的 `.html`
 
 ## 摘要
@@ -517,3 +517,4 @@ public final class ImageGenerationOptionsViewModel: ViewModel<MainRoute> {
 | 2026-11-26 | 实现完成，待用户看过后收尾 | 在 Ultra 上验证：Settings、Core（相关套件）、CommandLine 三个包的测试通过；Packages 的 AppCore、AppUI、Settings 整包跑的红都在已知清单里，不在清单里的 `FindSessionCorpusTests` 单独重跑 9 条全过（整包负载下超时）；macOS App（Tuist workspace）与 iOS App（模拟器）都编过。界面没有目视。 |
 | 2026-11-26 | 文档判断 | 不另写使用指南或实现说明：解析规则写在 `Settings.GenerationOptionsSettings` 与 `Settings.GenerationOption` 的文档注释里，根 `AGENTS.md` 第 7 条改成新 API；新术语「镜像覆盖」已登记进术语表，「Find 语料」一条改为按每个镜像生效的选项投影；CLI 指南与插件 skill（升到 1.4.1）已同步。 |
 | 2026-11-26 | sheet 不超过窗口高度 | 用户看过后指出 sheet 比窗口还高：改为选项区放进滚动视图，高度取所需高度与窗口可用高度中较小的那个。 |
+| 2026-11-26 | Implemented，落地为 0111 | 用户看过 sheet 的修改后收尾，合进 `next`。暂缓两项记入提案索引的后续项：CLI 与 MCP 按镜像套用覆盖；sheet 打开后主窗口变矮时 sheet 跟着缩。 |
