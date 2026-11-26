@@ -44,7 +44,7 @@ public final class ImageGenerationOptionsViewModel: ViewModel<MainRoute> {
 
     /// The options the image prints with now.
     @RxObserved
-    public private(set) var effectiveOptions = RuntimeObjectInterface.GenerationOptions()
+    public private(set) var effectiveOptions: RuntimeObjectInterface.GenerationOptions = RuntimeObjectInterface.GenerationOptions()
 
     /// The options the image overrides now.
     @RxObserved

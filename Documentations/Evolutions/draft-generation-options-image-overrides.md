@@ -88,7 +88,7 @@ Generation Options 从工具栏的弹窗搬进设置窗口，成为 Settings ›
 | `RuntimeViewerSettings/Settings.swift` · `Settings`、`SettingsAccess` | 修改 | 加 `@Default var generationOptions`；`accessPersistedValues()` 读它；`runMigrations()` 加 `migrateLegacyGenerationOptionsIfNeeded()` | 新分支要持久化；旧值迁一次 | 1 |
 | `Tests/RuntimeViewerSettingsTests/SettingsPersistenceTests.swift` | 修改 | 覆盖清单加 `generationOptions` | 守住 `accessPersistedValues()` | 1 |
 | `Tests/RuntimeViewerSettingsTests/GenerationOptionsSettingsTests.swift`、`GenerationOptionCatalogTests.swift`、`LegacyGenerationOptionsMigrationTests.swift` | 新增 | 解析、覆盖增删、清单覆盖全部字段、迁移 | 见各步行为 | 1 |
-| `RuntimeViewerAppCore/GenerationOptions/SettingsAccess+MergedGenerationOptions.swift` | 新增 | `mergedGenerationOptions(forImageAt:in:)`：生效选项再填 transformer 与 `marks…`；`trackedGenerationOptions(forImageAt:in:)` 返回 `Observable` | 取代 `currentMergedGenerationOptions` 里的合并逻辑，非 ViewModel（`FindSession`）也能用 | 2 |
+| `RuntimeViewerAppCore/GenerationOptions/SettingsAccess+GenerationOptions.swift` | 新增 | `mergedGenerationOptions(forImageAt:in:)`：生效选项再填 transformer 与 `marks…`（`mergingRequestOptions(into:)`）；`generationOptionsSettingsObservable()` 与 `effectiveGenerationOptionsObservable(forImageAt:in:)` 返回 `Observable` | 取代 `currentMergedGenerationOptions` 里的合并逻辑，非 ViewModel（`FindSession`）也能用 | 2 |
 | `RuntimeViewerAppCore/Base/ViewModel.swift` · `ViewModel` | 修改 | `currentMergedGenerationOptions` 换成 `mergedGenerationOptions(for runtimeObject:)` 与 `mergedGenerationOptions(forImageAt:)` | 选项随镜像而定 | 2 |
 | `RuntimeViewerAppCore/Content/ContentTextViewModel.swift` | 修改 | 取 interface 的管线订阅这个对象所在镜像的生效选项；C 名标签切换写这个镜像的覆盖；「Turn it off in Generation Options…」提示改指向新位置 | 内容区按镜像；切换不再动全局 | 2 |
 | `RuntimeViewerAppCore/Main/MainViewModel.swift` | 修改 | 保存与复制用对象所在镜像的合并选项；删 `generationOptionsClick` | 同上；按钮删了 | 2、5 |
@@ -98,9 +98,10 @@ Generation Options 从工具栏的弹窗搬进设置窗口，成为 Settings ›
 | `Tests/RuntimeViewerAppCoreTests/`（`ViewModelBaseTests`、`ContentTextPipelineTests`、`CImportedTypeNameTagTests`、`AppDefaultsIsolationTests`、`FindGenerationOptionsTests`、`FindSessionLifecycleTests`） | 修改 | 从注入 `AppDefaults.options` 改为注入 `SettingsAccess.preview` 的 `generationOptions`；隔离测试删掉 `$options` 那一条 | 跟着存储走 | 2、3 |
 | `Tests/RuntimeViewerAppCoreTests/ImageGenerationOptionsResolutionTests.swift` | 新增 | 两个镜像各自生效、覆盖变化只重取受影响的内容区、导出按镜像 | 见第 2 步行为 | 2 |
 | `RuntimeViewerCore/Search/RuntimeInterfaceSearchQuery.swift`、`RuntimeMemberSearchQuery.swift` | 修改 | 加 `generationOptionsByImagePath: [String: RuntimeObjectInterface.GenerationOptions]?` 与 `generationOptions(forImageAt:)` | 每个镜像按自己的选项投影；可选字段对旧对端兼容 | 3 |
-| `RuntimeViewerCore/Search/RuntimeEngine+Search.swift` | 修改 | 把表里的规范路径换成引擎目录里的写法再交给语料库 | 表按规范路径存，语料按目录写法存 | 3 |
-| `RuntimeViewerCore/Search/Corpus/RuntimeInterfaceCorpusStore.swift` | 修改 | `searchInterfaces` / `searchMembers` 扫描前按镜像算好可见性，扫描时按条目所在镜像取 | 原来整次搜索只有一个 `visibility` | 3 |
-| `Tests/RuntimeViewerCoreTests/RuntimeInterfaceCorpusVisibilityTests.swift` 及一个新增的请求兼容测试 | 修改 / 新增 | 两个镜像不同选项各自投影；没有表的请求与今天相同；旧形状的 JSON 能解码 | 见第 3 步行为 | 3 |
+| `RuntimeViewerCore/Search/RuntimeEngine+Search.swift` | 修改 | 表的键照 `imagePaths` 一样经 `imageCatalog.canonicalImagePath` 规范化（`canonicalizingImagePaths(_:)`）再交给语料库 | 语料库按目录的规范路径存镜像 | 3 |
+| `RuntimeViewerCore/Search/Corpus/RuntimeInterfaceCorpusStore.swift` | 修改 | 扫描前做好 `SearchVisibilities`（私有，按镜像的可见性表）；`scan` 的匹配闭包多收一个参数：条目所在镜像（来源的路径） | 原来整次搜索只有一个 `visibility` | 3 |
+| `Tests/RuntimeViewerCoreTests/RuntimeInterfaceSearchImageGenerationOptionsTests.swift` | 新增 | 两个方向的按镜像投影；没有表的请求与今天相同；旧形状的 JSON 能解码 | 见第 3 步行为 | 3 |
+| `RuntimeViewerAppCore/Find/Query/FindGenerationOptions.swift` · `FindGenerationOptions` | 新增 | 一次搜索读镜像所用的选项：全局 + 本 engine 各镜像的生效选项 | `FindSession` 的请求、重跑判断与交叉引用根解析共用一个值 | 3 |
 | `RuntimeViewerAppCore/Find/FindSession.swift`、`Find/CrossReferences/FindCrossReferenceRootResolver.swift`、`Find/CrossReferences/FindCrossReferences.swift`、`Find/FindViewModel.swift`、`Inspector/InspectorReferencesViewModel.swift` | 修改 | 请求带上这个 engine 的覆盖表；订阅 `generationOptions` 分支重跑屏上的搜索；交叉引用按成员所在镜像取选项 | Find 结果与内容区逐字相同 | 3 |
 | `RuntimeViewerSettingsUI/Components/GenerationOptionsSettingsView.swift` · `GenerationOptionsSettingsView` | 新增 | 全局两组（从 `GenerationOption.allCases` 生成）+ macOS 的 Image Overrides 组 | 设置页 | 4 |
 | `RuntimeViewerSettingsUI/SettingsWindowController.swift`、`SettingsViewController.swift` | 修改 | 注册新页（id `generationOptions`）；macOS 暴露 `show(pageWithID:)` | 新页；sheet 要跳到这一页 | 4 |
@@ -112,7 +113,7 @@ Generation Options 从工具栏的弹窗搬进设置窗口，成为 Settings ›
 | `RuntimeViewerUsingAppKit/.../Main/MainCoordinator.swift` | 修改 | 删 popover 分支；新路由开 sheet，完成时 `.dismiss` | 同上 | 5 |
 | `RuntimeViewerUsingAppKit/.../Main/MainToolbarController.swift`、`MainWindowController.swift` | 修改 | 删 `generationOptionsItem` 及三种样式的标识；加 `@objc showImageGenerationOptions(_:)` 与 `validateMenuItem` 分支（动态标题、能否点） | 删按钮；菜单入口 | 5 |
 | `RuntimeViewerUsingAppKit/.../App/MainMenuController.swift` | 修改 | Editor 菜单顶部加菜单项与分隔线 | 入口 | 5 |
-| `RuntimeViewerAppCore/Document/DocumentState.swift`（或 `EditorArea/` 下的读取） | 修改 | 加 `imagePathForGenerationOptions`：聚焦标签的对象或镜像页的镜像，退到侧栏的镜像 | 菜单项与 sheet 用同一个答案 | 5 |
+| `RuntimeViewerAppCore/GenerationOptions/DocumentState+ImageGenerationOptions.swift` | 新增 | `DocumentState.imagePathForGenerationOptions`：聚焦标签的对象或镜像页的镜像，退到侧栏的镜像 | 菜单项与 sheet 用同一个答案 | 5 |
 | `Tests/RuntimeViewerAppCoreTests/ImageGenerationOptionsViewModelTests.swift` | 新增 | sheet 的行为 | 见第 5 步行为 | 5 |
 | `RuntimeViewerCommandLineInterface/Execution/ApplicationOptionsReader.swift` | 修改 | 先读 `settings.json` 的 `generationOptions.global`，读不到再读旧 `UserDefaults` 键 | 存储搬走 | 6 |
 | `RuntimeViewerUsingAppKit/.../App/CommandLineHostController.swift` · `LiveApplicationOptionsReader` | 修改 | 读 `settings.generationOptions.global` | 同上 | 6 |
@@ -308,6 +309,11 @@ extension SettingsAccess {
     /// The options a fetch of an object in this image uses: its effective Generation Options,
     /// with the transformer and the editor's `marks…` flags merged in, as the content pane merges them.
     public func mergedGenerationOptions(forImageAt imagePath: String, in engine: RuntimeEngine) -> RuntimeObjectInterface.GenerationOptions
+    public func mergingRequestOptions(into options: RuntimeObjectInterface.GenerationOptions) -> RuntimeObjectInterface.GenerationOptions
+    /// The branch now and whenever it changes; emits on the main thread.
+    public nonisolated func generationOptionsSettingsObservable() -> Observable<Settings.GenerationOptionsSettings>
+    /// The image's effective options, emitting only when they change.
+    public nonisolated func effectiveGenerationOptionsObservable(forImageAt imagePath: String, in engine: RuntimeEngine) -> Observable<RuntimeObjectInterface.GenerationOptions>
 }
 
 extension ViewModel {
@@ -347,10 +353,10 @@ public struct RuntimeInterfaceSearchQuery: Hashable, Codable, Sendable {
 ```
 
 - `RuntimeMemberSearchQuery` 同样加这两样。
-- `RuntimeEngine+Search` 在交给语料库前把表的键从规范路径换成引擎目录里的写法（遍历已建语料的镜像，`canonicalImagePath(path)` 命中表就收进新表），语料库只做原样查找。
-- `RuntimeInterfaceCorpusStore.searchInterfaces` / `searchMembers`：扫描前为要搜的每个镜像算好 `RuntimeInterfaceVisibility`（按镜像查表，查不到用整体那一套），存进一个不可变字典，扫描闭包按 `entry.object.imagePath` 取。没有表时与今天完全相同。
-- 借用 shared cache 镜像的 engine（文件、Load Frameworks 的窗口）：搜索是跨 engine 的 spanning 命令，表随请求原样转给镜像的 owner；shared cache 镜像路径在两边写法相同。实现时用一个借用 engine 的测试核实，若不同就在转发前换写法。
-- `FindSession.ShownSearch` 记下当时的全局与表；选项变化重跑时重算两者。
+- `RuntimeEngine+Search` 在交给语料库前，把表的键照 `imagePaths` 的做法经 `imageCatalog.canonicalImagePath` 规范化：语料库本来就按目录的规范路径存镜像（实现时查明，原先设想的「换成目录写法」不需要）。规范化只对 iOS 模拟器进程（`DYLD_ROOT_PATH` 前缀）改变路径。
+- `RuntimeInterfaceCorpusStore.searchInterfaces` / `searchMembers`：扫描前做好私有的 `SearchVisibilities`（整体那一套加按镜像的表，都是 `RuntimeInterfaceVisibility`）；`scan` 把每个来源的镜像路径交给匹配闭包，闭包按它取可见性。没有表时与今天完全相同。
+- 借用 shared cache 镜像的 engine（文件、Load Frameworks 的窗口）：搜索是跨 engine 的 spanning 命令（`RuntimeEngine+SpanningCommands.swift`），每个参与者拿到的是原请求的副本，只改了 `imagePaths`，表原样带过去，参与者按自己的规范路径查。读代码核实，没有另写测试。
+- `FindSession` 用 `FindGenerationOptions`（全局 + 本 engine 的表）构造请求，`ShownSearch` 记下它；设置变了先比一比本 engine 的值，没变（例如别的 engine 的覆盖）就不重跑。交叉引用的根解析（`FindCrossReferenceRootResolver.resolve`）也收它。
 
 ### 5. sheet
 
