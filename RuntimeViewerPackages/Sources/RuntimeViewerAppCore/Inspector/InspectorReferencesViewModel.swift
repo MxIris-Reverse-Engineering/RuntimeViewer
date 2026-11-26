@@ -325,7 +325,7 @@ public final class InspectorReferencesViewModel: ViewModel<InspectorRuntimeObjec
         switch row.item {
         case .function(let function):
             guard let member = function.member else { return }
-            memberDeclarationLookupTask = FindCrossReferenceNavigation.open(member, declaration: nil, destination: destination, in: documentState, generationOptions: appDefaults.options)
+            memberDeclarationLookupTask = FindCrossReferenceNavigation.open(member, declaration: nil, destination: destination, in: documentState, generationOptions: settings.generationOptions.effectiveOptions(forImageAt: member.object.imagePath, in: documentState.runtimeEngine))
         case .target(.type(_, let object?)):
             FindCrossReferenceNavigation.open(object, highlighting: nil, destination: destination, in: documentState)
         case .target, .image, .unnamedFunctions, .loading, .failure:

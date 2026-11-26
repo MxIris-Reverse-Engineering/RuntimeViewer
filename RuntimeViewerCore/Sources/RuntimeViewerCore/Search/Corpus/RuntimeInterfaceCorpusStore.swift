@@ -1051,7 +1051,7 @@ actor RuntimeInterfaceCorpusStore {
         onProgress: @Sendable ([RuntimeInterfaceSearchMatch]) async -> Void
     ) async throws -> RuntimeInterfaceSearchSummary {
         let pattern = try RuntimeInterfaceTextMatcher.Pattern(query)
-        let visibility = query.generationOptions.map(RuntimeInterfaceVisibility.init)
+        let visibilities = SearchVisibilities(generationOptions: query.generationOptions, generationOptionsByImagePath: query.generationOptionsByImagePath)
         let searchedAt = Date()
         let scan = try await Self.scan(
             sourcesToSearch(within: query.imagePaths, searchedAt: searchedAt),
@@ -1061,7 +1061,8 @@ actor RuntimeInterfaceCorpusStore {
                 await self.readBack(imagePath: imagePath, transformer: transformer, searchedAt: searchedAt)
             },
             onProgress: onProgress
-        ) { entry, budget, isCollecting, reportsHits, collect in
+        ) { entry, imagePath, budget, isCollecting, reportsHits, collect in
+            let visibility = visibilities.visibility(forImageAt: imagePath)
             // Most entries have no hit at all; under options that hide
             // something, learn that before paying for the projection.
             if let visibility, !entry.visibilityRegions.isEmpty, !entry.mayHaveHits(of: pattern, under: visibility) {
@@ -1098,7 +1099,7 @@ actor RuntimeInterfaceCorpusStore {
         onProgress: @Sendable ([RuntimeMemberMatch]) async -> Void
     ) async throws -> RuntimeInterfaceSearchSummary {
         let pattern = query.text.isEmpty ? nil : try RuntimeInterfaceTextMatcher.Pattern(text: query.text, matchMode: query.matchMode, isCaseSensitive: query.isCaseSensitive)
-        let visibility = query.generationOptions.map(RuntimeInterfaceVisibility.init)
+        let visibilities = SearchVisibilities(generationOptions: query.generationOptions, generationOptionsByImagePath: query.generationOptionsByImagePath)
         let kinds = query.kinds
         let searchedAt = Date()
         let scan = try await Self.scan(
@@ -1109,8 +1110,9 @@ actor RuntimeInterfaceCorpusStore {
                 await self.readBack(imagePath: imagePath, transformer: transformer, searchedAt: searchedAt)
             },
             onProgress: onProgress
-        ) { entry, budget, isCollectingAtStart, reportsHits, collect in
+        ) { entry, imagePath, budget, isCollectingAtStart, reportsHits, collect in
             guard let pattern else { return 0 }
+            let visibility = visibilities.visibility(forImageAt: imagePath)
             var matchCount = 0
             var isCollecting = isCollectingAtStart
             // Whether a repeated protocol copy is only counted is settled at
@@ -1234,7 +1236,9 @@ actor RuntimeInterfaceCorpusStore {
     /// Reads `sources` entry by entry, off this actor, a stored corpus read
     /// back through `readBack` when the scan reaches it — an image it cannot
     /// read is passed over, and is not among the images scanned. The text
-    /// and member searches differ only in `matchEntry`, which hands each
+    /// and member searches differ only in `matchEntry`, which is told the
+    /// image the entry belongs to — each image may be read under options of
+    /// its own (`SearchVisibilities`) — and hands each
     /// match of an entry to its last argument — `false` back means the result
     /// limit is reached and nothing more is taken — and returns how many
     /// matches the entry has. Its third argument says whether anything is still taken
@@ -1265,7 +1269,7 @@ actor RuntimeInterfaceCorpusStore {
         regularExpressionTimeLimit: TimeInterval,
         readBack: @Sendable (_ imagePath: String, _ transformer: Transformer.Configuration) async -> [RuntimeInterfaceCorpusEntry]?,
         onProgress: @Sendable ([Match]) async -> Void,
-        matchEntry: @Sendable (_ entry: RuntimeInterfaceCorpusEntry, _ budget: inout RuntimeInterfaceTextMatcher.RegularExpressionBudget, _ isCollecting: Bool, _ reportsHits: (_ shownText: String) -> Bool, _ collect: (Match) -> Bool) throws -> Int
+        matchEntry: @Sendable (_ entry: RuntimeInterfaceCorpusEntry, _ imagePath: String, _ budget: inout RuntimeInterfaceTextMatcher.RegularExpressionBudget, _ isCollecting: Bool, _ reportsHits: (_ shownText: String) -> Bool, _ collect: (Match) -> Bool) throws -> Int
     ) async throws -> SearchScan {
         var scan = SearchScan()
         var budget = RuntimeInterfaceTextMatcher.RegularExpressionBudget(timeLimit: regularExpressionTimeLimit)
@@ -1292,7 +1296,7 @@ actor RuntimeInterfaceCorpusStore {
                     scan.scannedObjectCount += 1
                     var isRepeatedCopy = false
                     var shownText: String?
-                    let matchCount = try matchEntry(entry, &budget, collectedCount < resultLimit, { text in
+                    let matchCount = try matchEntry(entry, source.imagePath, &budget, collectedCount < resultLimit, { text in
                         isRepeatedCopy = repeatedProtocolCopies.isRepeated(entry, readingAs: text)
                         shownText = text
                         return !isRepeatedCopy
@@ -1347,5 +1351,29 @@ actor RuntimeInterfaceCorpusStore {
     private func unbuiltImagePaths(among indexedImagePaths: Set<String>, within scope: Set<String>?) -> [String] {
         let coveredImagePaths = scope.map(indexedImagePaths.intersection) ?? indexedImagePaths
         return coveredImagePaths.filter { !isBuilt($0) }.sorted()
+    }
+}
+
+/// The Generation Options a search reads each image under, as the predicates
+/// a projection takes: the query's own options, and those of the images it
+/// reads under options of their own (proposal
+/// `generation-options-image-overrides`). Made once per search, before the
+/// scan, so the scan only looks them up.
+private struct SearchVisibilities: Sendable {
+    private let visibility: RuntimeInterfaceVisibility?
+
+    private let visibilitiesByImagePath: [String: RuntimeInterfaceVisibility]
+
+    init(
+        generationOptions: RuntimeObjectInterface.GenerationOptions?,
+        generationOptionsByImagePath: [String: RuntimeObjectInterface.GenerationOptions]?
+    ) {
+        visibility = generationOptions.map(RuntimeInterfaceVisibility.init)
+        visibilitiesByImagePath = (generationOptionsByImagePath ?? [:]).mapValues(RuntimeInterfaceVisibility.init)
+    }
+
+    /// `nil` reads everything any options could show.
+    func visibility(forImageAt imagePath: String) -> RuntimeInterfaceVisibility? {
+        visibilitiesByImagePath[imagePath] ?? visibility
     }
 }

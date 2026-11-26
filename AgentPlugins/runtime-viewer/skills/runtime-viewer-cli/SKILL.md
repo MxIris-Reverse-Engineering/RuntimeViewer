@@ -172,9 +172,10 @@ UIKit, cached after. Without the SDK (an iOS image with only the Command Line To
 injected process) `__C.` names stay — except a C type the binary's own descriptors rename, which
 prints under that Swift name with no module (`AnyWeakAttribute` for AttributeGraph's
 `AGWeakAttribute`), its declaration, member types and extensions alike. A type imported as a member
-(`NSAttributedString.Key`) keeps its C name without the SDK. The app's Generation Options › Imported
-Type Names: C prints every one as the binary mangles it (`__C.AGWeakAttribute`) instead, which
-`--options app` takes over.
+(`NSAttributedString.Key`) keeps its C name without the SDK. The app's Settings › Generation Options ›
+Imported Type Names: C prints every one as the binary mangles it (`__C.AGWeakAttribute`) instead, which
+`--options app` takes over — the global value only: what the app sets for one image does not reach the
+tool.
 
 **Addresses are unslid virtual addresses** — what a disassembler shows for the image on disk or
 in the dyld shared cache. They are valid in a database built from the same build, which for a

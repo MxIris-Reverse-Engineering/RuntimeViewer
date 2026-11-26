@@ -47,7 +47,6 @@ public final class MainViewModel: ViewModel<MainRoute> {
         public let saveClick: Signal<Void>
         /// The engine identifier of a source chosen in the runtime source picker's list.
         public let switchSource: Signal<String>
-        public let generationOptionsClick: Signal<Void>
         public let increaseFontSize: Signal<Void>
         public let decreaseFontSize: Signal<Void>
         public let resetFontSize: Signal<Void>
@@ -281,7 +280,6 @@ public final class MainViewModel: ViewModel<MainRoute> {
         }
         .disposed(by: rx.disposeBag)
 
-        input.generationOptionsClick.emit(with: self) { owner, _ in owner.router.trigger(.generationOptions) }.disposed(by: rx.disposeBag)
 
         input.mcpStatusClick.emit(with: self) { owner, _ in owner.router.trigger(.mcpStatus) }.disposed(by: rx.disposeBag)
 
@@ -313,7 +311,7 @@ public final class MainViewModel: ViewModel<MainRoute> {
             .filterNil()
             .emitOnNext { [weak self] url, runtimeObject in
                 guard let self else { return }
-                var options = currentMergedGenerationOptions
+                var options = mergedGenerationOptions(for: runtimeObject)
                 options.interfaceLanguage = documentState.editorArea.focusedPane.activeTab.interfaceLanguage
                 Task {
                     do {
@@ -398,7 +396,7 @@ public final class MainViewModel: ViewModel<MainRoute> {
                             // Same cache + merged options as the save flow:
                             // sharing the visible object costs no engine
                             // round-trip and yields the displayed text.
-                            var options = await self.currentMergedGenerationOptions
+                            var options = await self.mergedGenerationOptions(for: runtimeObjectType)
                             options.interfaceLanguage = interfaceLanguage
                             let semanticString = try await documentState.interfaceCache.interface(for: runtimeObjectType, options: options)?.interfaceString
                             completion(semanticString?.string.data(using: .utf8), nil)

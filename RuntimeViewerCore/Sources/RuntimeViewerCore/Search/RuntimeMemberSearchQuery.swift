@@ -18,6 +18,12 @@ public struct RuntimeMemberSearchQuery: Hashable, Codable, Sendable {
     /// member they strip is not found, and a found one's line reads as
     /// displayed. `nil` searches every member any options could show.
     public var generationOptions: RuntimeObjectInterface.GenerationOptions?
+    /// Images read under options of their own, keyed by image path: an image
+    /// the app overrides some Generation Options of (proposal
+    /// `generation-options-image-overrides`). An image not listed is read
+    /// under `generationOptions`. `nil` lists none. A peer that predates it
+    /// ignores the key and reads every image under `generationOptions`.
+    public var generationOptionsByImagePath: [String: RuntimeObjectInterface.GenerationOptions]?
     /// The images to search, of those with a corpus; `nil` searches all of
     /// them. See `RuntimeInterfaceSearchQuery.imagePaths`.
     public var imagePaths: Set<String>?
@@ -29,6 +35,7 @@ public struct RuntimeMemberSearchQuery: Hashable, Codable, Sendable {
         isCaseSensitive: Bool = false,
         resultLimit: Int = 1000,
         generationOptions: RuntimeObjectInterface.GenerationOptions? = nil,
+        generationOptionsByImagePath: [String: RuntimeObjectInterface.GenerationOptions]? = nil,
         imagePaths: Set<String>? = nil
     ) {
         self.text = text
@@ -37,6 +44,13 @@ public struct RuntimeMemberSearchQuery: Hashable, Codable, Sendable {
         self.isCaseSensitive = isCaseSensitive
         self.resultLimit = resultLimit
         self.generationOptions = generationOptions
+        self.generationOptionsByImagePath = generationOptionsByImagePath
         self.imagePaths = imagePaths
+    }
+
+    /// The options the image at `imagePath` is read under: its own when the
+    /// query lists it, `generationOptions` otherwise.
+    public func generationOptions(forImageAt imagePath: String) -> RuntimeObjectInterface.GenerationOptions? {
+        generationOptionsByImagePath?[imagePath] ?? generationOptions
     }
 }

@@ -28,14 +28,24 @@ struct ViewModelBaseTests {
         #expect(inspectorViewModel.router === inspectorRouter)
     }
 
-    @Test("currentMergedGenerationOptions is the stored options with the live transformer settings applied")
-    func mergedOptionsCombineStoredOptionsAndTransformer() {
+    @Test("mergedGenerationOptions is the image's effective options with the live transformer settings applied")
+    func mergedOptionsCombineEffectiveOptionsAndTransformer() {
         let viewModel = makePlaceholder()
+        let engine = environment.documentState.runtimeEngine
+        let overriddenImagePath = "/usr/lib/libobjc.A.dylib"
+        environment.settings.generationOptions.updateOverride(forImageAt: overriddenImagePath, in: engine) {
+            $0.swiftInterfaceOptions.printFieldOffset = true
+        }
 
-        var expected = environment.appDefaults.options
+        var expected = environment.settings.generationOptions.effectiveOptions(forImageAt: overriddenImagePath, in: engine)
         expected.transformer = environment.settings.transformer
+        #expect(expected.swiftInterfaceOptions.printFieldOffset)
+        #expect(viewModel.mergedGenerationOptions(forImageAt: overriddenImagePath) == expected)
 
-        #expect(viewModel.currentMergedGenerationOptions == expected)
+        // Another image of the engine follows the global options.
+        var expectedGlobal = environment.settings.generationOptions.global
+        expectedGlobal.transformer = environment.settings.transformer
+        #expect(viewModel.mergedGenerationOptions(forImageAt: "/usr/lib/libSystem.B.dylib") == expectedGlobal)
     }
 
     @Test("commonLoading is false until tracked work starts and false again once it ends")

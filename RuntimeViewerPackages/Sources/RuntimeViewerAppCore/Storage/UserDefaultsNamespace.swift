@@ -5,9 +5,10 @@ import Foundation
 ///
 /// The app has exactly one namespace, ``standard``. Tests need many — one per
 /// `AppDefaults` they build — that share nothing: not the values, and not the
-/// key-value observation `AppDefaults.$options` is made of. While every
-/// instance used the standard defaults, a test that changed the Generation
-/// Options made every live Find session in every other test search again.
+/// key-value observation a `@UserDefault`'s publisher (`AppDefaults.$filterMode`,
+/// `$namingWordCloudPreferences`) is made of. While every instance used the
+/// standard defaults, a test that changed the Generation Options — stored
+/// there then — made every live Find session in every other test search again.
 ///
 /// The isolated namespaces all live in one suite, ``isolatedSuiteName``, and
 /// differ by key prefix. A suite per namespace would be simpler, but removing
@@ -50,8 +51,8 @@ package enum UserDefaultsNamespace {
     /// A namespace nothing else uses, named after `owningProcessIdentifier`.
     ///
     /// Only separators that key-value observation reads as part of a key:
-    /// a dot would make the prefixed key a key *path*, and `$options` would
-    /// stop observing it.
+    /// a dot would make the prefixed key a key *path*, and a `@UserDefault`'s
+    /// publisher would stop observing it.
     static func makeIsolated(owningProcessIdentifier: pid_t) -> UserDefaultsNamespace {
         let uniqueIdentifier = UUID().uuidString.replacingOccurrences(of: "-", with: "")
         return .isolated(keyPrefix: "\(isolatedKeyMarker)_\(owningProcessIdentifier)_\(uniqueIdentifier)_")

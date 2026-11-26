@@ -206,6 +206,7 @@ extension RuntimeEngine {
     ) async throws -> RuntimeInterfaceSearchSummary {
         var query = query
         query.imagePaths = query.imagePaths.map { Set($0.map(imageCatalog.canonicalImagePath)) }
+        query.generationOptionsByImagePath = query.generationOptionsByImagePath.map { canonicalizingImagePaths($0) }
         return try await interfaceCorpusStore.searchInterfaces(query, indexedImagePaths: await indexedImagePaths(), onProgress: reportProgress)
     }
 
@@ -215,7 +216,20 @@ extension RuntimeEngine {
     ) async throws -> RuntimeInterfaceSearchSummary {
         var query = query
         query.imagePaths = query.imagePaths.map { Set($0.map(imageCatalog.canonicalImagePath)) }
+        query.generationOptionsByImagePath = query.generationOptionsByImagePath.map { canonicalizingImagePaths($0) }
         return try await interfaceCorpusStore.searchMembers(query, indexedImagePaths: await indexedImagePaths(), onProgress: reportProgress)
+    }
+
+    /// A query's per-image options keyed the way the corpus store keys its
+    /// images: the catalog's canonical paths. Two spellings of one image keep
+    /// the first.
+    private func canonicalizingImagePaths(
+        _ optionsByImagePath: [String: RuntimeObjectInterface.GenerationOptions]
+    ) -> [String: RuntimeObjectInterface.GenerationOptions] {
+        Dictionary(
+            optionsByImagePath.map { imagePath, options in (imageCatalog.canonicalImagePath(imagePath), options) },
+            uniquingKeysWith: { firstOptions, _ in firstOptions }
+        )
     }
 
     func _members(in imagePath: String, shownUnder options: RuntimeObjectInterface.GenerationOptions?) async -> [RuntimeObjectMembers]? {

@@ -43,23 +43,19 @@ open class ViewModel<Route: Routable>: NSObject, ViewModelProtocol {
         self.router = router
     }
 
-    /// The generation options a single-object interface fetch should use
-    /// right now: the stored options merged with the live transformer
-    /// configuration, exactly as the content pipeline's fetch half merges
-    /// them. Every fetch that should share a `RuntimeInterfaceCache` entry
-    /// with the content pane must use these options so the cache keys line
-    /// up (and so exported text matches what the pane displays).
-    public var currentMergedGenerationOptions: RuntimeObjectInterface.GenerationOptions {
-        var mergedOptions = appDefaults.options
-        #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-        mergedOptions.transformer = settings.transformer
-        mergedOptions.marksCommentStructure = settings.editor.drawsCommentTags
-        mergedOptions.marksAttachedMacros = settings.editor.showsMacroExpansionsInline
-        mergedOptions.marksCImportedTypeNames = settings.editor.showsCImportedTypeNameTags
-        #else
-        mergedOptions.transformer = .init()
-        #endif
-        return mergedOptions
+    /// The generation options a single-object interface fetch of `runtimeObject` should use right
+    /// now: the effective Generation Options of the image it is in, merged with the live transformer
+    /// configuration exactly as the content pipeline's fetch half merges them. Every fetch that
+    /// should share a `RuntimeInterfaceCache` entry with the content pane must use these options so
+    /// the cache keys line up (and so exported text matches what the pane displays).
+    public func mergedGenerationOptions(for runtimeObject: RuntimeObject) -> RuntimeObjectInterface.GenerationOptions {
+        mergedGenerationOptions(forImageAt: runtimeObject.imagePath)
+    }
+
+    /// ``mergedGenerationOptions(for:)`` for an object in the image at `imagePath` of the document's
+    /// engine.
+    public func mergedGenerationOptions(forImageAt imagePath: String) -> RuntimeObjectInterface.GenerationOptions {
+        settings.mergedGenerationOptions(forImageAt: imagePath, in: documentState.runtimeEngine)
     }
 }
 

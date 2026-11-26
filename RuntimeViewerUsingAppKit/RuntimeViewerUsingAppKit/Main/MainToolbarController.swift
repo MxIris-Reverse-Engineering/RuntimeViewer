@@ -228,10 +228,6 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
         $0.label = "Runtime Source"
     }
 
-    let generationOptionsItem = IconButtonToolbarItem(itemIdentifier: .Main.generationOptions, icon: .ellipsisCurlybraces).then {
-        $0.label = "Generation Options"
-    }
-
     let sharingServicePickerItem = NSSharingServicePickerToolbarItem(itemIdentifier: .Main.share)
 
     let loadFrameworksItem = IconButtonToolbarItem(itemIdentifier: .Main.loadFrameworks, icon: .latch2Case).then {
@@ -323,7 +319,6 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
         ] + middleIdentifiers + [
             .Main.attach,
             .Main.loadFrameworks,
-            .Main.generationOptions,
             .Main.save,
             .Main.share,
             .Main.mcpStatus,
@@ -356,7 +351,6 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
             .Main.save,
             .Main.switchSource,
             .Main.switchSourcePopUp,
-            .Main.generationOptions,
             .Main.loadFrameworks,
             .Main.attach,
             .Main.mcpStatus,
@@ -383,8 +377,6 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
             return switchSourceItem
         case .Main.switchSourcePopUp:
             return switchSourcePopUpItem
-        case .Main.generationOptions:
-            return generationOptionsItem
         case .Main.loadFrameworks:
             return loadFrameworksItem
         case .Main.installHelper:
@@ -421,7 +413,6 @@ extension NSToolbarItem.Identifier {
         static let save: NSToolbarItem.Identifier = "save"
         static let switchSource: NSToolbarItem.Identifier = "switchSource"
         static let switchSourcePopUp: NSToolbarItem.Identifier = "switchSourcePopUp"
-        static let generationOptions: NSToolbarItem.Identifier = "generationOptions"
         static let loadFrameworks: NSToolbarItem.Identifier = "loadFrameworks"
         static let installHelper: NSToolbarItem.Identifier = "installHelper"
         static let helperStatus: NSToolbarItem.Identifier = "helperStatus"

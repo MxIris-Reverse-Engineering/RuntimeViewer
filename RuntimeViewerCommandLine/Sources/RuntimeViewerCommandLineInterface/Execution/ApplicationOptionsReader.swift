@@ -12,11 +12,16 @@ public protocol ApplicationOptionsReading: Sendable {
 
 /// Reads the app's files the way the app writes them, without linking the app.
 ///
-/// - The generation options live in the app's `UserDefaults` domain under the
-///   key `generationOptions`, JSON-encoded (`RxDefaultsPlus.UserDefault`).
-/// - The transformer configuration lives in
+/// - The global Generation Options live in
 ///   `~/Library/Application Support/RuntimeViewer[-Debug]/settings.json` under
-///   the top-level key `transformer` (`RuntimeViewerSettings.Settings`).
+///   `generationOptions.global` (`RuntimeViewerSettings.Settings`; proposal
+///   `generation-options-image-overrides`). An app from before kept them in its
+///   `UserDefaults` domain under the key `generationOptions`, JSON-encoded
+///   (`RxDefaultsPlus.UserDefault`), which is read when the settings file has
+///   none. What the app overrides for one image is not read: `--options app`
+///   is the global options.
+/// - The transformer configuration lives in the same `settings.json` under the
+///   top-level key `transformer`.
 ///
 /// A missing or unreadable file yields the defaults for that half; the two are
 /// independent. A Debug tool reads the Debug app's files.
@@ -47,13 +52,31 @@ public struct ApplicationOptionsReader: ApplicationOptionsReading {
     }
 
     public func readGenerationOptions() -> RuntimeObjectInterface.GenerationOptions {
-        var options = readPersistedOptions() ?? RuntimeObjectInterface.GenerationOptions()
+        var options = readSettingsFileGlobalOptions() ?? readPersistedOptions() ?? RuntimeObjectInterface.GenerationOptions()
         if let settingsDerived = readSettingsFile() {
             options.transformer = settingsDerived.transformer
         }
         return options
     }
 
+    /// The global Generation Options in `settings.json`; `nil` when the file
+    /// has none — an app from before they moved there — or cannot be read.
+    private func readSettingsFileGlobalOptions() -> RuntimeObjectInterface.GenerationOptions? {
+        guard let settingsFileURL, let data = try? Data(contentsOf: settingsFileURL) else { return nil }
+        return (try? JSONDecoder().decode(SettingsFileGenerationOptions.self, from: data))?.generationOptions?.global
+    }
+
+    /// The one branch of `settings.json` this reads the options from, so this
+    /// module never names the settings schema.
+    private struct SettingsFileGenerationOptions: Decodable {
+        struct Branch: Decodable {
+            let global: RuntimeObjectInterface.GenerationOptions?
+        }
+
+        let generationOptions: Branch?
+    }
+
+    /// The options an app from before kept in its user defaults.
     private func readPersistedOptions() -> RuntimeObjectInterface.GenerationOptions? {
         for bundleIdentifier in bundleIdentifiers {
             guard let defaults = UserDefaults(suiteName: bundleIdentifier),

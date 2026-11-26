@@ -25,7 +25,10 @@ enum FindCrossReferenceRootResolver {
     /// The most roots a term gives.
     static let rootLimit = 200
 
-    static func resolve(_ query: FindQuery, engine: RuntimeEngine, generationOptions: RuntimeObjectInterface.GenerationOptions) async throws -> Resolution {
+    /// The roots of a cross-reference query. A member root is looked for in the images' Find corpora,
+    /// each image read under its own Generation Options, so a root's line reads as the content pane
+    /// shows it.
+    static func resolve(_ query: FindQuery, engine: RuntimeEngine, generationOptions: FindGenerationOptions) async throws -> Resolution {
         guard let direction = query.mode.crossReferenceDirection else { return Resolution(roots: []) }
         switch direction {
         case .typeReferences:
@@ -54,7 +57,7 @@ enum FindCrossReferenceRootResolver {
         return Resolution(roots: roots)
     }
 
-    private static func memberRoots(for query: FindQuery, engine: RuntimeEngine, generationOptions: RuntimeObjectInterface.GenerationOptions) async throws -> Resolution {
+    private static func memberRoots(for query: FindQuery, engine: RuntimeEngine, generationOptions: FindGenerationOptions) async throws -> Resolution {
         let qualifiedName = query.term.hasPatterns ? nil : QualifiedMemberName(query.term.plainText)
         let memberQuery: RuntimeMemberSearchQuery
         if let qualifiedName {
@@ -64,7 +67,8 @@ enum FindCrossReferenceRootResolver {
                 kinds: qualifiedName.isObjectiveCMethod ? [.objcMethod] : FindCrossReferenceRoot.memberKindsWithCode,
                 isCaseSensitive: false,
                 resultLimit: FindSession.resultLimit,
-                generationOptions: generationOptions,
+                generationOptions: generationOptions.global,
+                generationOptionsByImagePath: generationOptions.queryOptionsByImagePath,
                 imagePaths: nil
             )
         } else {
@@ -75,7 +79,8 @@ enum FindCrossReferenceRootResolver {
                 kinds: FindCrossReferenceRoot.memberKindsWithCode,
                 isCaseSensitive: query.isCaseSensitive,
                 resultLimit: FindSession.resultLimit,
-                generationOptions: generationOptions,
+                generationOptions: generationOptions.global,
+                generationOptionsByImagePath: generationOptions.queryOptionsByImagePath,
                 imagePaths: nil
             )
         }

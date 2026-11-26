@@ -46,6 +46,82 @@ struct ApplicationOptionsReaderTests {
         #expect(options.objcHeaderOptions == RuntimeObjectInterface.GenerationOptions().objcHeaderOptions)
     }
 
+    /// The app keeps its global Generation Options in `settings.json` (proposal
+    /// `generation-options-image-overrides`); an image's override there is not
+    /// read.
+    @Test("The global generation options are read from settings.json")
+    func applicationOptionsReaderReadsGlobalFromSettingsFile() throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let settingsURL = directory.appendingPathComponent("settings.json")
+        var global = RuntimeObjectInterface.GenerationOptions()
+        global.swiftInterfaceOptions.printFieldOffset = true
+        var overridden = global
+        overridden.swiftInterfaceOptions.expandsMacros = true
+        try settingsFile(global: global, overrideValues: overridden).write(to: settingsURL)
+
+        let reader = ApplicationOptionsReader(bundleIdentifiers: [], settingsFileURL: settingsURL)
+        let options = reader.readGenerationOptions()
+
+        #expect(options.swiftInterfaceOptions.printFieldOffset)
+        #expect(!options.swiftInterfaceOptions.expandsMacros, "an image's override is the app's, not the CLI's")
+    }
+
+    @Test("Without options in settings.json, those an app from before kept in its defaults are read")
+    func applicationOptionsReaderFallsBackToLegacyUserDefaults() throws {
+        let (suiteName, defaults) = makeSuite()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(try JSONEncoder().encode(RuntimeObjectInterface.GenerationOptions.mcp), forKey: "generationOptions")
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let settingsURL = directory.appendingPathComponent("settings.json")
+        try Data(#"{"mcp":{"isEnabled":false}}"#.utf8).write(to: settingsURL)
+
+        let reader = ApplicationOptionsReader(bundleIdentifiers: [suiteName], settingsFileURL: settingsURL)
+
+        #expect(reader.readGenerationOptions().objcHeaderOptions == RuntimeObjectInterface.GenerationOptions.mcp.objcHeaderOptions)
+    }
+
+    @Test("The options in settings.json win over those left in the defaults")
+    func settingsFileGlobalWinsOverLegacyUserDefaults() throws {
+        let (suiteName, defaults) = makeSuite()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(try JSONEncoder().encode(RuntimeObjectInterface.GenerationOptions.mcp), forKey: "generationOptions")
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let settingsURL = directory.appendingPathComponent("settings.json")
+        var global = RuntimeObjectInterface.GenerationOptions()
+        global.objcHeaderOptions.stripOverrides = true
+        try settingsFile(global: global, overrideValues: nil).write(to: settingsURL)
+
+        let reader = ApplicationOptionsReader(bundleIdentifiers: [suiteName], settingsFileURL: settingsURL)
+
+        #expect(reader.readGenerationOptions().objcHeaderOptions == global.objcHeaderOptions)
+    }
+
+    private func makeTemporaryDirectory() throws -> URL {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("ApplicationOptionsReaderTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }
+
+    /// A `settings.json` holding the Generation Options branch as the app
+    /// writes it, with one image override when `overrideValues` is given.
+    private func settingsFile(global: RuntimeObjectInterface.GenerationOptions, overrideValues: RuntimeObjectInterface.GenerationOptions?) throws -> Data {
+        var branch: [String: Any] = [
+            "global": try JSONSerialization.jsonObject(with: JSONEncoder().encode(global)),
+        ]
+        if let overrideValues {
+            branch["imageOverrides"] = [[
+                "engine": ["key": "scope:local", "name": "My Mac", "hostName": "Mac"],
+                "imagePath": "/usr/lib/libobjc.A.dylib",
+                "overriddenOptions": ["swift.expandsMacros"],
+                "values": try JSONSerialization.jsonObject(with: JSONEncoder().encode(overrideValues)),
+            ]]
+        }
+        return try JSONSerialization.data(withJSONObject: ["mcp": ["isEnabled": false], "generationOptions": branch])
+    }
+
     @Test("Missing files yield the defaults")
     func missingFilesYieldDefaults() {
         let reader = ApplicationOptionsReader(

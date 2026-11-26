@@ -1,6 +1,7 @@
 #if os(iOS) || os(visionOS)
 
 import UIKit
+import RuntimeViewerSettings
 import UIFoundationSettingsUI
 
 /// RuntimeViewer's settings on iOS and visionOS: the pages whose settings act
@@ -19,6 +20,9 @@ public final class SettingsViewController: UIFoundationSettingsUI.SettingsViewCo
             }
             SettingsPage("Theme", id: "theme", plainSymbol: "paintpalette") {
                 ThemeSettingsView()
+            }
+            SettingsPage("Generation Options", id: RuntimeViewerSettings.Settings.PageIdentifier.generationOptions.rawValue, plainSymbol: "ellipsis.curlybraces") {
+                GenerationOptionsSettingsView()
             }
             SettingsPage("Transformer", id: "transformer", plainSymbol: "arrow.triangle.2.circlepath") {
                 TransformerSettingsView()

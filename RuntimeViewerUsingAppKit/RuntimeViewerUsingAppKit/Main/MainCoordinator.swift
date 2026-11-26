@@ -105,13 +105,12 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
                 .route(on: sidebarCoordinator, to: .root),
                 .route(on: inspectorCoordinator, to: .placeholder),
             )
-        case .generationOptions:
-            guard let anchorView = popoverAnchorView(of: rootWindowController.toolbarController.generationOptionsItem) else { return .none() }
-            let viewController = GenerationOptionsViewController()
-            let viewModel = GenerationOptionsViewModel(documentState: documentState, router: self)
+        case .imageGenerationOptions(let imagePath):
+            let viewController = ImageGenerationOptionsViewController()
+            let viewModel = ImageGenerationOptionsViewModel(imagePath: imagePath, documentState: documentState, router: self)
             viewController.loadViewIfNeeded()
             viewController.setupBindings(for: viewModel)
-            return .popover(viewController, relativeTo: anchorView.bounds, of: anchorView, preferredEdge: .maxY, behavior: .transient)
+            return .presentOnRoot(viewController, mode: .asSheet)
         case .mcpStatus:
             guard let anchorView = popoverAnchorView(of: rootWindowController.toolbarController.mcpStatusItem) else { return .none() }
             let viewController = MCPStatusPopoverViewController()

@@ -17,6 +17,12 @@ public struct RuntimeInterfaceSearchQuery: Hashable, Codable, Sendable {
     /// `nil` searches everything any options could show. The transformer
     /// part is not consulted: the corpus is already printed with it.
     public var generationOptions: RuntimeObjectInterface.GenerationOptions?
+    /// Images read under options of their own, keyed by image path: an image
+    /// the app overrides some Generation Options of (proposal
+    /// `generation-options-image-overrides`). An image not listed is read
+    /// under `generationOptions`. `nil` lists none. A peer that predates it
+    /// ignores the key and reads every image under `generationOptions`.
+    public var generationOptionsByImagePath: [String: RuntimeObjectInterface.GenerationOptions]?
     /// The images to search, of those with a corpus; `nil` searches all of
     /// them. The Find navigator's scope arrives here, and a search already
     /// shown widens itself this way to an image whose corpus was built after
@@ -30,6 +36,7 @@ public struct RuntimeInterfaceSearchQuery: Hashable, Codable, Sendable {
         scope: RuntimeInterfaceSearchScope = .all,
         resultLimit: Int = 1000,
         generationOptions: RuntimeObjectInterface.GenerationOptions? = nil,
+        generationOptionsByImagePath: [String: RuntimeObjectInterface.GenerationOptions]? = nil,
         imagePaths: Set<String>? = nil
     ) {
         self.text = text
@@ -38,6 +45,13 @@ public struct RuntimeInterfaceSearchQuery: Hashable, Codable, Sendable {
         self.scope = scope
         self.resultLimit = resultLimit
         self.generationOptions = generationOptions
+        self.generationOptionsByImagePath = generationOptionsByImagePath
         self.imagePaths = imagePaths
+    }
+
+    /// The options the image at `imagePath` is read under: its own when the
+    /// query lists it, `generationOptions` otherwise.
+    public func generationOptions(forImageAt imagePath: String) -> RuntimeObjectInterface.GenerationOptions? {
+        generationOptionsByImagePath?[imagePath] ?? generationOptions
     }
 }
