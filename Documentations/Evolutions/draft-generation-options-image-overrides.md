@@ -388,6 +388,7 @@ public final class ImageGenerationOptionsViewModel: ViewModel<MainRoute> {
 ```
 
 - 状态订阅 `settings.generationOptions`，所以设置页里同时改全局、或还原这个镜像的覆盖，sheet 立刻跟着变。
+- sheet 最高到所在窗口内容区的高度减 40pt（至少 240pt，由 `MainCoordinator` 在出示前设给 `maximumContentHeight`）；放不下时中间的选项区滚动，标题与底部按钮不动。
 - ViewController 从 `Settings.GenerationOption.allCases` 按分组生成行（每行：控件 + 还原按钮，按钮只在被覆盖时显示；被覆盖时标题加粗），底部 Revert All / Global Options… / Done；这些固定按钮用 `rx.click`，行内动态生成的控件照现在的写法汇进一个 `PublishRelay`（AGENTS 允许的例外）。Done 触发 `.dismiss`。
 
 ### 6. 设置页
@@ -515,3 +516,4 @@ public final class ImageGenerationOptionsViewModel: ViewModel<MainRoute> {
 | 2026-11-26 | sheet 的勾选框只在点击时发改动 | 原弹窗用 `rx.state`，绑定时的初值会发一次；放在 sheet 里，初值发出会把与默认值不同的全局选项记成覆盖。改用 `rx.click`，并取点击后的状态。 |
 | 2026-11-26 | 实现完成，待用户看过后收尾 | 在 Ultra 上验证：Settings、Core（相关套件）、CommandLine 三个包的测试通过；Packages 的 AppCore、AppUI、Settings 整包跑的红都在已知清单里，不在清单里的 `FindSessionCorpusTests` 单独重跑 9 条全过（整包负载下超时）；macOS App（Tuist workspace）与 iOS App（模拟器）都编过。界面没有目视。 |
 | 2026-11-26 | 文档判断 | 不另写使用指南或实现说明：解析规则写在 `Settings.GenerationOptionsSettings` 与 `Settings.GenerationOption` 的文档注释里，根 `AGENTS.md` 第 7 条改成新 API；新术语「镜像覆盖」已登记进术语表，「Find 语料」一条改为按每个镜像生效的选项投影；CLI 指南与插件 skill（升到 1.4.1）已同步。 |
+| 2026-11-26 | sheet 不超过窗口高度 | 用户看过后指出 sheet 比窗口还高：改为选项区放进滚动视图，高度取所需高度与窗口可用高度中较小的那个。 |
