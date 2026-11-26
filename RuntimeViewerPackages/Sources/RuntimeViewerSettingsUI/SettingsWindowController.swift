@@ -19,7 +19,7 @@ package final class SettingsWindowController: UIFoundationSettingsUI.SettingsWin
             SettingsPage("Theme", id: "theme", plainSymbol: "paintpalette") {
                 ThemeSettingsView()
             }
-            SettingsPage("Generation Options", id: Settings.PageIdentifier.generationOptions.rawValue, plainSymbol: "ellipsis.curlybraces") {
+            SettingsPage("Generation Options", id: RuntimeViewerSettings.Settings.PageIdentifier.generationOptions.rawValue, plainSymbol: "ellipsis.curlybraces") {
                 GenerationOptionsSettingsView()
             }
             SettingsPage("Notifications", id: "notifications", plainSymbol: "bell.badge") {
@@ -55,7 +55,7 @@ package final class SettingsWindowController: UIFoundationSettingsUI.SettingsWin
     }
 
     /// Shows the window on `page`, whichever page it was on.
-    package func show(_ page: Settings.PageIdentifier) {
+    package func show(_ page: RuntimeViewerSettings.Settings.PageIdentifier) {
         navigator.navigate(to: page.rawValue)
         showWindow(nil)
     }

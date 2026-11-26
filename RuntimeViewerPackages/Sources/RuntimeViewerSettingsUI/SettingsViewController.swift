@@ -21,7 +21,7 @@ public final class SettingsViewController: UIFoundationSettingsUI.SettingsViewCo
             SettingsPage("Theme", id: "theme", plainSymbol: "paintpalette") {
                 ThemeSettingsView()
             }
-            SettingsPage("Generation Options", id: Settings.PageIdentifier.generationOptions.rawValue, plainSymbol: "ellipsis.curlybraces") {
+            SettingsPage("Generation Options", id: RuntimeViewerSettings.Settings.PageIdentifier.generationOptions.rawValue, plainSymbol: "ellipsis.curlybraces") {
                 GenerationOptionsSettingsView()
             }
             SettingsPage("Transformer", id: "transformer", plainSymbol: "arrow.triangle.2.circlepath") {

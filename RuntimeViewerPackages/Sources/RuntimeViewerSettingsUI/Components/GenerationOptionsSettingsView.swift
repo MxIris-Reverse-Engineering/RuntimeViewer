@@ -15,7 +15,7 @@ struct GenerationOptionsSettingsView: View {
 
     var body: some View {
         SettingsForm {
-            ForEach(Settings.GenerationOption.Section.allCases, id: \.self) { section in
+            ForEach(RuntimeViewerSettings.Settings.GenerationOption.Section.allCases, id: \.self) { section in
                 Section {
                     ForEach(section.options, id: \.self) { option in
                         GenerationOptionRow(option: option, options: $settings.global)
@@ -23,7 +23,7 @@ struct GenerationOptionsSettingsView: View {
                 } header: {
                     Text(section.title)
                 } footer: {
-                    if section == Settings.GenerationOption.Section.allCases.last {
+                    if section == RuntimeViewerSettings.Settings.GenerationOption.Section.allCases.last {
                         Text("These options apply to every image. An image can override some of them; its other options keep following these.")
                     }
                 }
@@ -38,7 +38,7 @@ struct GenerationOptionsSettingsView: View {
 
 /// One option as a control: a toggle, or a segmented choice among an enumeration's cases.
 private struct GenerationOptionRow: View {
-    let option: Settings.GenerationOption
+    let option: RuntimeViewerSettings.Settings.GenerationOption
 
     @Binding
     var options: RuntimeObjectInterface.GenerationOptions
@@ -66,10 +66,10 @@ private struct GenerationOptionRow: View {
 /// The images that override some of the global options, each with what it overrides.
 private struct ImageOverridesSection: View {
     @Binding
-    var settings: Settings.GenerationOptionsSettings
+    var settings: RuntimeViewerSettings.Settings.GenerationOptionsSettings
 
     /// By engine, then by image, so one engine's images stay together.
-    private var sortedOverrides: [Settings.ImageGenerationOptionsOverride] {
+    private var sortedOverrides: [RuntimeViewerSettings.Settings.ImageGenerationOptionsOverride] {
         settings.imageOverrides.sorted { first, second in
             if first.engine.name != second.engine.name {
                 return first.engine.name.localizedStandardCompare(second.engine.name) == .orderedAscending
@@ -86,7 +86,7 @@ private struct ImageOverridesSection: View {
             } else {
                 ForEach(sortedOverrides) { override in
                     DisclosureGroup {
-                        ForEach(Settings.GenerationOption.allCases.filter(override.overriddenOptions.contains), id: \.self) { option in
+                        ForEach(RuntimeViewerSettings.Settings.GenerationOption.allCases.filter(override.overriddenOptions.contains), id: \.self) { option in
                             HStack {
                                 Text(option.title)
                                 Spacer()

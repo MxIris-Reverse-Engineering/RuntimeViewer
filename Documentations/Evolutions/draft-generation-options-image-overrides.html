@@ -320,13 +320,13 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
   <table>
     <thead><tr><th>文件 / 类型</th><th>动作</th><th>改什么</th><th>为什么</th><th>步骤</th></tr></thead>
     <tbody>
-      <tr><td><code>RuntimeViewerSettings/Settings+GenerationOptions.swift</code> · <code>Settings.GenerationOptionsSettings</code>、<code>Settings.ImageGenerationOptionsOverride</code></td><td><span class="tag tag-added">新增</span></td><td>全局 + 覆盖列表的模型；<code>effectiveOptions</code>、<code>override</code>、<code>updateOverride</code>、<code>revert</code>、<code>removeOverride</code></td><td>存储与解析规则放在一处，设置页、sheet、AppCore 共用</td><td class="numeric">1</td></tr>
+      <tr><td><code>RuntimeViewerSettings/Settings+GenerationOptionsSettings.swift</code> · <code>Settings.GenerationOptionsSettings</code>；<code>Settings+ImageGenerationOptionsOverride.swift</code> · <code>Settings.ImageGenerationOptionsOverride</code></td><td><span class="tag tag-added">新增</span></td><td>全局 + 覆盖列表的模型；<code>effectiveOptions</code>、<code>override</code>、<code>updateOverride</code>、<code>revert</code>、<code>removeOverride</code></td><td>存储与解析规则放在一处，设置页、sheet、AppCore 共用</td><td class="numeric">1</td></tr>
       <tr><td><code>RuntimeViewerSettings/Settings+GenerationOption.swift</code> · <code>Settings.GenerationOption</code></td><td><span class="tag tag-added">新增</span></td><td>每个用户可设的选项一个 case（原始值存盘不改名）：标题、分组、控件、<code>copyValue</code>、<code>hasSameValue</code></td><td>逐项覆盖要稳定标识；两处界面从同一份清单生成</td><td class="numeric">1</td></tr>
       <tr><td><code>RuntimeViewerSettings/Settings+GenerationOptionsEngine.swift</code></td><td><span class="tag tag-added">新增</span></td><td>接 <code>RuntimeEngine</code> 的便捷入口，内部算 engine 键与规范路径</td><td>调用方不用自己算</td><td class="numeric">1</td></tr>
       <tr><td><code>RuntimeViewerSettings/Settings.swift</code> · <code>Settings</code>、<code>SettingsAccess</code></td><td><span class="tag tag-changed">修改</span></td><td>加 <code>generationOptions</code> 分支；<code>accessPersistedValues()</code> 读它；加迁移</td><td>持久化；旧值迁一次</td><td class="numeric">1</td></tr>
       <tr><td><code>Tests/RuntimeViewerSettingsTests/SettingsPersistenceTests.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>覆盖清单加 <code>generationOptions</code></td><td>守住 <code>accessPersistedValues()</code></td><td class="numeric">1</td></tr>
       <tr><td><code>Tests/RuntimeViewerSettingsTests/</code> 三个新测试文件</td><td><span class="tag tag-added">新增</span></td><td>解析、覆盖增删、清单覆盖全部字段、迁移</td><td>见第 1 步行为</td><td class="numeric">1</td></tr>
-      <tr><td><code>RuntimeViewerAppCore/GenerationOptions/SettingsAccess+MergedGenerationOptions.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>mergedGenerationOptions(forImageAt:in:)</code> 与可订阅的版本</td><td>取代 <code>currentMergedGenerationOptions</code> 的合并逻辑，<code>FindSession</code> 也能用</td><td class="numeric">2</td></tr>
+      <tr><td><code>RuntimeViewerAppCore/GenerationOptions/SettingsAccess+GenerationOptions.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>mergedGenerationOptions(forImageAt:in:)</code>、<code>mergingRequestOptions(into:)</code>、<code>generationOptionsSettingsObservable()</code>、<code>effectiveGenerationOptionsObservable(forImageAt:in:)</code></td><td>取代 <code>currentMergedGenerationOptions</code> 的合并逻辑，<code>FindSession</code> 也能用</td><td class="numeric">2</td></tr>
       <tr><td><code>RuntimeViewerAppCore/Base/ViewModel.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>currentMergedGenerationOptions</code> 换成按对象 / 按镜像的两个方法</td><td>选项随镜像而定</td><td class="numeric">2</td></tr>
       <tr><td><code>RuntimeViewerAppCore/Content/ContentTextViewModel.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>订阅对象所在镜像的生效选项；C 名标签写覆盖；提示文字指向新位置</td><td>内容区按镜像；切换不动全局</td><td class="numeric">2</td></tr>
       <tr><td><code>RuntimeViewerAppCore/Main/MainViewModel.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>保存与复制按对象所在镜像；删 <code>generationOptionsClick</code></td><td>同上；按钮删了</td><td class="numeric">2、5</td></tr>
@@ -336,9 +336,10 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
       <tr><td><code>Tests/RuntimeViewerAppCoreTests/</code> 六个既有测试</td><td><span class="tag tag-changed">修改</span></td><td>改为注入 <code>SettingsAccess.preview</code>；删隔离测试里 <code>$options</code> 那条</td><td>跟着存储走</td><td class="numeric">2、3</td></tr>
       <tr><td><code>Tests/RuntimeViewerAppCoreTests/ImageGenerationOptionsResolutionTests.swift</code></td><td><span class="tag tag-added">新增</span></td><td>两个镜像各自生效、只重取受影响的、导出按镜像</td><td>见第 2 步行为</td><td class="numeric">2</td></tr>
       <tr><td><code>RuntimeViewerCore/Search/RuntimeInterfaceSearchQuery.swift</code>、<code>RuntimeMemberSearchQuery.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>加 <code>generationOptionsByImagePath</code> 与 <code>generationOptions(forImageAt:)</code></td><td>每个镜像按自己的选项投影；可选字段兼容旧对端</td><td class="numeric">3</td></tr>
-      <tr><td><code>RuntimeViewerCore/Search/RuntimeEngine+Search.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>表的键从规范路径换成目录写法</td><td>表按规范路径存，语料按目录写法存</td><td class="numeric">3</td></tr>
-      <tr><td><code>RuntimeViewerCore/Search/Corpus/RuntimeInterfaceCorpusStore.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>扫描前按镜像算好可见性，扫描时按条目所在镜像取</td><td>原来整次搜索只有一个</td><td class="numeric">3</td></tr>
-      <tr><td><code>Tests/RuntimeViewerCoreTests/</code> 可见性测试与请求兼容测试</td><td><span class="tag tag-changed">修改</span> / <span class="tag tag-added">新增</span></td><td>不同选项各自投影；没有表与今天相同；旧 JSON 能解码</td><td>见第 3 步行为</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerCore/Search/RuntimeEngine+Search.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>表的键照 <code>imagePaths</code> 一样经目录规范化（<code>canonicalizingImagePaths(_:)</code>）</td><td>语料库按目录的规范路径存镜像</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerCore/Search/Corpus/RuntimeInterfaceCorpusStore.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>扫描前做好私有的 <code>SearchVisibilities</code>；<code>scan</code> 把来源的镜像路径交给匹配闭包</td><td>原来整次搜索只有一个</td><td class="numeric">3</td></tr>
+      <tr><td><code>Tests/RuntimeViewerCoreTests/RuntimeInterfaceSearchImageGenerationOptionsTests.swift</code></td><td><span class="tag tag-added">新增</span></td><td>两个方向的按镜像投影；没有表与今天相同；旧 JSON 能解码</td><td>见第 3 步行为</td><td class="numeric">3</td></tr>
+      <tr><td><code>Find/Query/FindGenerationOptions.swift</code> · <code>FindGenerationOptions</code></td><td><span class="tag tag-added">新增</span></td><td>一次搜索读镜像所用的选项：全局 + 本 engine 的表</td><td>请求、重跑判断与交叉引用根解析共用一个值</td><td class="numeric">3</td></tr>
       <tr><td><code>Find/FindSession.swift</code>、交叉引用两个文件、<code>FindViewModel.swift</code>、<code>InspectorReferencesViewModel.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>请求带表；订阅分支重跑；交叉引用按成员所在镜像</td><td>Find 与内容区逐字相同</td><td class="numeric">3</td></tr>
       <tr><td><code>RuntimeViewerSettingsUI/Components/GenerationOptionsSettingsView.swift</code></td><td><span class="tag tag-added">新增</span></td><td>全局两组 + macOS 的 Image Overrides</td><td>设置页</td><td class="numeric">4</td></tr>
       <tr><td><code>SettingsWindowController.swift</code>、<code>SettingsViewController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>注册新页；macOS 暴露 <code>show(pageWithID:)</code></td><td>新页；sheet 要跳到这一页</td><td class="numeric">4</td></tr>
@@ -350,7 +351,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
       <tr><td><code>Main/MainCoordinator.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>删 popover 分支；新路由开 sheet</td><td>同上</td><td class="numeric">5</td></tr>
       <tr><td><code>Main/MainToolbarController.swift</code>、<code>MainWindowController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>删工具栏项；加菜单动作与校验（动态标题）</td><td>删按钮；菜单入口</td><td class="numeric">5</td></tr>
       <tr><td><code>App/MainMenuController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>Editor 菜单顶部加菜单项与分隔线</td><td>入口</td><td class="numeric">5</td></tr>
-      <tr><td><code>Document/DocumentState.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>加 <code>imagePathForGenerationOptions</code></td><td>菜单项与 sheet 同一个答案</td><td class="numeric">5</td></tr>
+      <tr><td><code>GenerationOptions/DocumentState+ImageGenerationOptions.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>DocumentState.imagePathForGenerationOptions</code></td><td>菜单项与 sheet 同一个答案</td><td class="numeric">5</td></tr>
       <tr><td><code>Tests/RuntimeViewerAppCoreTests/ImageGenerationOptionsViewModelTests.swift</code></td><td><span class="tag tag-added">新增</span></td><td>sheet 的行为</td><td>见第 5 步行为</td><td class="numeric">5</td></tr>
       <tr><td><code>Execution/ApplicationOptionsReader.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>先读 <code>settings.json</code> 的 <code>generationOptions.global</code>，再退回旧键</td><td>存储搬走</td><td class="numeric">6</td></tr>
       <tr><td><code>App/CommandLineHostController.swift</code> · <code>LiveApplicationOptionsReader</code></td><td><span class="tag tag-changed">修改</span></td><td>读 <code>settings.generationOptions.global</code></td><td>同上</td><td class="numeric">6</td></tr>
@@ -489,10 +490,10 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 }</code></pre>
       <ul>
         <li><code>RuntimeMemberSearchQuery</code> 同样加。</li>
-        <li><code>RuntimeEngine+Search</code> 把表的键换成目录写法，语料库只做原样查找。</li>
-        <li>语料库扫描前为每个镜像算好 <code>RuntimeInterfaceVisibility</code>，存进不可变字典，扫描闭包按 <code>entry.object.imagePath</code> 取；没有表时与今天相同。</li>
-        <li>借用 shared cache 镜像的 engine：表随请求转给 owner；路径写法预计相同，实现时用测试核实。</li>
-        <li><code>FindSession.ShownSearch</code> 记下当时的全局与表，变化时重算。</li>
+        <li><code>RuntimeEngine+Search</code> 把表的键照 <code>imagePaths</code> 一样规范化：语料库本就按目录的规范路径存镜像。规范化只对 iOS 模拟器进程改变路径。</li>
+        <li>语料库扫描前做好私有的 <code>SearchVisibilities</code>；<code>scan</code> 把每个来源的镜像路径交给匹配闭包，按它取可见性；没有表时与今天相同。</li>
+        <li>借用 shared cache 镜像的 engine：每个参与者拿原请求的副本，表原样带过去（读代码核实）。</li>
+        <li><code>FindSession</code> 用 <code>FindGenerationOptions</code> 构造请求并记进 <code>ShownSearch</code>；设置变了先比本 engine 的值，别的 engine 的覆盖不再让屏上的搜索重跑。</li>
       </ul>
     </div>
   </details>
@@ -592,25 +593,25 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
     <li><strong>设置模型、选项清单与迁移</strong>
       <ul><li><code>effectiveOptionsEqualsGlobalWithoutOverride</code>、<code>overriddenOptionUsesImageValueAndOthersFollowGlobal</code>、<code>changingGlobalReachesOptionsTheImageDoesNotOverride</code>、<code>updatingAnOptionToTheGlobalValueRemovesItsOverride</code>、<code>removingTheLastOverriddenOptionRemovesTheOverride</code>、<code>overridesOfOtherEnginesOrImagesDoNotApply</code>、<code>unknownStoredOptionIsDroppedWithoutLosingTheOverride</code>、<code>catalogCoversEveryEncodedOptionExactlyOnce</code>、<code>legacyUserDefaultsOptionsMigrateIntoGlobalOnce</code>、<code>unreadableLegacyOptionsLeaveDefaultsAndKeepTheOldValue</code>、<code>legacyOptionsDoNotOverwriteAGlobalAlreadyChanged</code>、<code>settingsPersistenceCoversGenerationOptions</code></li></ul></li>
     <li><strong>按镜像解析，换掉 <code>AppDefaults.options</code></strong>
-      <ul><li><code>contentPaneUsesTheEffectiveOptionsOfTheObjectsImage</code>、<code>anOverrideOfAnotherImageDoesNotRefetchTheContentPane</code>、<code>anOverrideOfThisImageRefetchesTheContentPane</code>、<code>cImportedTypeNameTagTogglesOnlyTheObjectsImage</code>、<code>saveAndCopyUseTheObjectsImageOptions</code>、<code>batchExportUsesEachImagesOwnOptions</code>、<code>wordCloudCountsUnderItsImagesOptions</code></li></ul></li>
+      <ul><li><code>contentPaneUsesTheEffectiveOptionsOfTheObjectsImage</code>（含改这个镜像的覆盖会重取）、<code>anOverrideOfAnotherImageDoesNotRefetchTheContentPane</code>、<code>togglingFlipsStoredSpelling</code>、<code>mergedOptionsCombineEffectiveOptionsAndTransformer</code>、<code>batchExportUsesEachImagesOwnOptions</code>、<code>wordCloudCountsUnderItsImagesOptions</code></li></ul></li>
     <li><strong>Find 按镜像投影</strong>
-      <ul><li><code>searchProjectsEachImageUnderItsOwnOptions</code>、<code>searchWithoutPerImageTableMatchesTodaysResults</code>、<code>queryEncodedWithoutTheTableStillDecodes</code>、<code>perImageTableKeyedByCanonicalPathReachesTheCatalogSpelling</code>、<code>borrowedSharedCacheImageIsProjectedUnderTheBorrowersOverride</code>、<code>changingAnOverrideRerunsTheShownSearch</code>、<code>crossReferenceMemberOpensUnderItsImagesOptions</code></li></ul></li>
+      <ul><li><code>searchProjectsEachImageUnderItsOwnOptions</code>、<code>searchWithoutPerImageTableMatchesTodaysResults</code>、<code>queryEncodedWithoutTheTableStillDecodes</code>、<code>changingAnOverrideRerunsTheShownSearch</code>、<code>anotherEnginesOverrideRunsNothingAgain</code></li></ul></li>
     <li><strong>设置页</strong>
-      <ul><li><code>settingsWindowListsGenerationOptionsBetweenThemeAndTransformer</code>、<code>iOSSettingsListsGenerationOptionsAfterTheme</code>、<code>settingsPageRouteShowsTheWindowOnThatPage</code>；目视交给用户。</li></ul></li>
+      <ul><li>编译核实两处注册新页与 <code>AppRoute.settingsPage</code>；目视交给用户。</li></ul></li>
     <li><strong>窗口 sheet，删掉工具栏按钮</strong>
-      <ul><li><code>menuItemTargetsTheFocusedPanesImage</code>、<code>menuItemFallsBackToTheSidebarsImageOnAnEmptyTab</code>、<code>menuItemIsDisabledWithoutAnImage</code>、<code>sheetShowsEffectiveValuesAndMarksOverriddenOptions</code>、<code>changingAnOptionInTheSheetRecordsAnOverride</code>、<code>revertingAnOptionReturnsItToTheGlobalValue</code>、<code>revertAllRemovesTheImagesOverride</code>、<code>sheetFollowsGlobalChangesMadeInSettings</code>、<code>globalOptionsOpensTheSettingsPage</code>、<code>toolbarHasNoGenerationOptionsItemInAnyStyle</code></li></ul></li>
+      <ul><li><code>menuItemTargetsTheFocusedPanesImage</code>、<code>menuItemFallsBackToTheSidebarsImageOnAnEmptyTab</code>、<code>menuItemIsDisabledWithoutAnImage</code>、<code>sheetShowsEffectiveValuesAndMarksOverriddenOptions</code>、<code>changingAnOptionInTheSheetRecordsAnOverride</code>、<code>revertingAnOptionReturnsItToTheGlobalValue</code>、<code>revertAllRemovesTheImagesOverride</code>、<code>sheetFollowsGlobalChangesMadeInSettings</code>、<code>globalOptionsOpensTheSettingsPage</code>（含 Done）；工具栏删项以编译核实</li></ul></li>
     <li><strong>CLI 与文档</strong>
-      <ul><li><code>applicationOptionsReaderReadsGlobalFromSettingsFile</code>、<code>applicationOptionsReaderFallsBackToLegacyUserDefaults</code>、<code>settingsFileGlobalWinsOverLegacyUserDefaults</code>、<code>liveHostReadsTheGlobalOptions</code></li></ul></li>
+      <ul><li><code>applicationOptionsReaderReadsGlobalFromSettingsFile</code>、<code>applicationOptionsReaderFallsBackToLegacyUserDefaults</code>、<code>settingsFileGlobalWinsOverLegacyUserDefaults</code></li></ul></li>
   </ol>
   <div class="callout callout-note">
-    <p>构建与测试在 Ultra 上跑；三个包的 <code>swift test</code> 各过一遍，App 用 Debug workspace 编一次。原生工程的 target 与设置不变，预计不改 Tuist 描述，落地前跑 <code>./TuistScript.sh check</code> 确认。收尾判断：预计不需要单独的指南；术语「镜像覆盖」登记进术语表，并更新「Find 语料」一条的说法。</p>
+    <p>构建与测试在 Ultra 上跑；三个包的 <code>swift test</code> 各过一遍，App 用 Tuist workspace 编一次。原生工程的 target 与设置不变，预计不改 Tuist 描述，落地前跑 <code>./TuistScript.sh check</code> 确认。收尾判断：预计不需要单独的指南；术语「镜像覆盖」登记进术语表，并更新「Find 语料」一条的说法。</p>
   </div>
 </section>
 
 <section id="log">
   <h2>决策日志</h2>
   <details>
-    <summary>5 条，最近一条：用户批准，开始实现</summary>
+    <summary>11 条，最近一条：sheet 的勾选框只在点击时发改动</summary>
     <div class="details-body">
       <div class="table-wrap">
       <table>
@@ -621,6 +622,12 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
           <tr><td class="numeric">2026-11-26</td><td>窗口入口定为 Editor 菜单开 sheet</td><td>用户选择 Editor 菜单打开 sheet；工具栏按钮删除；设置页列出全局与覆盖。</td></tr>
           <tr><td class="numeric">2026-11-26</td><td>agent 自定的假设</td><td>存进 <code>settings.json</code> 并迁移旧键；engine 键沿用 Always Index 的；镜像路径用规范写法；Find 按镜像投影；C 名标签只改当前镜像；CLI 与 MCP 只用全局；iOS 设置加全局页。</td></tr>
           <tr><td class="numeric">2026-11-26</td><td>Accepted</td><td>用户批准，开始实现。</td></tr>
+          <tr><td class="numeric">2026-11-26</td><td>In Progress</td><td>在 <code>feature/generation-options-image-overrides</code> 上开始实现。</td></tr>
+          <tr><td class="numeric">2026-11-26</td><td>迁移读取的 user defaults 可注入</td><td><code>SettingsAccess.init(store:legacyUserDefaults:)</code>，默认 <code>.standard</code>；主题迁移也改读它。</td></tr>
+          <tr><td class="numeric">2026-11-26</td><td>表的键在引擎里规范化</td><td>语料库本就按目录的规范路径存镜像，改为照 <code>imagePaths</code> 的做法规范化，再按来源的路径查。</td></tr>
+          <tr><td class="numeric">2026-11-26</td><td>加 <code>FindGenerationOptions</code></td><td>全局与本 engine 的表合成一个值；别的 engine 的覆盖不再让屏上的搜索重跑。</td></tr>
+          <tr><td class="numeric">2026-11-26</td><td>几条计划中的测试没写</td><td>规范化只对模拟器进程有差别；借用转发读代码核实；设置页注册、路由、工具栏删项与 CLI host 的读取器在没有测试目标的 App 层或私有类型里，以编译核实，界面交给用户目视。</td></tr>
+          <tr><td class="numeric">2026-11-26</td><td>sheet 的勾选框只在点击时发改动</td><td>绑定初值若发出，会把与默认值不同的全局选项记成覆盖；改用 <code>rx.click</code>。</td></tr>
         </tbody>
       </table>
       </div>

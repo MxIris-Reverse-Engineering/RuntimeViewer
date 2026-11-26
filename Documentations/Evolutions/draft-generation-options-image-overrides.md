@@ -458,26 +458,21 @@ public final class ImageGenerationOptionsViewModel: ViewModel<MainRoute> {
    - 行为：`unreadableLegacyOptionsLeaveDefaultsAndKeepTheOldValue`
    - 行为：`legacyOptionsDoNotOverwriteAGlobalAlreadyChanged`
    - 行为：`settingsPersistenceCoversGenerationOptions`
-2. **按镜像解析，换掉 `AppDefaults.options`**（已完成） —— `RuntimeViewerAppCore` 里 Base、Content、Main（保存与复制）、Exporting、BatchExporting、NamingWordCloud、Storage 各行，`ImageGenerationOptionsResolutionTests` 与改动的测试
-   - 行为：`contentPaneUsesTheEffectiveOptionsOfTheObjectsImage`
+2. **按镜像解析，换掉 `AppDefaults.options`**（已完成） —— `RuntimeViewerAppCore` 里 Base、Content、Main（保存与复制）、Exporting、BatchExporting、NamingWordCloud、Storage 各行与改动的测试；新行为的测试放进已有的套件（`ContentTextPipelineTests`、`CImportedTypeNameTagTests`、`ViewModelBaseTests`、`NamingWordCloudViewModelTests`）与新的 `BatchExportingGenerationOptionsTests`
+   - 行为：`contentPaneUsesTheEffectiveOptionsOfTheObjectsImage`（含「改这个镜像的覆盖会重取」）
    - 行为：`anOverrideOfAnotherImageDoesNotRefetchTheContentPane`
-   - 行为：`anOverrideOfThisImageRefetchesTheContentPane`
-   - 行为：`cImportedTypeNameTagTogglesOnlyTheObjectsImage`
-   - 行为：`saveAndCopyUseTheObjectsImageOptions`
+   - 行为：`togglingFlipsStoredSpelling`（C 名标签只改对象所在镜像）
+   - 行为：`mergedOptionsCombineEffectiveOptionsAndTransformer`（保存、复制与跳转预热都经 `mergedGenerationOptions(for:)`）
    - 行为：`batchExportUsesEachImagesOwnOptions`
    - 行为：`wordCloudCountsUnderItsImagesOptions`
 3. **Find 按镜像投影**（已完成） —— Core 的四行、AppCore 的 Find 与交叉引用各行、Find 的测试
-   - 行为：`searchProjectsEachImageUnderItsOwnOptions`
+   - 行为：`searchProjectsEachImageUnderItsOwnOptions`（文本与成员搜索，两个方向）
    - 行为：`searchWithoutPerImageTableMatchesTodaysResults`
    - 行为：`queryEncodedWithoutTheTableStillDecodes`
-   - 行为：`perImageTableKeyedByCanonicalPathReachesTheCatalogSpelling`
-   - 行为：`borrowedSharedCacheImageIsProjectedUnderTheBorrowersOverride`
    - 行为：`changingAnOverrideRerunsTheShownSearch`
-   - 行为：`crossReferenceMemberOpensUnderItsImagesOptions`
+   - 行为：`anotherEnginesOverrideRunsNothingAgain`
 4. **设置页** —— `RuntimeViewerSettingsUI` 三行、`Settings.PageIdentifier`、`AppRoute` 与 `AppCoordinator`
-   - 行为：`settingsWindowListsGenerationOptionsBetweenThemeAndTransformer`
-   - 行为：`iOSSettingsListsGenerationOptionsAfterTheme`
-   - 行为：`settingsPageRouteShowsTheWindowOnThatPage`
+   - 行为（编译核实）：两处设置窗口注册新页，`AppRoute.settingsPage` 经 `SettingsWindowController.show(_:)` 打开
    - 行为（目视，交给用户）：设置页的两组控件与 Image Overrides 的展开、还原、删除
 5. **窗口 sheet，删掉工具栏按钮** —— AppCore 的 GenerationOptions、Main、Document 各行，App 的 Generation Options、Main、MainMenuController 各行，`ImageGenerationOptionsViewModelTests`
    - 行为：`menuItemTargetsTheFocusedPanesImage`
@@ -488,15 +483,14 @@ public final class ImageGenerationOptionsViewModel: ViewModel<MainRoute> {
    - 行为：`revertingAnOptionReturnsItToTheGlobalValue`
    - 行为：`revertAllRemovesTheImagesOverride`
    - 行为：`sheetFollowsGlobalChangesMadeInSettings`
-   - 行为：`globalOptionsOpensTheSettingsPage`
-   - 行为：`toolbarHasNoGenerationOptionsItemInAnyStyle`
+   - 行为：`globalOptionsOpensTheSettingsPage`（含 Done 关闭 sheet）
+   - 行为（编译核实）：三种工具栏样式都不再有 Generation Options 项
 6. **CLI 与文档** —— CLI 三行、文档两行、AGENTS 与术语表一行
    - 行为：`applicationOptionsReaderReadsGlobalFromSettingsFile`
    - 行为：`applicationOptionsReaderFallsBackToLegacyUserDefaults`
    - 行为：`settingsFileGlobalWinsOverLegacyUserDefaults`
-   - 行为：`liveHostReadsTheGlobalOptions`
 
-- 构建与测试按项目规矩在 Ultra 上跑（本机是公司那台）：三个包的 `swift test` 各自过一遍，App 用 Debug workspace 编一次。原生工程的 target、依赖与设置都不变（改名的两个文件在同步文件夹里），预计不用改 Tuist 描述；落地前跑一次 `./TuistScript.sh check` 确认。
+- 构建与测试按项目规矩在 Ultra 上跑（本机是公司那台）：三个包的 `swift test` 各自过一遍，App 用 Tuist workspace 编一次（项目记忆规定的编译验证方式）。原生工程的 target、依赖与设置都不变（改名的两个文件在同步文件夹里），预计不用改 Tuist 描述；落地前跑一次 `./TuistScript.sh check` 确认。
 - 界面目视（设置页、sheet、菜单标题）交给用户。
 
 **收尾时必须判断两件事**（判断结果写进决策日志，不允许沉默跳过）：
@@ -515,3 +509,7 @@ public final class ImageGenerationOptionsViewModel: ViewModel<MainRoute> {
 | 2026-11-26 | Accepted | 用户批准，开始实现。 |
 | 2026-11-26 | In Progress | 在 `feature/generation-options-image-overrides` 上开始实现。 |
 | 2026-11-26 | 迁移读取的 user defaults 可注入 | `SettingsAccess.init(store:legacyUserDefaults:)`，默认 `.standard`；主题迁移也改读它，测试因此不碰测试进程的标准 defaults。 |
+| 2026-11-26 | 第 3 步：表的键在引擎里规范化 | 语料库本就按目录的规范路径存镜像，原先设想的「换成目录写法」不需要；改为照 `imagePaths` 的做法规范化，再按来源的路径查。 |
+| 2026-11-26 | 第 3 步：加 `FindGenerationOptions` | 全局与本 engine 的表总是一起用（请求、`ShownSearch`、重跑判断、交叉引用根解析），合成一个值；设置变了先比本 engine 的值，别的 engine 的覆盖不再让屏上的搜索重跑。 |
+| 2026-11-26 | 几条计划中的测试没写 | 规范化测试要 iOS 模拟器进程才有差别；借用 engine 的转发读代码核实（每个参与者拿原请求的副本，表原样带过去）；打开交叉引用成员只是把成员所在镜像的选项传进去。设置页注册、`AppRoute.settingsPage`、工具栏删项与 CLI host 的 `LiveApplicationOptionsReader` 都在没有测试目标的 App 层或私有类型里，以编译核实，界面交给用户目视。 |
+| 2026-11-26 | sheet 的勾选框只在点击时发改动 | 原弹窗用 `rx.state`，绑定时的初值会发一次；放在 sheet 里，初值发出会把与默认值不同的全局选项记成覆盖。改用 `rx.click`，并取点击后的状态。 |
