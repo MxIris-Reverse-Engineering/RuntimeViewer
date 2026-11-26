@@ -471,10 +471,10 @@ public final class ImageGenerationOptionsViewModel: ViewModel<MainRoute> {
    - 行为：`queryEncodedWithoutTheTableStillDecodes`
    - 行为：`changingAnOverrideRerunsTheShownSearch`
    - 行为：`anotherEnginesOverrideRunsNothingAgain`
-4. **设置页** —— `RuntimeViewerSettingsUI` 三行、`Settings.PageIdentifier`、`AppRoute` 与 `AppCoordinator`
+4. **设置页**（已完成） —— `RuntimeViewerSettingsUI` 三行、`Settings.PageIdentifier`、`AppRoute` 与 `AppCoordinator`
    - 行为（编译核实）：两处设置窗口注册新页，`AppRoute.settingsPage` 经 `SettingsWindowController.show(_:)` 打开
    - 行为（目视，交给用户）：设置页的两组控件与 Image Overrides 的展开、还原、删除
-5. **窗口 sheet，删掉工具栏按钮** —— AppCore 的 GenerationOptions、Main、Document 各行，App 的 Generation Options、Main、MainMenuController 各行，`ImageGenerationOptionsViewModelTests`
+5. **窗口 sheet，删掉工具栏按钮**（已完成） —— AppCore 的 GenerationOptions、Main、Document 各行，App 的 Generation Options、Main、MainMenuController 各行，`ImageGenerationOptionsViewModelTests`
    - 行为：`menuItemTargetsTheFocusedPanesImage`
    - 行为：`menuItemFallsBackToTheSidebarsImageOnAnEmptyTab`
    - 行为：`menuItemIsDisabledWithoutAnImage`
@@ -485,7 +485,7 @@ public final class ImageGenerationOptionsViewModel: ViewModel<MainRoute> {
    - 行为：`sheetFollowsGlobalChangesMadeInSettings`
    - 行为：`globalOptionsOpensTheSettingsPage`（含 Done 关闭 sheet）
    - 行为（编译核实）：三种工具栏样式都不再有 Generation Options 项
-6. **CLI 与文档** —— CLI 三行、文档两行、AGENTS 与术语表一行
+6. **CLI 与文档**（已完成） —— CLI 三行、文档两行、AGENTS 与术语表一行
    - 行为：`applicationOptionsReaderReadsGlobalFromSettingsFile`
    - 行为：`applicationOptionsReaderFallsBackToLegacyUserDefaults`
    - 行为：`settingsFileGlobalWinsOverLegacyUserDefaults`
@@ -513,3 +513,5 @@ public final class ImageGenerationOptionsViewModel: ViewModel<MainRoute> {
 | 2026-11-26 | 第 3 步：加 `FindGenerationOptions` | 全局与本 engine 的表总是一起用（请求、`ShownSearch`、重跑判断、交叉引用根解析），合成一个值；设置变了先比本 engine 的值，别的 engine 的覆盖不再让屏上的搜索重跑。 |
 | 2026-11-26 | 几条计划中的测试没写 | 规范化测试要 iOS 模拟器进程才有差别；借用 engine 的转发读代码核实（每个参与者拿原请求的副本，表原样带过去）；打开交叉引用成员只是把成员所在镜像的选项传进去。设置页注册、`AppRoute.settingsPage`、工具栏删项与 CLI host 的 `LiveApplicationOptionsReader` 都在没有测试目标的 App 层或私有类型里，以编译核实，界面交给用户目视。 |
 | 2026-11-26 | sheet 的勾选框只在点击时发改动 | 原弹窗用 `rx.state`，绑定时的初值会发一次；放在 sheet 里，初值发出会把与默认值不同的全局选项记成覆盖。改用 `rx.click`，并取点击后的状态。 |
+| 2026-11-26 | 实现完成，待用户看过后收尾 | 在 Ultra 上验证：Settings、Core（相关套件）、CommandLine 三个包的测试通过；Packages 的 AppCore、AppUI、Settings 整包跑的红都在已知清单里，不在清单里的 `FindSessionCorpusTests` 单独重跑 9 条全过（整包负载下超时）；macOS App（Tuist workspace）与 iOS App（模拟器）都编过。界面没有目视。 |
+| 2026-11-26 | 文档判断 | 不另写使用指南或实现说明：解析规则写在 `Settings.GenerationOptionsSettings` 与 `Settings.GenerationOption` 的文档注释里，根 `AGENTS.md` 第 7 条改成新 API；新术语「镜像覆盖」已登记进术语表，「Find 语料」一条改为按每个镜像生效的选项投影；CLI 指南与插件 skill（升到 1.4.1）已同步。 |
