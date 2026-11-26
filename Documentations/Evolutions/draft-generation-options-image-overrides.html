@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Draft - Generation Options 搬进设置，并可按 engine + 镜像逐项覆盖</title>
+<style>
+/* Evolution proposal page, shared style (style A, "Apple documentation").
+   Copy this whole <style> block verbatim. Page-specific rules, if any, go only
+   in the marked block at the end. Must render in WebKit (Safari, Xcode preview,
+   Quick Look): no JavaScript, no external resources. */
+:root {
+  --background: #ffffff; --foreground: #1d1d1f; --secondary: #6e6e73; --separator: #d2d2d7;
+  --panel: #f5f5f7; --code-background: #f2f2f4; --accent: #0071e3;
+  --added: #1f8a4c; --added-fill: #e3f5ea;
+  --changed: #b26a00; --changed-fill: #fdf0db;
+  --removed: #c62828; --removed-fill: #fbe4e4;
+  --moved: #0066cc; --moved-fill: #e5f0fc;
+  --kept: #6e6e73; --kept-fill: #ececef;
+  --token-keyword: #ad3da4; --token-type: #3900a0; --token-string: #c41a16; --token-number: #1c00cf;
+  --token-comment: #707f8c; --token-macro: #643820;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #1c1c1e; --foreground: #f2f2f7; --secondary: #a1a1a6; --separator: #3a3a3c;
+    --panel: #2c2c2e; --code-background: #2a2a2d; --accent: #4ea1ff;
+    --added: #4cd281; --added-fill: #183826;
+    --changed: #ffb340; --changed-fill: #3d2c10;
+    --removed: #ff6b6b; --removed-fill: #3d1a1a;
+    --moved: #5aa9ff; --moved-fill: #142b45;
+    --kept: #b0b0b5; --kept-fill: #333336;
+    --token-keyword: #fc5fa3; --token-type: #d0a8ff; --token-string: #fc6a5d; --token-number: #d0bf69;
+    --token-comment: #7f8c98; --token-macro: #fd8f3f;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--background); color: var(--foreground);
+  font: 15px/1.65 -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased; }
+.page { max-width: 1080px; margin: 0 auto; padding: 28px 24px 72px; }
+.svg-definitions { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+/* Header */
+.eyebrow { margin: 0 0 6px; font-size: 13px; color: var(--secondary); }
+.crumb + .crumb::before { content: " / "; }
+h1 { font-size: 28px; line-height: 1.3; letter-spacing: -0.01em; margin: 0 0 12px; }
+h1 code { font-size: 0.8em; }
+.proposal-number { color: var(--secondary); margin-right: 4px; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 20px; margin: 0; font-size: 13px; color: var(--secondary); }
+.meta div { display: flex; gap: 6px; align-items: baseline; }
+.meta dd { margin: 0; color: var(--foreground); }
+.meta dd code { font-size: 12px; }
+.status { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--kept); background: var(--kept-fill); }
+.status-accepted { color: var(--moved); background: var(--moved-fill); }
+.status-in-progress { color: var(--changed); background: var(--changed-fill); }
+.status-implemented { color: var(--added); background: var(--added-fill); }
+.status-rejected, .status-withdrawn { color: var(--removed); background: var(--removed-fill); }
+
+/* Table of contents */
+.toc { margin: 22px 0 8px; padding: 8px 10px; background: var(--panel); border-radius: 12px; }
+.toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 2px 4px; }
+.toc li { margin: 0; }
+.toc a { display: inline-block; padding: 3px 11px; border-radius: 999px; color: var(--accent); text-decoration: none; font-size: 14px; }
+.toc a:hover { background: var(--background); }
+
+/* Text */
+section { scroll-margin-top: 16px; }
+h2 { font-size: 21px; margin: 40px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--separator); }
+h3 { font-size: 16px; margin: 22px 0 8px; }
+h4 { font-size: 15px; margin: 18px 0 6px; }
+p { margin: 10px 0; }
+a { color: var(--accent); }
+ul, ol { padding-left: 22px; }
+li { margin: 4px 0; }
+blockquote { margin: 12px 0; padding: 2px 14px; border-left: 3px solid var(--separator); color: var(--secondary); }
+hr { border: none; border-top: 1px solid var(--separator); margin: 24px 0; }
+
+/* Code */
+code { font: 0.86em/1.4 ui-monospace, "SF Mono", Menlo, monospace; background: var(--code-background); padding: 1px 5px; border-radius: 5px; }
+pre { background: var(--code-background); border-radius: 10px; padding: 14px 16px; overflow-x: auto; -webkit-overflow-scrolling: touch; font: 12.5px/1.6 ui-monospace, "SF Mono", Menlo, monospace; }
+pre code { font: inherit; background: none; padding: 0; border-radius: 0; }
+.token-keyword { color: var(--token-keyword); font-weight: 600; }
+.token-type { color: var(--token-type); }
+.token-string { color: var(--token-string); }
+.token-number { color: var(--token-number); }
+.token-comment { color: var(--token-comment); }
+.token-macro { color: var(--token-macro); }
+
+/* Callouts */
+.callout { background: var(--panel); border-left: 4px solid var(--accent); border-radius: 10px; padding: 12px 16px; margin: 14px 0; }
+.callout-note { border-left-color: var(--secondary); }
+.callout-warning { border-left-color: var(--changed); }
+.callout-title { margin: 0 0 6px; font-weight: 600; }
+.callout > :last-child { margin-bottom: 0; }
+.callout ol, .callout ul { margin: 6px 0 0; }
+
+/* Diagrams */
+.legend { list-style: none; padding: 0; margin: 8px 0 12px; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--secondary); }
+.legend li { margin: 0; }
+.swatch { display: inline-block; width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid; vertical-align: -2px; margin-right: 6px; }
+.swatch-added { background: var(--added-fill); border-color: var(--added); }
+.swatch-changed { background: var(--changed-fill); border-color: var(--changed); }
+.swatch-removed { background: var(--removed-fill); border-color: var(--removed); border-style: dashed; }
+.swatch-moved { background: var(--moved-fill); border-color: var(--moved); }
+.swatch-kept { background: var(--kept-fill); border-color: var(--kept); }
+.figure { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--separator); border-radius: 12px; padding: 12px; margin: 12px 0; }
+.figure svg { display: block; width: 100%; min-width: 760px; height: auto; }
+.figure-narrow svg { min-width: 0; max-width: 640px; margin: 0 auto; }
+.figure-caption { font-size: 13px; color: var(--secondary); margin-top: 8px; }
+svg text { font: 12px ui-monospace, "SF Mono", Menlo, monospace; fill: var(--foreground); }
+svg .group-label { font-size: 13px; font-weight: 700; }
+svg .caption { font-size: 10.5px; fill: var(--secondary); }
+svg .strike { text-decoration: line-through; }
+svg .group { fill: none; stroke: var(--separator); stroke-width: 1.5; stroke-dasharray: 5 4; }
+svg .box-added { fill: var(--added-fill); stroke: var(--added); stroke-width: 1.5; }
+svg .box-changed { fill: var(--changed-fill); stroke: var(--changed); stroke-width: 1.5; }
+svg .box-removed { fill: var(--removed-fill); stroke: var(--removed); stroke-width: 1.5; stroke-dasharray: 4 3; }
+svg .box-moved { fill: var(--moved-fill); stroke: var(--moved); stroke-width: 1.5; }
+svg .box-kept { fill: var(--kept-fill); stroke: var(--kept); stroke-width: 1.2; }
+svg .arrow { fill: none; stroke: var(--secondary); stroke-width: 1.4; marker-end: url(#arrowhead); }
+svg .arrow-weak { stroke-dasharray: 4 3; }
+svg .arrow-removed { stroke: var(--removed); stroke-dasharray: 4 3; }
+svg .arrowhead { fill: var(--secondary); }
+
+/* Tables */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 10px 0; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { border: 1px solid var(--separator); padding: 7px 9px; text-align: left; vertical-align: top; }
+th { background: var(--panel); font-weight: 600; }
+.numeric { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tag { display: inline-block; white-space: nowrap; padding: 0 7px; border-radius: 5px; font-size: 12px; font-weight: 600; color: var(--kept); background: var(--kept-fill); }
+.tag-added { color: var(--added); background: var(--added-fill); }
+.tag-changed { color: var(--changed); background: var(--changed-fill); }
+.tag-removed { color: var(--removed); background: var(--removed-fill); }
+.tag-moved { color: var(--moved); background: var(--moved-fill); }
+
+/* Collapsible sections */
+details { border: 1px solid var(--separator); border-radius: 12px; margin: 12px 0; overflow: hidden; }
+summary { cursor: pointer; list-style: none; padding: 11px 16px; font-weight: 600; background: var(--panel); }
+summary::-webkit-details-marker { display: none; }
+summary::before { content: "›"; display: inline-block; width: 1em; color: var(--secondary); -webkit-transition: -webkit-transform 0.15s; transition: transform 0.15s; }
+details[open] > summary::before { -webkit-transform: rotate(90deg); transform: rotate(90deg); }
+details[open] > summary { border-bottom: 1px solid var(--separator); }
+.details-body { padding: 4px 16px 12px; }
+
+@media (max-width: 640px) {
+  .page { padding: 20px 16px 56px; }
+  h1 { font-size: 23px; }
+}
+
+/* ===== Page-specific styles (only for elements the shared style lacks, e.g. UI mockups) ===== */
+</style>
+</head>
+<body>
+<svg class="svg-definitions" aria-hidden="true" focusable="false">
+  <defs><marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>
+</svg>
+<div class="page">
+
+<header class="doc-header">
+  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">Draft</span></p>
+  <h1><span class="proposal-number">Draft</span> Generation Options 搬进设置，并可按 engine + 镜像逐项覆盖</h1>
+  <dl class="meta">
+    <div><dt>状态</dt><dd><span class="status status-accepted">Accepted</span></dd></div>
+    <div><dt>最后更新</dt><dd>2026-11-26</dd></div>
+    <div><dt>项目类型</dt><dd>App</dd></div>
+    <div><dt>原文</dt><dd><code>draft-generation-options-image-overrides.md</code></dd></div>
+  </dl>
+</header>
+
+<nav class="toc" aria-label="目录">
+  <ol>
+    <li><a href="#summary">摘要</a></li>
+    <li><a href="#decide">要你定</a></li>
+    <li><a href="#architecture">架构图</a></li>
+    <li><a href="#map">改动地图</a></li>
+    <li><a href="#proposal">提议方案</a></li>
+    <li><a href="#design">详细设计</a></li>
+    <li><a href="#research">调研</a></li>
+    <li><a href="#alternatives">替代方案</a></li>
+    <li><a href="#impact">影响</a></li>
+    <li><a href="#steps">落地步骤</a></li>
+    <li><a href="#log">决策日志</a></li>
+  </ol>
+</nav>
+
+<main class="content">
+
+<section id="summary">
+  <h2>摘要</h2>
+  <p>Generation Options 从工具栏的弹窗搬进设置窗口，成为 Settings › Generation Options 一页，那里改的是<strong>全局</strong>选项。每个 engine + 镜像可以<strong>逐项覆盖</strong>全局：覆盖的那几项用这个镜像自己的值，没覆盖的照旧跟着全局走，全局改了它们也跟着变。</p>
+  <p>覆盖在文档窗口里改：Editor › Generation Options for “&lt;镜像名&gt;”… 打开一个 sheet，列出这个镜像生效的选项，改一项就记成这一项的覆盖，改回与全局相同就自动去掉覆盖；被覆盖的行有标记和还原按钮。设置页列出所有覆盖，可以逐项还原或整条删除。工具栏的 Generation Options 按钮和弹窗删掉。</p>
+  <p>全局与覆盖都存在 <code>settings.json</code> 的新分支里，首次启动从旧的 <code>UserDefaults</code> 键 <code>generationOptions</code> 迁移一次。凡是按选项打印或投影 interface 的地方——内容区、复制与保存、单个与批量导出、命名词云、Find 的文本与成员搜索、交叉引用——都按对象所在镜像生效的选项来；CLI 的 <code>--options app</code> 与 MCP 只用全局。</p>
+</section>
+
+<section id="decide">
+  <h2>要你定</h2>
+  <div class="callout">
+    <p class="callout-title">已批准（2026-11-26）。两个设计问题已定：</p>
+    <ol>
+      <li>覆盖粒度：逐项覆盖。</li>
+      <li>窗口入口：Editor 菜单打开 sheet，工具栏按钮删除。</li>
+    </ol>
+  </div>
+  <div class="callout callout-note">
+    <p class="callout-title">agent 自定的假设（可推翻）</p>
+    <ul>
+      <li>存进 <code>settings.json</code> 并迁移旧 <code>UserDefaults</code> 键，旧键不删。</li>
+      <li>engine 键沿用 Always Index 的（附加的进程按进程名）；镜像路径用规范写法。</li>
+      <li>Find 每个镜像按各自的选项投影；搜索请求加一个可选字段，旧对端忽略即退回全局。</li>
+      <li>内容区的 C 名标签只改当前镜像。</li>
+      <li>CLI 与 MCP 只用全局。</li>
+      <li>iOS 设置也加这一页（只有全局）。</li>
+    </ul>
+  </div>
+</section>
+
+<section id="architecture">
+  <h2>架构图</h2>
+  <ul class="legend">
+    <li><i class="swatch swatch-added"></i>新增</li>
+    <li><i class="swatch swatch-changed"></i>修改</li>
+    <li><i class="swatch swatch-removed"></i>删除</li>
+    <li><i class="swatch swatch-kept"></i>不变</li>
+  </ul>
+
+  <h3>改了什么</h3>
+  <div class="figure">
+  <svg viewBox="0 0 1120 470" role="img" aria-label="What changed">
+    <rect class="group" x="10" y="10" width="340" height="450" rx="10"/>
+    <text class="group-label" x="22" y="32">Entry points</text>
+    <rect class="box-removed" x="25" y="45" width="310" height="44" rx="6"/><text class="strike" x="35" y="63">Toolbar {…} item + popover</text><text class="caption" x="35" y="80">MainRoute.generationOptions</text>
+    <rect class="box-added" x="25" y="110" width="310" height="44" rx="6"/><text x="35" y="128">Editor ▸ Generation Options for “X”…</text><text class="caption" x="35" y="145">MainWindowController action</text>
+    <rect class="box-changed" x="25" y="175" width="310" height="44" rx="6"/><text x="35" y="193">ImageGenerationOptionsViewController</text><text class="caption" x="35" y="210">sheet; was the popover</text>
+    <rect class="box-changed" x="25" y="240" width="310" height="44" rx="6"/><text x="35" y="258">ImageGenerationOptionsViewModel</text><text class="caption" x="35" y="275">edits one image's override</text>
+    <rect class="box-added" x="25" y="320" width="310" height="44" rx="6"/><text x="35" y="338">GenerationOptionsSettingsView</text><text class="caption" x="35" y="355">Settings ▸ Generation Options</text>
+    <rect class="box-changed" x="25" y="390" width="310" height="44" rx="6"/><text x="35" y="408">ContentTextViewModel C-name tag</text><text class="caption" x="35" y="425">toggles this image only</text>
+    <rect class="group" x="370" y="10" width="360" height="450" rx="10"/>
+    <text class="group-label" x="382" y="32">Storage (RuntimeViewerSettings)</text>
+    <rect class="box-removed" x="385" y="45" width="330" height="44" rx="6"/><text class="strike" x="395" y="63">AppDefaults.options</text><text class="caption" x="395" y="80">UserDefaults "generationOptions"</text>
+    <rect class="box-added" x="385" y="140" width="330" height="62" rx="6"/><text x="395" y="158">Settings.generationOptions</text><text class="caption" x="395" y="175">global: GenerationOptions</text><text class="caption" x="395" y="192">imageOverrides: [ImageGenerationOptionsOverride]</text>
+    <rect class="box-added" x="385" y="235" width="330" height="44" rx="6"/><text x="395" y="253">migrateLegacyGenerationOptions…</text><text class="caption" x="395" y="270">old key → global, once</text>
+    <rect class="box-added" x="385" y="330" width="330" height="44" rx="6"/><text x="395" y="348">Settings.GenerationOption</text><text class="caption" x="395" y="365">one case per user-set option</text>
+    <rect class="group" x="750" y="10" width="360" height="450" rx="10"/>
+    <text class="group-label" x="762" y="32">Resolution &amp; consumers</text>
+    <rect class="box-removed" x="765" y="45" width="330" height="44" rx="6"/><text class="strike" x="775" y="63">currentMergedGenerationOptions</text><text class="caption" x="775" y="80">one set for every image</text>
+    <rect class="box-added" x="765" y="110" width="330" height="44" rx="6"/><text x="775" y="128">effectiveOptions(forImageAt:in:)</text><text class="caption" x="775" y="145">global, overridden options replaced</text>
+    <rect class="box-added" x="765" y="175" width="330" height="44" rx="6"/><text x="775" y="193">mergedGenerationOptions(forImageAt:in:)</text><text class="caption" x="775" y="210">+ transformer, marks… flags</text>
+    <rect class="box-changed" x="765" y="240" width="330" height="44" rx="6"/><text x="775" y="258">content · save · export · word cloud</text><text class="caption" x="775" y="275">per object's image</text>
+    <rect class="box-changed" x="765" y="320" width="330" height="44" rx="6"/><text x="775" y="338">Find / member search query</text><text class="caption" x="775" y="355">+ generationOptionsByImagePath</text>
+    <rect class="box-changed" x="765" y="390" width="330" height="44" rx="6"/><text x="775" y="408">CLI --options app</text><text class="caption" x="775" y="425">global only; MCP unchanged</text>
+    <path class="arrow arrow-removed" d="M 335 67 L 385 67"/>
+    <path class="arrow" d="M 335 262 L 385 180"/>
+    <path class="arrow" d="M 335 342 L 385 188"/>
+    <path class="arrow" d="M 335 412 L 385 196"/>
+    <path class="arrow" d="M 550 235 L 550 206"/>
+    <path class="arrow arrow-weak" d="M 385 345 C 360 330, 360 230, 335 205"/>
+    <path class="arrow" d="M 715 160 L 765 132"/>
+    <path class="arrow" d="M 930 154 L 930 175"/>
+    <path class="arrow" d="M 930 219 L 930 240"/>
+    <path class="arrow" d="M 770 150 C 735 200, 735 300, 765 340"/>
+    <path class="arrow arrow-weak" d="M 715 195 C 740 260, 740 380, 765 410"/>
+  </svg>
+  </div>
+  <p class="figure-caption">窗口的 sheet、设置页与内容区的 C 名标签都写同一个 <code>Settings.generationOptions</code>；所有消费者经 <code>effectiveOptions</code> 按对象所在镜像取选项，CLI 只读 <code>global</code>。</p>
+
+  <h3>一次取 interface 与一次 Find 搜索</h3>
+  <div class="figure">
+  <svg viewBox="0 0 1120 250" role="img" aria-label="Data flow">
+    <rect class="group" x="10" y="10" width="1100" height="100" rx="10"/>
+    <text class="group-label" x="22" y="30">Find text / member search</text>
+    <rect class="box-changed" x="20" y="45" width="200" height="50" rx="6"/><text x="30" y="63">FindSession</text><text class="caption" x="30" y="80">global + engine's overrides</text>
+    <rect class="box-changed" x="240" y="45" width="200" height="50" rx="6"/><text x="250" y="63">SearchQuery</text><text class="caption" x="250" y="80">+ ByImagePath table</text>
+    <rect class="box-changed" x="460" y="45" width="200" height="50" rx="6"/><text x="470" y="63">RuntimeEngine</text><text class="caption" x="470" y="80">canonical → catalog path</text>
+    <rect class="box-changed" x="680" y="45" width="200" height="50" rx="6"/><text x="690" y="63">CorpusStore</text><text class="caption" x="690" y="80">visibility per image</text>
+    <rect class="box-kept" x="900" y="45" width="200" height="50" rx="6"/><text x="910" y="63">projection</text><text class="caption" x="910" y="80">→ matches</text>
+    <path class="arrow" d="M 220 70 L 240 70"/>
+    <path class="arrow" d="M 440 70 L 460 70"/>
+    <path class="arrow" d="M 660 70 L 680 70"/>
+    <path class="arrow" d="M 880 70 L 900 70"/>
+    <rect class="group" x="10" y="130" width="1100" height="110" rx="10"/>
+    <text class="group-label" x="22" y="150">Content pane fetch</text>
+    <rect class="box-kept" x="20" y="165" width="190" height="50" rx="6"/><text x="30" y="183">$runtimeObject</text><text class="caption" x="30" y="200">flatMapLatest</text>
+    <rect class="box-added" x="240" y="165" width="350" height="50" rx="6"/><text x="250" y="183">Observable.tracking</text><text class="caption" x="250" y="200">effectiveOptions(forImageAt: object.imagePath)</text>
+    <rect class="box-kept" x="620" y="165" width="200" height="50" rx="6"/><text x="630" y="183">merge</text><text class="caption" x="630" y="200">transformer, marks…</text>
+    <rect class="box-kept" x="850" y="165" width="250" height="50" rx="6"/><text x="860" y="183">interfaceCache</text><text class="caption" x="860" y="200">interface(for:options:)</text>
+    <path class="arrow" d="M 210 190 L 240 190"/>
+    <path class="arrow" d="M 590 190 L 620 190"/>
+    <path class="arrow" d="M 820 190 L 850 190"/>
+  </svg>
+  </div>
+  <p class="figure-caption">Find 的表只含这个 engine 有覆盖的镜像；没有表的请求与今天完全相同。内容区只在本镜像的生效选项变了时才重取。</p>
+
+  <h3>窗口入口</h3>
+  <div class="figure">
+  <svg viewBox="0 0 1120 200" role="img" aria-label="Window entry">
+    <rect class="box-added" x="20" y="20" width="240" height="50" rx="6"/><text x="30" y="38">MainMenuController</text><text class="caption" x="30" y="55">Editor menu item</text>
+    <rect class="box-added" x="290" y="20" width="260" height="50" rx="6"/><text x="300" y="38">MainWindowController</text><text class="caption" x="300" y="55">showImageGenerationOptions(_:)</text>
+    <rect class="box-added" x="580" y="20" width="260" height="50" rx="6"/><text x="590" y="38">MainRoute</text><text class="caption" x="590" y="55">.imageGenerationOptions(imagePath:)</text>
+    <rect class="box-changed" x="870" y="20" width="230" height="50" rx="6"/><text x="880" y="38">MainCoordinator</text><text class="caption" x="880" y="55">.presentOnRoot(.asSheet)</text>
+    <path class="arrow" d="M 260 45 L 290 45"/>
+    <path class="arrow" d="M 550 45 L 580 45"/>
+    <path class="arrow" d="M 840 45 L 870 45"/>
+    <rect class="box-removed" x="20" y="110" width="240" height="50" rx="6"/><text class="strike" x="30" y="128">generationOptionsItem</text><text class="caption" x="30" y="145">and generationOptionsClick</text>
+    <rect class="box-changed" x="290" y="110" width="260" height="50" rx="6"/><text x="300" y="128">ImageGenerationOptionsViewModel</text><text class="caption" x="300" y="145">update / revert / revertAll</text>
+    <rect class="box-kept" x="580" y="110" width="260" height="50" rx="6"/><text x="590" y="128">Settings.generationOptions</text><text class="caption" x="590" y="145">updateOverride(…)</text>
+    <rect class="box-added" x="870" y="110" width="230" height="50" rx="6"/><text x="880" y="128">AppRoute.settingsPage</text><text class="caption" x="880" y="145">Global Options…</text>
+    <path class="arrow" d="M 985 70 C 985 95, 430 85, 420 110"/>
+    <path class="arrow" d="M 550 135 L 580 135"/>
+    <path class="arrow arrow-weak" d="M 550 152 C 650 190, 840 190, 900 160"/>
+  </svg>
+  </div>
+</section>
+
+<section id="map">
+  <h2>改动地图</h2>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>文件 / 类型</th><th>动作</th><th>改什么</th><th>为什么</th><th>步骤</th></tr></thead>
+    <tbody>
+      <tr><td><code>RuntimeViewerSettings/Settings+GenerationOptions.swift</code> · <code>Settings.GenerationOptionsSettings</code>、<code>Settings.ImageGenerationOptionsOverride</code></td><td><span class="tag tag-added">新增</span></td><td>全局 + 覆盖列表的模型；<code>effectiveOptions</code>、<code>override</code>、<code>updateOverride</code>、<code>revert</code>、<code>removeOverride</code></td><td>存储与解析规则放在一处，设置页、sheet、AppCore 共用</td><td class="numeric">1</td></tr>
+      <tr><td><code>RuntimeViewerSettings/Settings+GenerationOption.swift</code> · <code>Settings.GenerationOption</code></td><td><span class="tag tag-added">新增</span></td><td>每个用户可设的选项一个 case（原始值存盘不改名）：标题、分组、控件、<code>copyValue</code>、<code>hasSameValue</code></td><td>逐项覆盖要稳定标识；两处界面从同一份清单生成</td><td class="numeric">1</td></tr>
+      <tr><td><code>RuntimeViewerSettings/Settings+GenerationOptionsEngine.swift</code></td><td><span class="tag tag-added">新增</span></td><td>接 <code>RuntimeEngine</code> 的便捷入口，内部算 engine 键与规范路径</td><td>调用方不用自己算</td><td class="numeric">1</td></tr>
+      <tr><td><code>RuntimeViewerSettings/Settings.swift</code> · <code>Settings</code>、<code>SettingsAccess</code></td><td><span class="tag tag-changed">修改</span></td><td>加 <code>generationOptions</code> 分支；<code>accessPersistedValues()</code> 读它；加迁移</td><td>持久化；旧值迁一次</td><td class="numeric">1</td></tr>
+      <tr><td><code>Tests/RuntimeViewerSettingsTests/SettingsPersistenceTests.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>覆盖清单加 <code>generationOptions</code></td><td>守住 <code>accessPersistedValues()</code></td><td class="numeric">1</td></tr>
+      <tr><td><code>Tests/RuntimeViewerSettingsTests/</code> 三个新测试文件</td><td><span class="tag tag-added">新增</span></td><td>解析、覆盖增删、清单覆盖全部字段、迁移</td><td>见第 1 步行为</td><td class="numeric">1</td></tr>
+      <tr><td><code>RuntimeViewerAppCore/GenerationOptions/SettingsAccess+MergedGenerationOptions.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>mergedGenerationOptions(forImageAt:in:)</code> 与可订阅的版本</td><td>取代 <code>currentMergedGenerationOptions</code> 的合并逻辑，<code>FindSession</code> 也能用</td><td class="numeric">2</td></tr>
+      <tr><td><code>RuntimeViewerAppCore/Base/ViewModel.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>currentMergedGenerationOptions</code> 换成按对象 / 按镜像的两个方法</td><td>选项随镜像而定</td><td class="numeric">2</td></tr>
+      <tr><td><code>RuntimeViewerAppCore/Content/ContentTextViewModel.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>订阅对象所在镜像的生效选项；C 名标签写覆盖；提示文字指向新位置</td><td>内容区按镜像；切换不动全局</td><td class="numeric">2</td></tr>
+      <tr><td><code>RuntimeViewerAppCore/Main/MainViewModel.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>保存与复制按对象所在镜像；删 <code>generationOptionsClick</code></td><td>同上；按钮删了</td><td class="numeric">2、5</td></tr>
+      <tr><td><code>Exporting/ExportingProgressViewModel.swift</code>、<code>BatchExporting/BatchExportingProgressViewModel.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>单个导出用该镜像的；批量导出每个镜像各用各的</td><td>导出与内容区一致</td><td class="numeric">2</td></tr>
+      <tr><td><code>NamingWordCloud/NamingWordCloudViewModel.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>订阅并使用该镜像的生效选项</td><td>同上</td><td class="numeric">2</td></tr>
+      <tr><td><code>RuntimeViewerAppCore/Storage/AppDefaults.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>删 <code>options</code></td><td>存储搬走了</td><td class="numeric">2</td></tr>
+      <tr><td><code>Tests/RuntimeViewerAppCoreTests/</code> 六个既有测试</td><td><span class="tag tag-changed">修改</span></td><td>改为注入 <code>SettingsAccess.preview</code>；删隔离测试里 <code>$options</code> 那条</td><td>跟着存储走</td><td class="numeric">2、3</td></tr>
+      <tr><td><code>Tests/RuntimeViewerAppCoreTests/ImageGenerationOptionsResolutionTests.swift</code></td><td><span class="tag tag-added">新增</span></td><td>两个镜像各自生效、只重取受影响的、导出按镜像</td><td>见第 2 步行为</td><td class="numeric">2</td></tr>
+      <tr><td><code>RuntimeViewerCore/Search/RuntimeInterfaceSearchQuery.swift</code>、<code>RuntimeMemberSearchQuery.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>加 <code>generationOptionsByImagePath</code> 与 <code>generationOptions(forImageAt:)</code></td><td>每个镜像按自己的选项投影；可选字段兼容旧对端</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerCore/Search/RuntimeEngine+Search.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>表的键从规范路径换成目录写法</td><td>表按规范路径存，语料按目录写法存</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerCore/Search/Corpus/RuntimeInterfaceCorpusStore.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>扫描前按镜像算好可见性，扫描时按条目所在镜像取</td><td>原来整次搜索只有一个</td><td class="numeric">3</td></tr>
+      <tr><td><code>Tests/RuntimeViewerCoreTests/</code> 可见性测试与请求兼容测试</td><td><span class="tag tag-changed">修改</span> / <span class="tag tag-added">新增</span></td><td>不同选项各自投影；没有表与今天相同；旧 JSON 能解码</td><td>见第 3 步行为</td><td class="numeric">3</td></tr>
+      <tr><td><code>Find/FindSession.swift</code>、交叉引用两个文件、<code>FindViewModel.swift</code>、<code>InspectorReferencesViewModel.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>请求带表；订阅分支重跑；交叉引用按成员所在镜像</td><td>Find 与内容区逐字相同</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerSettingsUI/Components/GenerationOptionsSettingsView.swift</code></td><td><span class="tag tag-added">新增</span></td><td>全局两组 + macOS 的 Image Overrides</td><td>设置页</td><td class="numeric">4</td></tr>
+      <tr><td><code>SettingsWindowController.swift</code>、<code>SettingsViewController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>注册新页；macOS 暴露 <code>show(pageWithID:)</code></td><td>新页；sheet 要跳到这一页</td><td class="numeric">4</td></tr>
+      <tr><td><code>RuntimeViewerSettings/Settings+PageIdentifier.swift</code> · <code>Settings.PageIdentifier</code></td><td><span class="tag tag-added">新增</span></td><td>页面 id 常量</td><td>路由与设置窗口共用</td><td class="numeric">4</td></tr>
+      <tr><td><code>App/AppRoute.swift</code>、<code>RuntimeViewerAppUI/App/AppCoordinator.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>加 <code>AppRoute.settingsPage(_:)</code></td><td>Global Options…</td><td class="numeric">4</td></tr>
+      <tr><td><code>GenerationOptionsViewModel.swift</code> → <code>ImageGenerationOptionsViewModel.swift</code></td><td><span class="tag tag-changed">修改（改名）</span></td><td>编辑一个镜像的覆盖</td><td>弹窗改造成 sheet</td><td class="numeric">5</td></tr>
+      <tr><td><code>GenerationOptionsViewController.swift</code> → <code>ImageGenerationOptionsViewController.swift</code></td><td><span class="tag tag-changed">修改（改名）</span></td><td>行从清单生成；覆盖行加粗带还原按钮；底部三个按钮</td><td>同上</td><td class="numeric">5</td></tr>
+      <tr><td><code>Main/MainRoute.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>删 <code>generationOptions</code>；加 <code>imageGenerationOptions(imagePath:)</code></td><td>新入口</td><td class="numeric">5</td></tr>
+      <tr><td><code>Main/MainCoordinator.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>删 popover 分支；新路由开 sheet</td><td>同上</td><td class="numeric">5</td></tr>
+      <tr><td><code>Main/MainToolbarController.swift</code>、<code>MainWindowController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>删工具栏项；加菜单动作与校验（动态标题）</td><td>删按钮；菜单入口</td><td class="numeric">5</td></tr>
+      <tr><td><code>App/MainMenuController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>Editor 菜单顶部加菜单项与分隔线</td><td>入口</td><td class="numeric">5</td></tr>
+      <tr><td><code>Document/DocumentState.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>加 <code>imagePathForGenerationOptions</code></td><td>菜单项与 sheet 同一个答案</td><td class="numeric">5</td></tr>
+      <tr><td><code>Tests/RuntimeViewerAppCoreTests/ImageGenerationOptionsViewModelTests.swift</code></td><td><span class="tag tag-added">新增</span></td><td>sheet 的行为</td><td>见第 5 步行为</td><td class="numeric">5</td></tr>
+      <tr><td><code>Execution/ApplicationOptionsReader.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>先读 <code>settings.json</code> 的 <code>generationOptions.global</code>，再退回旧键</td><td>存储搬走</td><td class="numeric">6</td></tr>
+      <tr><td><code>App/CommandLineHostController.swift</code> · <code>LiveApplicationOptionsReader</code></td><td><span class="tag tag-changed">修改</span></td><td>读 <code>settings.generationOptions.global</code></td><td>同上</td><td class="numeric">6</td></tr>
+      <tr><td><code>ApplicationOptionsReaderTests.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>新位置、旧位置、新的优先</td><td>同上</td><td class="numeric">6</td></tr>
+      <tr><td>CLI 使用指南、插件 skill 与两个插件清单的 <code>version</code></td><td><span class="tag tag-changed">修改</span></td><td><code>--options app</code> 的来源与「只用全局」；Imported Type Names 的位置</td><td>CLI 文档跟着改；插件规则要求升版本</td><td class="numeric">6</td></tr>
+      <tr><td>根 <code>AGENTS.md</code> 第 7 条、AppKit 与 UIKit 两份 <code>AGENTS.md</code>、<code>Glossary.md</code></td><td><span class="tag tag-changed">修改</span></td><td>新 API 名；popover 例子只剩 MCP；iOS 页清单；术语「镜像覆盖」</td><td>文档与代码同批</td><td class="numeric">6</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section id="proposal">
+  <h2>提议方案</h2>
+  <ol>
+    <li><strong>设置页</strong>：Settings › Generation Options（macOS 排在 Theme 与 Transformer 之间，符号 <code>ellipsis.curlybraces</code>），Objective-C、Swift 两组，控件与原弹窗一一对应。这里改全局。macOS 页末是 Image Overrides：每条覆盖一行（镜像名、engine 名、覆盖了几项），展开逐项列出并可还原，整条可删除。</li>
+    <li><strong>存储</strong>：<code>Settings</code> 加顶层分支 <code>generationOptions</code>（<code>global</code> + <code>imageOverrides</code>）。首次启动迁移旧 <code>UserDefaults</code> 键，旧键不删。<code>AppDefaults.options</code> 删除。</li>
+    <li><strong>逐项覆盖</strong>：engine 键 + 镜像规范路径认出一条覆盖，存「覆盖了哪几项」与值。生效 = 全局，覆盖的项换成覆盖值。改回与全局相同即去掉这一项，最后一项去掉时整条删掉。</li>
+    <li><strong>窗口入口</strong>：Editor 菜单顶部 Generation Options for “&lt;镜像名&gt;”…，作用于聚焦编辑栏显示的镜像，空标签退到侧栏的镜像，都没有时灰掉。sheet：标题镜像名、副标题 engine 名；被覆盖的行加粗、带还原按钮；底部 Revert All、Global Options…、Done；改动即时生效。</li>
+    <li><strong>按镜像解析</strong>：所有按选项打印或投影的地方都按对象所在镜像的生效选项；内容区、词云、Find 订阅生效选项。</li>
+    <li><strong>Find</strong>：请求多带一张「镜像路径 → 生效选项」的表（只含这个 engine 有覆盖的镜像），引擎按镜像投影；旧对端忽略即退回全局。</li>
+    <li><strong>C 名标签</strong>：只记成对象所在镜像的覆盖。</li>
+    <li><strong>删掉</strong>工具栏按钮、<code>MainRoute.generationOptions</code>、<code>generationOptionsClick</code>，弹窗那一对改造成 sheet。</li>
+    <li><strong>CLI 与 MCP</strong>：<code>--options app</code> 读全局，不看覆盖；MCP 不变。</li>
+    <li><strong>iOS / visionOS</strong>：设置里加这一页，只有全局两组。</li>
+  </ol>
+  <h3>非目标</h3>
+  <ul>
+    <li>CLI、MCP 按镜像套用覆盖（留作后续项）。</li>
+    <li>在设置页里新建或改覆盖的值：只看、还原、删除。</li>
+    <li>按对象覆盖、按镜像名匹配、engine 之间共享覆盖。</li>
+    <li>按镜像覆盖 Transformer 或编辑器显示设置。</li>
+    <li>导出对话框里另选选项。</li>
+    <li>iOS 上设置覆盖的入口。</li>
+  </ul>
+</section>
+
+<section id="design">
+  <h2>详细设计</h2>
+  <details>
+    <summary>1. 选项清单 Settings.GenerationOption</summary>
+    <div class="details-body">
+<pre><code><span class="token-keyword">extension</span> <span class="token-type">Settings</span> {
+    <span class="token-comment">/// The raw values are stored in settings.json: never rename one.</span>
+    <span class="token-keyword">public enum</span> <span class="token-type">GenerationOption</span>: <span class="token-type">String</span>, <span class="token-type">CaseIterable</span>, <span class="token-type">Codable</span>, <span class="token-type">Sendable</span> {
+        <span class="token-keyword">case</span> objcStripProtocolConformance = <span class="token-string">"objc.stripProtocolConformance"</span>
+        <span class="token-comment">// … every option the popover lists today</span>
+
+        <span class="token-keyword">public enum</span> <span class="token-type">Section</span>: <span class="token-type">Sendable</span> { <span class="token-keyword">case</span> objectiveC, swift }
+        <span class="token-keyword">public enum</span> <span class="token-type">Control</span> {
+            <span class="token-keyword">case</span> toggle(<span class="token-type">WritableKeyPath</span>&lt;<span class="token-type">RuntimeObjectInterface.GenerationOptions</span>, <span class="token-type">Bool</span>&gt;)
+            <span class="token-keyword">case</span> choice(labels: [<span class="token-type">String</span>], selectedIndex: …, select: …)
+        }
+
+        <span class="token-keyword">public var</span> title: <span class="token-type">String</span> { <span class="token-keyword">get</span> }
+        <span class="token-keyword">public var</span> section: <span class="token-type">Section</span> { <span class="token-keyword">get</span> }
+        <span class="token-keyword">public var</span> control: <span class="token-type">Control</span> { <span class="token-keyword">get</span> }
+        <span class="token-keyword">public func</span> copyValue(from source: …, to destination: <span class="token-keyword">inout</span> …)
+        <span class="token-keyword">public func</span> hasSameValue(in options: …, as otherOptions: …) -&gt; <span class="token-type">Bool</span>
+    }
+}</code></pre>
+      <ul>
+        <li>用 <code>enum</code>：App 内部清单，要 <code>CaseIterable</code> 生成界面，也要穷尽检查。</li>
+        <li>标题、顺序、分段标签照原弹窗。</li>
+        <li><code>GenerationOptionCatalogTests</code>：逐个翻转选项比较编码后的键，所有键恰好被一个选项改到；不在界面上的字段（现只有 <code>maximumLineWidth</code>）列在排除清单里。</li>
+      </ul>
+    </div>
+  </details>
+  <details>
+    <summary>2. 存储 Settings.GenerationOptionsSettings 与迁移</summary>
+    <div class="details-body">
+<pre><code><span class="token-macro">@Codable</span> <span class="token-macro">@MemberInit</span>
+<span class="token-keyword">public struct</span> <span class="token-type">GenerationOptionsSettings</span>: <span class="token-type">Sendable</span>, <span class="token-type">Hashable</span> {
+    <span class="token-macro">@Default</span>(<span class="token-type">RuntimeObjectInterface.GenerationOptions</span>())
+    <span class="token-keyword">public var</span> global: <span class="token-type">RuntimeObjectInterface.GenerationOptions</span>
+    <span class="token-macro">@Default</span>([<span class="token-type">ImageGenerationOptionsOverride</span>]())
+    <span class="token-keyword">public var</span> imageOverrides: [<span class="token-type">ImageGenerationOptionsOverride</span>]
+
+    <span class="token-keyword">public func</span> effectiveOptions(forImageAt canonicalImagePath: <span class="token-type">String</span>, engineKey: <span class="token-type">String</span>) -&gt; …
+    <span class="token-keyword">public func</span> override(forImageAt canonicalImagePath: <span class="token-type">String</span>, engineKey: <span class="token-type">String</span>) -&gt; <span class="token-type">ImageGenerationOptionsOverride</span>?
+    <span class="token-keyword">public mutating func</span> updateOverride(forImageAt: …, engine: <span class="token-type">Indexing.EngineReference</span>, _ body: (<span class="token-keyword">inout</span> …) -&gt; <span class="token-type">Void</span>)
+    <span class="token-keyword">public mutating func</span> revert(_ option: <span class="token-type">GenerationOption</span>, forImageAt: …, engineKey: …)
+    <span class="token-keyword">public mutating func</span> removeOverride(forImageAt: …, engineKey: …)
+}
+
+<span class="token-keyword">public struct</span> <span class="token-type">ImageGenerationOptionsOverride</span>: <span class="token-type">Sendable</span>, <span class="token-type">Hashable</span>, <span class="token-type">Identifiable</span> {
+    <span class="token-keyword">public var</span> engine: <span class="token-type">Indexing.EngineReference</span>
+    <span class="token-keyword">public var</span> imagePath: <span class="token-type">String</span>            <span class="token-comment">// canonical</span>
+    <span class="token-keyword">public var</span> overriddenOptions: <span class="token-type">Set</span>&lt;<span class="token-type">GenerationOption</span>&gt;
+    <span class="token-keyword">public var</span> values: <span class="token-type">RuntimeObjectInterface.GenerationOptions</span>
+}</code></pre>
+      <ul>
+        <li>值存一份完整的 <code>GenerationOptions</code>，复用现成 <code>Codable</code>；不认识的选项原始值解码时丢弃，不让整条失败。</li>
+        <li><code>global</code> 与旧 <code>UserDefaults</code> 里的形状相同，迁移原样搬，CLI 照旧按这个类型解码。</li>
+        <li>便捷入口接 <code>RuntimeEngine</code>：<code>effectiveOptions(forImageAt:in:)</code>、<code>updateOverride(forImageAt:in:_:)</code>、<code>effectiveOptionsByImagePath(in:)</code>（Find 请求的表）。</li>
+        <li>迁移照主题迁移：标记 <code>didMigrateLegacyGenerationOptions</code> 只试一次；旧键解码不了就返回、留着旧数据；只有 <code>global</code> 仍为默认值时才写入；旧键不删。</li>
+      </ul>
+    </div>
+  </details>
+  <details>
+    <summary>3. 按镜像解析与各个消费者</summary>
+    <div class="details-body">
+<pre><code><span class="token-keyword">extension</span> <span class="token-type">SettingsAccess</span> {
+    <span class="token-keyword">public func</span> mergedGenerationOptions(forImageAt imagePath: <span class="token-type">String</span>, in engine: <span class="token-type">RuntimeEngine</span>) -&gt; …
+}
+<span class="token-keyword">extension</span> <span class="token-type">ViewModel</span> {
+    <span class="token-keyword">public func</span> mergedGenerationOptions(for runtimeObject: <span class="token-type">RuntimeObject</span>) -&gt; …
+    <span class="token-keyword">public func</span> mergedGenerationOptions(forImageAt imagePath: <span class="token-type">String</span>) -&gt; …
+}</code></pre>
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>消费者</th><th>用哪个镜像</th><th>订阅变化</th></tr></thead>
+        <tbody>
+          <tr><td>内容区取 interface、跳转预热</td><td>对象的 <code>imagePath</code></td><td>是：<code>Observable.tracking</code> 取代 <code>appDefaults.$options</code></td></tr>
+          <tr><td>保存、复制</td><td>对象的 <code>imagePath</code></td><td>否</td></tr>
+          <tr><td>单个导出</td><td><code>exportingState.imagePath</code></td><td>否</td></tr>
+          <tr><td>批量导出</td><td>每个镜像各自</td><td>否</td></tr>
+          <tr><td>命名词云</td><td>词云的镜像</td><td>是</td></tr>
+          <tr><td>Find 文本与成员搜索</td><td>每个镜像各自（请求里的表）</td><td>是：订阅整个分支，变了重跑屏上的搜索</td></tr>
+          <tr><td>交叉引用根解析、打开成员</td><td>成员所在镜像</td><td>否</td></tr>
+          <tr><td>CLI <code>--options app</code></td><td>只用 <code>global</code></td><td>—</td></tr>
+          <tr><td>MCP</td><td>不变：<code>.mcp</code> 预设</td><td>—</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p>订阅读整个 <code>generationOptions</code> 分支，<code>distinctUntilChanged()</code> 挡掉与本镜像无关的变化。interface cache 的键里本来就有选项，不用改。</p>
+    </div>
+  </details>
+  <details>
+    <summary>4. Find 的请求</summary>
+    <div class="details-body">
+<pre><code><span class="token-keyword">public struct</span> <span class="token-type">RuntimeInterfaceSearchQuery</span>: <span class="token-type">Hashable</span>, <span class="token-type">Codable</span>, <span class="token-type">Sendable</span> {
+    <span class="token-keyword">public var</span> generationOptions: <span class="token-type">RuntimeObjectInterface.GenerationOptions</span>?
+    <span class="token-comment">/// Keyed by canonical image path; a peer that predates it reads every image under generationOptions.</span>
+    <span class="token-keyword">public var</span> generationOptionsByImagePath: [<span class="token-type">String</span>: <span class="token-type">RuntimeObjectInterface.GenerationOptions</span>]?
+    <span class="token-keyword">public func</span> generationOptions(forImageAt imagePath: <span class="token-type">String</span>) -&gt; <span class="token-type">RuntimeObjectInterface.GenerationOptions</span>?
+}</code></pre>
+      <ul>
+        <li><code>RuntimeMemberSearchQuery</code> 同样加。</li>
+        <li><code>RuntimeEngine+Search</code> 把表的键换成目录写法，语料库只做原样查找。</li>
+        <li>语料库扫描前为每个镜像算好 <code>RuntimeInterfaceVisibility</code>，存进不可变字典，扫描闭包按 <code>entry.object.imagePath</code> 取；没有表时与今天相同。</li>
+        <li>借用 shared cache 镜像的 engine：表随请求转给 owner；路径写法预计相同，实现时用测试核实。</li>
+        <li><code>FindSession.ShownSearch</code> 记下当时的全局与表，变化时重算。</li>
+      </ul>
+    </div>
+  </details>
+  <details>
+    <summary>5. sheet</summary>
+    <div class="details-body">
+      <ul>
+        <li><code>DocumentState.imagePathForGenerationOptions</code>：聚焦标签的对象所在镜像或镜像页的镜像，空标签退到 <code>currentImageNode?.path</code>。</li>
+        <li>菜单项标题：有镜像时 <code>Generation Options for “&lt;镜像名&gt;”…</code>，没有时 <code>Generation Options for This Image…</code> 并灰掉。</li>
+        <li><code>ImageGenerationOptionsViewModel</code> 的 Input：改值、还原一项、全部还原、打开全局、完成；Output：标题、副标题、生效选项、被覆盖的选项、能否全部还原。订阅 <code>settings.generationOptions</code>，设置页同时改全局时立刻跟着变。</li>
+        <li>ViewController 从清单生成行；固定按钮用 <code>rx.click</code>，动态行的控件汇进 <code>PublishRelay</code>；Done 触发 <code>.dismiss</code>。</li>
+      </ul>
+    </div>
+  </details>
+  <details>
+    <summary>6. 设置页与 7. CLI</summary>
+    <div class="details-body">
+      <ul>
+        <li><code>GenerationOptionsSettingsView</code>：<code>@AppSettings(\.generationOptions)</code>；勾选绑定 <code>$settings.global</code> 的 key path，分段选择用 segmented <code>Picker</code>。</li>
+        <li>Image Overrides（仅 macOS）：每条一个 <code>DisclosureGroup</code>，逐项「标题：值」与还原，行尾 Remove，按 engine 名、镜像名排序；footer 说明去 Editor 菜单设置。</li>
+        <li>CLI：先把 <code>settings.json</code> 解码成私有镜像结构取 <code>generationOptions.global</code>，取不到退回旧键，再退回默认值；<code>transformer</code> 照旧从顶层读。<code>LiveApplicationOptionsReader</code> 读 <code>global</code> 再填 transformer。</li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<section id="research">
+  <h2>调研</h2>
+  <details>
+    <summary>现状代码、设置一侧、先例与菜单</summary>
+    <div class="details-body">
+      <ul>
+        <li><strong>存储</strong>：<code>AppDefaults.options</code> 是 <code>@UserDefault</code>，标准域键 <code>generationOptions</code>（<code>UserDefaultsNamespace.swift:35</code>）。</li>
+        <li><strong>改写</strong>：弹窗经 <code>GenerationOptionsViewModel</code> 改 <code>appDefaults.options</code>；内容区 C 名标签切换（<code>ContentTextViewModel.swift:686-694</code>）改全局。</li>
+        <li><strong>弹窗怎么开</strong>：<code>generationOptionsClick</code> → <code>MainRoute.generationOptions</code> → popover（<code>MainCoordinator.swift:108-114</code>）；工具栏不可自定义（<code>MainToolbarController.swift:266</code>）。</li>
+        <li><strong>合并</strong>：<code>ViewModel.currentMergedGenerationOptions</code>（<code>ViewModel.swift:52</code>），根 <code>AGENTS.md</code> 第 7 条要求单对象 interface 用它。</li>
+        <li><strong>读取点</strong>：内容区 <code>:258</code>、<code>:654</code>；保存复制 <code>MainViewModel.swift:316</code>、<code>:401</code>；导出 <code>:61</code>、批量 <code>:69</code>；词云 <code>:238</code>、<code>:370</code>；Find <code>FindSession.swift:228</code>、<code>:372</code>、<code>:415</code>、<code>:799</code>，打开交叉引用成员两处；CLI host <code>CommandLineHostController.swift:97</code>。</li>
+        <li><strong>Find</strong>：语料打印一次、按请求里的一套选项投影（<code>RuntimeInterfaceCorpusStore.swift:1054</code>、<code>:1101</code>）；请求是合成 <code>Codable</code>，加可选字段两头兼容。</li>
+        <li><strong>CLI</strong>：<code>ApplicationOptionsReader</code> 读 <code>UserDefaults</code> 的 <code>generationOptions</code> 与 <code>settings.json</code> 的 <code>transformer</code>；指南 <code>CommandLineInterface.md:111</code>、插件 skill <code>SKILL.md:175</code> 写了来源。</li>
+        <li><strong>MCP</strong>：用 <code>.mcp</code> 预设（<code>MCPBridgeServer.swift:822</code>），不读 App 选项。</li>
+        <li><strong>选项清单</strong>：ObjC 11 项加 <code>marksSwiftNamesFromAPINotes</code>；Swift 16 项（两个枚举）；<code>maximumLineWidth</code> 不在界面上；<code>transformer</code>、<code>marks…</code>、<code>waitsForTypeIndex</code>、<code>interfaceLanguage</code> 是每次请求决定的。</li>
+        <li><strong>设置</strong>：<code>Settings</code> 是 <code>@Observable @Codable</code>，<code>accessPersistedValues()</code> 与 <code>SettingsPersistenceTests</code>；迁移先例 <code>migrateLegacyThemeProfileIfNeeded()</code>；UIFoundation 0.50.1 有 <code>navigator.navigate(to:)</code>。</li>
+        <li><strong>先例</strong>：<code>RuntimeObjectScopeMemory</code> 用 <code>EngineReference.key(for:)</code>；最近打开用 <code>engine.canonicalImagePath(_:)</code>（<code>RuntimeEngine+ImagePathCanonicalization.swift:41</code>）。</li>
+        <li><strong>菜单</strong>：Editor 菜单只有 Code Folding（<code>MainMenuController.swift:389</code>）；Show Naming Word Cloud 是现成样板（<code>MainWindowController.swift:528</code>、<code>675</code>）。</li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<section id="alternatives">
+  <h2>替代方案</h2>
+  <details>
+    <summary>8 条，均被否</summary>
+    <div class="details-body">
+      <ul>
+        <li><strong>整套覆盖</strong>：覆盖后再改全局就影响不到它。用户选了逐项。</li>
+        <li><strong>保留工具栏按钮改成当前镜像</strong>：与「搬进设置」相反。用户选了菜单加 sheet。</li>
+        <li><strong>只在设置页管理覆盖</strong>：设置窗口没有「当前镜像」，新建覆盖要挑 engine 和镜像。</li>
+        <li><strong>覆盖存进 <code>AppDefaults</code> 文件存储</strong>：设置页要绑定与列出，放 <code>Settings</code> 里直接用 <code>@AppSettings</code>，CLI 也只读一处。</li>
+        <li><strong>为每种值造 <code>enum</code> 做稀疏字典</strong>：要写编解码与比较；完整 <code>GenerationOptions</code> 加一组选项名复用现成能力。</li>
+        <li><strong>Find 只用全局</strong>：有覆盖的镜像里搜到的与内容区不一致，违背「逐字相同」。</li>
+        <li><strong>改回与全局相同时保留覆盖</strong>：会留下大量相同条目，看不出哪些真的不同；有需要再加「钉住」。</li>
+        <li><strong>CLI 也按镜像套覆盖</strong>：独立 host 要自己算键与路径，留作后续项。</li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<section id="impact">
+  <h2>影响</h2>
+  <h3>用户可见变化</h3>
+  <ul>
+    <li>工具栏不再有 Generation Options 按钮；全局在设置页，单个镜像在 Editor 菜单。</li>
+    <li>设置多一页（iOS 也有，只有全局）。</li>
+    <li>C 名标签只改当前镜像；Find 在有覆盖的镜像里按那个镜像的选项搜。</li>
+    <li>「只打印导出的声明」提示指向新位置。</li>
+  </ul>
+  <h3>可发现性</h3>
+  <ul>
+    <li>设置侧栏可见新页；Editor 菜单项标题带镜像名；Image Overrides 为空时说明去哪设。What's New 是发版时的事。</li>
+  </ul>
+  <h3>数据与配置兼容</h3>
+  <ul>
+    <li>首次启动迁移旧键，旧键不删；降级时旧版本读得到迁移前的值。迁移失败用默认值、旧数据留着。</li>
+    <li>旧版本读新 <code>settings.json</code> 时忽略新键。新旧 CLI 与新旧 App 交叉组合都能读到全局。</li>
+    <li>Find 请求新字段可选，新旧对端交叉连接都按全局或今天的行为搜。</li>
+  </ul>
+  <h3>平台与最低版本</h3>
+  <p>不变。iOS / visionOS 只有设置页的全局部分。</p>
+  <h3>发布</h3>
+  <p>无新权限、entitlement、隐私清单条目；不影响公证与 Sparkle。插件 skill 改了，两个清单的 <code>version</code> 升一级。</p>
+</section>
+
+<section id="steps">
+  <h2>落地步骤</h2>
+  <ol>
+    <li><strong>设置模型、选项清单与迁移</strong>
+      <ul><li><code>effectiveOptionsEqualsGlobalWithoutOverride</code>、<code>overriddenOptionUsesImageValueAndOthersFollowGlobal</code>、<code>changingGlobalReachesOptionsTheImageDoesNotOverride</code>、<code>updatingAnOptionToTheGlobalValueRemovesItsOverride</code>、<code>removingTheLastOverriddenOptionRemovesTheOverride</code>、<code>overridesOfOtherEnginesOrImagesDoNotApply</code>、<code>unknownStoredOptionIsDroppedWithoutLosingTheOverride</code>、<code>catalogCoversEveryEncodedOptionExactlyOnce</code>、<code>legacyUserDefaultsOptionsMigrateIntoGlobalOnce</code>、<code>unreadableLegacyOptionsLeaveDefaultsAndKeepTheOldValue</code>、<code>legacyOptionsDoNotOverwriteAGlobalAlreadyChanged</code>、<code>settingsPersistenceCoversGenerationOptions</code></li></ul></li>
+    <li><strong>按镜像解析，换掉 <code>AppDefaults.options</code></strong>
+      <ul><li><code>contentPaneUsesTheEffectiveOptionsOfTheObjectsImage</code>、<code>anOverrideOfAnotherImageDoesNotRefetchTheContentPane</code>、<code>anOverrideOfThisImageRefetchesTheContentPane</code>、<code>cImportedTypeNameTagTogglesOnlyTheObjectsImage</code>、<code>saveAndCopyUseTheObjectsImageOptions</code>、<code>batchExportUsesEachImagesOwnOptions</code>、<code>wordCloudCountsUnderItsImagesOptions</code></li></ul></li>
+    <li><strong>Find 按镜像投影</strong>
+      <ul><li><code>searchProjectsEachImageUnderItsOwnOptions</code>、<code>searchWithoutPerImageTableMatchesTodaysResults</code>、<code>queryEncodedWithoutTheTableStillDecodes</code>、<code>perImageTableKeyedByCanonicalPathReachesTheCatalogSpelling</code>、<code>borrowedSharedCacheImageIsProjectedUnderTheBorrowersOverride</code>、<code>changingAnOverrideRerunsTheShownSearch</code>、<code>crossReferenceMemberOpensUnderItsImagesOptions</code></li></ul></li>
+    <li><strong>设置页</strong>
+      <ul><li><code>settingsWindowListsGenerationOptionsBetweenThemeAndTransformer</code>、<code>iOSSettingsListsGenerationOptionsAfterTheme</code>、<code>settingsPageRouteShowsTheWindowOnThatPage</code>；目视交给用户。</li></ul></li>
+    <li><strong>窗口 sheet，删掉工具栏按钮</strong>
+      <ul><li><code>menuItemTargetsTheFocusedPanesImage</code>、<code>menuItemFallsBackToTheSidebarsImageOnAnEmptyTab</code>、<code>menuItemIsDisabledWithoutAnImage</code>、<code>sheetShowsEffectiveValuesAndMarksOverriddenOptions</code>、<code>changingAnOptionInTheSheetRecordsAnOverride</code>、<code>revertingAnOptionReturnsItToTheGlobalValue</code>、<code>revertAllRemovesTheImagesOverride</code>、<code>sheetFollowsGlobalChangesMadeInSettings</code>、<code>globalOptionsOpensTheSettingsPage</code>、<code>toolbarHasNoGenerationOptionsItemInAnyStyle</code></li></ul></li>
+    <li><strong>CLI 与文档</strong>
+      <ul><li><code>applicationOptionsReaderReadsGlobalFromSettingsFile</code>、<code>applicationOptionsReaderFallsBackToLegacyUserDefaults</code>、<code>settingsFileGlobalWinsOverLegacyUserDefaults</code>、<code>liveHostReadsTheGlobalOptions</code></li></ul></li>
+  </ol>
+  <div class="callout callout-note">
+    <p>构建与测试在 Ultra 上跑；三个包的 <code>swift test</code> 各过一遍，App 用 Debug workspace 编一次。原生工程的 target 与设置不变，预计不改 Tuist 描述，落地前跑 <code>./TuistScript.sh check</code> 确认。收尾判断：预计不需要单独的指南；术语「镜像覆盖」登记进术语表，并更新「Find 语料」一条的说法。</p>
+  </div>
+</section>
+
+<section id="log">
+  <h2>决策日志</h2>
+  <details>
+    <summary>5 条，最近一条：用户批准，开始实现</summary>
+    <div class="details-body">
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>日期</th><th>变更</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td class="numeric">2026-11-26</td><td>Created as Draft</td><td>把工具栏的 Generation Options 搬进设置，并支持按 engine + 镜像覆盖全局选项。</td></tr>
+          <tr><td class="numeric">2026-11-26</td><td>覆盖粒度定为逐项</td><td>用户选择逐项覆盖：没动过的项继续跟随全局。整套覆盖记入替代方案。</td></tr>
+          <tr><td class="numeric">2026-11-26</td><td>窗口入口定为 Editor 菜单开 sheet</td><td>用户选择 Editor 菜单打开 sheet；工具栏按钮删除；设置页列出全局与覆盖。</td></tr>
+          <tr><td class="numeric">2026-11-26</td><td>agent 自定的假设</td><td>存进 <code>settings.json</code> 并迁移旧键；engine 键沿用 Always Index 的；镜像路径用规范写法；Find 按镜像投影；C 名标签只改当前镜像；CLI 与 MCP 只用全局；iOS 设置加全局页。</td></tr>
+          <tr><td class="numeric">2026-11-26</td><td>Accepted</td><td>用户批准，开始实现。</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+  </details>
+</section>
+
+</main>
+</div>
+</body>
+</html>
