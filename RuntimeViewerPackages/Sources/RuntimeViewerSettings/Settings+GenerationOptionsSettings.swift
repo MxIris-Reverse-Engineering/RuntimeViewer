@@ -24,8 +24,8 @@ extension Settings {
         public var global: RuntimeObjectInterface.GenerationOptions
 
         /// The images that override some of ``global``, at most one per engine and image.
-        @Default([ImageGenerationOptionsOverride]())
-        public var imageOverrides: [ImageGenerationOptionsOverride]
+        @Default([Settings.ImageGenerationOptionsOverride]())
+        public var imageOverrides: [Settings.ImageGenerationOptionsOverride]
 
         public static let `default` = Self()
 
