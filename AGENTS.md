@@ -233,9 +233,13 @@ and through `queued-build`. What `check` compares, the Tuist workarounds behind 
 manifests, and the known differences from the native build: `Documentations/Guides/TuistDevelopment.md`.
 Background: `Documentations/Evolutions/0053-tuist-coexistence.md`.
 
-**Dependency floors**: UIFoundation is declared `from: "0.50.1"` with its `Settings` trait on (which
+**Dependency floors**: UIFoundation is declared `from: "0.51.0"` with its `Settings` trait on (which
 exposes `UIFoundationSettings` and `UIFoundationSettingsUI`) and its `WelcomePanel` trait on (the welcome
-window's `WelcomePanelController`). `0.50.1` is the first whose `ScrollPocketView` works on macOS 26 (with `0.50.0`
+window's `WelcomePanelController`). `0.51.0` is the first whose `LayerBackedView` keeps a corner radius or a
+background colour set on it under the `AppKitPlus` trait with AppKitPlus `0.24.0`, whose `NSLayerBackedView`
+took those names over: with `0.50.1` the welcome window, the Load Frameworks banner, the start page's Open
+Quickly field and every other rounded `LayerBackedView` turned square (UIFoundation's proposal 0044).
+`0.50.1` was the first whose `ScrollPocketView` works on macOS 26 (with `0.50.0`
 no window opened there); `0.50.0` the first whose welcome window takes the text of its empty
 list (`Configuration.projectListPlaceholderText`), which says No Recent Files here. `0.49.0` was the first whose settings pages
 and `SettingsViewController` build on iOS, for the iOS settings screen; `0.48.0` the first whose settings store
@@ -258,7 +262,7 @@ one `SwiftDeclaration.Definition`'s generated `box` setter assigns `self`, which
 SFSymbols is declared `from: "0.4.0"`, the first release with `nsuiImage` (it deprecated the misspelled
 `nsuiImgae`). AppKitPlus-Release is declared `from: "0.24.0"`, the first release with `NSResponderDebugPanel`,
 which a Debug build's Debug ▸ Responder Debugger shows; it needs Xcode 27.2, the version the release workflow
-selects. `0.22.0` was the first whose `NSPopUpPathControl` draws a symbol icon whole, sized to the control's font as Xcode's jump bar does: before it,
+selects, and UIFoundation `0.51.0` (above). `0.22.0` was the first whose `NSPopUpPathControl` draws a symbol icon whole, sized to the control's font as Xcode's jump bar does: before it,
 the jump bar cut the right side off the image kinds' symbols wider than 16 points, such as the framework one.
 `0.18.0` brought what the
 sidebar's text-token filter fields need — a comparison type's `valuePrefix` / `valueSuffix`, no menu for a
