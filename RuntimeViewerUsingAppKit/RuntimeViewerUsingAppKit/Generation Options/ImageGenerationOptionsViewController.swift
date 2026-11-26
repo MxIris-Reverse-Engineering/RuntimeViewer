@@ -7,31 +7,33 @@ import RuntimeViewerSettings
 
 /// The sheet Editor › Generation Options for “<image>”… opens: one image's Generation Options, the
 /// overridden ones in bold with a button that puts them back on the global options (proposal
-/// `generation-options-image-overrides`). The rows come from `Settings.GenerationOption`, the list
+/// `generation-options-image-overrides`). The rows come from `RuntimeViewerSettings.Settings.GenerationOption`, the list
 /// Settings › Generation Options is built from too.
 final class ImageGenerationOptionsViewController: BaseViewController<ImageGenerationOptionsViewModel> {
     // MARK: - Rows
 
     /// One option's row: its control, and the button that reverts it.
     private final class OptionRow {
-        let option: Settings.GenerationOption
+        let option: RuntimeViewerSettings.Settings.GenerationOption
         let view: NSView
-        let revertButton = NSButton().then {
-            $0.isBordered = false
-            $0.bezelStyle = .accessoryBar
-            $0.image = NSImage(systemSymbolName: "arrow.uturn.backward", accessibilityDescription: "Use the Global Value")
-            $0.imagePosition = .imageOnly
-            $0.toolTip = "Use the global value"
-            $0.isHidden = true
-        }
+        let revertButton: NSButton
 
         /// The checkbox of a toggle, or the segmented control of a choice with its title.
         let checkbox: CheckboxButton?
         let segmentedControl: NSSegmentedControl?
         let titleLabel: Label?
 
-        init(option: Settings.GenerationOption) {
+        init(option: RuntimeViewerSettings.Settings.GenerationOption) {
             self.option = option
+            let revertButton = NSButton().then {
+                $0.isBordered = false
+                $0.bezelStyle = .accessoryBar
+                $0.image = NSImage(systemSymbolName: "arrow.uturn.backward", accessibilityDescription: "Use the Global Value")
+                $0.imagePosition = .imageOnly
+                $0.toolTip = "Use the global value"
+                $0.isHidden = true
+            }
+            self.revertButton = revertButton
             switch option.control {
             case .toggle:
                 let checkbox = CheckboxButton(title: option.title)
@@ -115,7 +117,7 @@ final class ImageGenerationOptionsViewController: BaseViewController<ImageGenera
         $0.keyEquivalent = "\r"
     }
 
-    private lazy var rows: [OptionRow] = Settings.GenerationOption.allCases.map(OptionRow.init)
+    private lazy var rows: [OptionRow] = RuntimeViewerSettings.Settings.GenerationOption.allCases.map(OptionRow.init)
 
     private lazy var stackView = VStackView(alignment: .leading, spacing: 10) {
         VStackView(alignment: .leading, spacing: 2) {
@@ -142,7 +144,7 @@ final class ImageGenerationOptionsViewController: BaseViewController<ImageGenera
             make.edges.equalToSuperview().inset(20)
         }
 
-        for section in Settings.GenerationOption.Section.allCases {
+        for section in RuntimeViewerSettings.Settings.GenerationOption.Section.allCases {
             stackView.addArrangedSubview(Label(section.title).then {
                 $0.textColor = .secondaryLabelColor
             })
