@@ -1,6 +1,6 @@
 # Draft - Generation Options 搬进设置，并可按 engine + 镜像逐项覆盖
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-26
 - **最后更新**: 2026-11-26
@@ -82,7 +82,7 @@ Generation Options 从工具栏的弹窗搬进设置窗口，成为 Settings ›
 
 | 文件 / 类型 | 动作 | 改什么 | 为什么 | 步骤 |
 |---|---|---|---|---|
-| `RuntimeViewerSettings/Settings+GenerationOptions.swift` · `Settings.GenerationOptionsSettings`、`Settings.ImageGenerationOptionsOverride` | 新增 | 全局 + 覆盖列表的模型；`effectiveOptions(forImageAt:engineKey:)`、`override(forImageAt:engineKey:)`、`updateOverride(forImageAt:engine:_:)`、`revert(_:forImageAt:engineKey:)`、`removeOverride(forImageAt:engineKey:)` | 存储与解析规则放在一处，设置页、sheet、AppCore 共用 | 1 |
+| `RuntimeViewerSettings/Settings+GenerationOptionsSettings.swift` · `Settings.GenerationOptionsSettings`；`Settings+ImageGenerationOptionsOverride.swift` · `Settings.ImageGenerationOptionsOverride` | 新增 | 全局 + 覆盖列表的模型；`effectiveOptions(forImageAt:engineKey:)`、`override(forImageAt:engineKey:)`、`updateOverride(forImageAt:engine:_:)`、`revert(_:forImageAt:engineKey:)`、`removeOverride(forImageAt:engineKey:)` | 存储与解析规则放在一处，设置页、sheet、AppCore 共用 | 1 |
 | `RuntimeViewerSettings/Settings+GenerationOption.swift` · `Settings.GenerationOption`、`Settings.GenerationOption.Control`、`Settings.GenerationOption.Section` | 新增 | 用户可设的每个选项一个 case（原始值存盘，不改名）：标题、分组、控件（勾选的 key path 或分段选择的标签与读写）、`copyValue(from:to:)`、`hasSameValue(in:as:)` | 逐项覆盖要给每个选项一个稳定的标识；两处界面从同一份清单生成，加选项只改这里 | 1 |
 | `RuntimeViewerSettings/Settings+GenerationOptionsEngine.swift` | 新增 | `effectiveOptions(forImageAt:in engine:)`、`updateOverride(forImageAt:in engine:_:)` 等便捷入口：内部取 `EngineReference.key(for:)` 与 `engine.canonicalImagePath(_:)` | 调用方不用自己算键与规范路径 | 1 |
 | `RuntimeViewerSettings/Settings.swift` · `Settings`、`SettingsAccess` | 修改 | 加 `@Default var generationOptions`；`accessPersistedValues()` 读它；`runMigrations()` 加 `migrateLegacyGenerationOptionsIfNeeded()` | 新分支要持久化；旧值迁一次 | 1 |
@@ -507,3 +507,5 @@ public final class ImageGenerationOptionsViewModel: ViewModel<MainRoute> {
 | 2026-11-26 | 窗口入口定为 Editor 菜单开 sheet | 用户选择 Editor › Generation Options for “<镜像名>”… 打开 sheet；工具栏按钮删除；设置页列出全局与覆盖。 |
 | 2026-11-26 | agent 自定的假设 | 存进 `settings.json` 并迁移旧键；engine 键沿用 Always Index 的；镜像路径用规范写法；Find 按镜像投影；C 名标签只改当前镜像；CLI 与 MCP 只用全局；iOS 设置加全局页。均在简报里列出，用户未反对前按此执行。 |
 | 2026-11-26 | Accepted | 用户批准，开始实现。 |
+| 2026-11-26 | In Progress | 在 `feature/generation-options-image-overrides` 上开始实现。 |
+| 2026-11-26 | 迁移读取的 user defaults 可注入 | `SettingsAccess.init(store:legacyUserDefaults:)`，默认 `.standard`；主题迁移也改读它，测试因此不碰测试进程的标准 defaults。 |

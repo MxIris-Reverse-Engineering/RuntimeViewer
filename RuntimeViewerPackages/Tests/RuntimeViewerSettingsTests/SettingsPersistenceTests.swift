@@ -90,6 +90,11 @@ private let persistedProperties: [PersistedProperty] = [
         matches: { $0.transformer.objc.cType.isEnabled != Settings.TransformerSettings().objc.cType.isEnabled }
     ),
     PersistedProperty(
+        encodedKey: "generationOptions",
+        apply: { $0.generationOptions.global.swiftInterfaceOptions.printFieldOffset = true },
+        matches: { $0.generationOptions.global.swiftInterfaceOptions.printFieldOffset }
+    ),
+    PersistedProperty(
         encodedKey: "mcp",
         apply: { $0.mcp.fixedPort = 12_345 },
         matches: { $0.mcp.fixedPort == 12_345 }

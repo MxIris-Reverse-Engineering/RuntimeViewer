@@ -3,6 +3,7 @@ import FoundationToolbox
 import MetaCodable
 import Observation
 import UIFoundationSettings
+import RuntimeViewerCore
 
 @Observable
 @Codable
@@ -19,6 +20,10 @@ public final class Settings {
 
     @Default(TransformerSettings.default)
     public var transformer: TransformerSettings = .init()
+
+    /// The Generation Options, global and per image (proposal `generation-options-image-overrides`).
+    @Default(GenerationOptionsSettings.default)
+    public var generationOptions: GenerationOptionsSettings = .init()
 
     @Default(MCP.default)
     public var mcp: MCP = .init()
@@ -79,6 +84,7 @@ extension Settings: PersistentSettings {
         _ = editor
         _ = notifications
         _ = transformer
+        _ = generationOptions
         _ = mcp
         _ = indexing
         _ = search
@@ -104,8 +110,13 @@ public final class SettingsAccess {
 
     private let store: SettingsStore<Settings>
 
-    init(store: SettingsStore<Settings>) {
+    /// Where the one-shot migrations read what earlier builds kept in user defaults, and record
+    /// that they ran: the standard defaults, or a suite of a test's own.
+    private let legacyUserDefaults: UserDefaults
+
+    init(store: SettingsStore<Settings>, legacyUserDefaults: UserDefaults = .standard) {
         self.store = store
+        self.legacyUserDefaults = legacyUserDefaults
     }
 
     /// Whether the last ``load()`` or ``loadSynchronously()`` found stored
@@ -161,6 +172,32 @@ public final class SettingsAccess {
     private func runMigrations() {
         migrateLegacyThemeProfileIfNeeded()
         migrateResidentLimitDefaultsIfNeeded()
+        migrateLegacyGenerationOptionsIfNeeded()
+    }
+
+    /// Moves the Generation Options earlier builds kept in user defaults, under `generationOptions`
+    /// (`AppDefaults.options`), into `generationOptions.global`, once (proposal
+    /// `generation-options-image-overrides`).
+    ///
+    /// Tried once, whatever comes of it, like the theme migration below. The old value is written
+    /// only over global options still at their defaults, so it never replaces options changed in a
+    /// build that already has this branch; and the old key stays, so a build from before still
+    /// finds its options after a downgrade.
+    private func migrateLegacyGenerationOptionsIfNeeded() {
+        let legacyKey = "generationOptions"
+        let migrationFlagKey = "didMigrateLegacyGenerationOptions"
+
+        guard !legacyUserDefaults.bool(forKey: migrationFlagKey) else { return }
+        defer { legacyUserDefaults.set(true, forKey: migrationFlagKey) }
+
+        guard let legacyData = legacyUserDefaults.data(forKey: legacyKey) else { return }
+        guard let legacyOptions = try? JSONDecoder().decode(RuntimeObjectInterface.GenerationOptions.self, from: legacyData) else {
+            #log(.error, "The Generation Options stored under \(legacyKey, privacy: .public) no longer decode; the defaults stay")
+            return
+        }
+        guard store.value.generationOptions.global == RuntimeObjectInterface.GenerationOptions() else { return }
+        store.value.generationOptions.global = legacyOptions
+        #log(.info, "Moved the Generation Options from user defaults into the settings")
     }
 
     /// Writes pending changes immediately instead of waiting out the store's
@@ -227,7 +264,7 @@ public final class SettingsAccess {
     private func migrateLegacyThemeProfileIfNeeded() {
         let legacyKey = "themeProfile"
         let migrationFlagKey = "didMigrateLegacyThemeProfile"
-        let defaults = UserDefaults.standard
+        let defaults = legacyUserDefaults
 
         guard !defaults.bool(forKey: migrationFlagKey) else { return }
         // Mark the migration as attempted unconditionally so a malformed
