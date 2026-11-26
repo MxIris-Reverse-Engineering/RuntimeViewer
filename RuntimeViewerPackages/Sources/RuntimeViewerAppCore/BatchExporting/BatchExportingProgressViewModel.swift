@@ -3,6 +3,7 @@
 import Foundation
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
+import RuntimeViewerSettings
 
 public final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
     public struct Input {
@@ -66,14 +67,19 @@ public final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
             return
         }
 
-        var generationOptions = appDefaults.options
-        generationOptions.transformer = settings.transformer
-
         let images = exportingState.selectedImages
         guard !images.isEmpty else {
             isExporting = false
             return
         }
+
+        // Taken as they are when the export starts.
+        let generationOptionsByImagePath = Self.generationOptionsByImagePath(
+            for: images,
+            generationOptions: settings.generationOptions,
+            transformer: settings.transformer,
+            in: documentState.runtimeEngine
+        )
 
         let total = images.count
         // Locals, so the export loop below captures them and not this view model.
@@ -107,7 +113,7 @@ public final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
                             swiftFormat: swiftFormat,
                             cPlusPlusFormat: cPlusPlusFormat,
                             includeMetadata: includeMetadata,
-                            generationOptions: generationOptions,
+                            generationOptions: generationOptionsByImagePath[rowViewModel.image.path] ?? RuntimeObjectInterface.GenerationOptions(),
                             runtimeEngine: runtimeEngine,
                             documentState: documentState,
                         )
@@ -127,7 +133,7 @@ public final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
                                 swiftFormat: swiftFormat,
                                 cPlusPlusFormat: cPlusPlusFormat,
                                 includeMetadata: includeMetadata,
-                                generationOptions: generationOptions,
+                                generationOptions: generationOptionsByImagePath[nextRowViewModel.image.path] ?? RuntimeObjectInterface.GenerationOptions(),
                                 runtimeEngine: runtimeEngine,
                                 documentState: documentState,
                             )
@@ -163,6 +169,24 @@ public final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
     }
 
     @MainActor
+    /// The options each image exports with: its own effective Generation Options, as the content
+    /// pane shows it (proposal `generation-options-image-overrides`), with the transformer.
+    static func generationOptionsByImagePath(
+        for images: [BatchExportingImage],
+        generationOptions: Settings.GenerationOptionsSettings,
+        transformer: Transformer.Configuration,
+        in runtimeEngine: RuntimeEngine
+    ) -> [String: RuntimeObjectInterface.GenerationOptions] {
+        Dictionary(
+            images.map { image -> (String, RuntimeObjectInterface.GenerationOptions) in
+                var imageGenerationOptions = generationOptions.effectiveOptions(forImageAt: image.path, in: runtimeEngine)
+                imageGenerationOptions.transformer = transformer
+                return (image.path, imageGenerationOptions)
+            },
+            uniquingKeysWith: { firstOptions, _ in firstOptions }
+        )
+    }
+
     private static func exportOne(
         rowViewModel: BatchExportingProgressRowViewModel,
         baseDirectory: URL,

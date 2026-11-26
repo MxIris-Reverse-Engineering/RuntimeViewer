@@ -225,7 +225,7 @@ public final class FindSession {
 
     public init(documentState: DocumentState) {
         self.documentState = documentState
-        appDefaults.$options
+        settings.generationOptionsSettingsObservable()
             .distinctUntilChanged()
             .skip(1)
             .observe(on: MainScheduler.instance)
@@ -369,7 +369,7 @@ public final class FindSession {
             return
         }
         prioritizeCorpora(of: scopeImagePaths)
-        let generationOptions = appDefaults.options
+        let generationOptions = settings.generationOptions.global
         if query.mode.relationship == nil {
             shownSearch = ShownSearch(query: query, generationOptions: generationOptions, scopeImagePaths: scopeImagePaths)
         }
@@ -412,7 +412,7 @@ public final class FindSession {
     /// into, which stays as it is. Relationship searches depend on neither.
     private func rerunShownSearch() {
         guard let shownSearch else { return }
-        let generationOptions = appDefaults.options
+        let generationOptions = settings.generationOptions.global
         cancelCurrentRun()
         resetResults()
         self.shownSearch = ShownSearch(query: shownSearch.query, generationOptions: generationOptions, scopeImagePaths: shownSearch.scopeImagePaths)
@@ -796,7 +796,7 @@ public final class FindSession {
         let run = SearchRun()
         currentRun = run
         isSearching = true
-        let generationOptions = appDefaults.options
+        let generationOptions = settings.generationOptions.global
         // As `startSearch`: the task holds the run, never the session.
         searchTask = Task { [weak self] in
             let outcome: Result<FindCrossReferenceRootResolver.Resolution, any Swift.Error>

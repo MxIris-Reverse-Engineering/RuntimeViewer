@@ -24,14 +24,14 @@ public final class GenerationOptionsViewModel<Route: Routable>: ViewModel<Route>
         input.updateOption
             .emitOnNext { [weak self] mutation in
                 guard let self else { return }
-                var currentOptions = appDefaults.options
+                var currentOptions = settings.generationOptions.global
                 mutation(&currentOptions)
-                appDefaults.options = currentOptions
+                settings.generationOptions.global = currentOptions
             }
             .disposed(by: rx.disposeBag)
 
         return Output(
-            options: appDefaults.$options.asDriverOnErrorJustComplete()
+            options: settings.generationOptionsSettingsObservable().map(\.global).distinctUntilChanged().asDriverOnErrorJustComplete()
         )
     }
 }

@@ -10,57 +10,60 @@ import RuntimeViewerAppTestingSupport
 /// standard defaults.
 ///
 /// The race these replace — a Find session rerunning its search because an
-/// unrelated test changed the Generation Options — cannot be reproduced on
-/// demand; these are its deterministic stand-ins. Each writes a value that
-/// differs from what the instance holds, so a leftover from an earlier run
-/// cannot hide a leak behind an equal value.
+/// unrelated test changed the Generation Options, which lived in user
+/// defaults then — cannot be reproduced on demand; these are its
+/// deterministic stand-ins, written against the Match Case switch, a value
+/// still kept there. Each writes a value that differs from what the instance
+/// holds, so a leftover from an earlier run cannot hide a leak behind an
+/// equal value.
 @Suite("AppDefaults isolation")
 struct AppDefaultsIsolationTests {
-    @Test("a Generation Options write stays in the instance it was made on")
-    func optionsWriteStaysInItsInstance() {
-        restoringStandardGenerationOptions {
+    @Test("a write stays in the instance it was made on")
+    func writeStaysInItsInstance() {
+        restoringStandardCaseSensitivity {
             let writer = AppDefaults.isolated()
             let bystander = AppDefaults.isolated()
-            let bystanderOptionsBefore = bystander.options
+            let bystanderValueBefore = bystander.isRuntimeObjectFilterCaseSensitive
 
-            writer.options = Self.toggled(writer.options)
+            writer.isRuntimeObjectFilterCaseSensitive.toggle()
 
-            #expect(bystander.options == bystanderOptionsBefore, "another instance's write changed what this one reads")
+            #expect(bystander.isRuntimeObjectFilterCaseSensitive == bystanderValueBefore, "another instance's write changed what this one reads")
         }
     }
 
     @Test("another instance's write is not observed")
     func otherInstanceWriteIsNotObserved() {
-        restoringStandardGenerationOptions {
+        restoringStandardCaseSensitivity {
             let writer = AppDefaults.isolated()
             let bystander = AppDefaults.isolated()
-            let writtenOptions = Self.toggled(writer.options)
-            var observedWrites: [RuntimeObjectInterface.GenerationOptions] = []
+            let writtenValue = !writer.isRuntimeObjectFilterCaseSensitive
+            #expect(bystander.isRuntimeObjectFilterCaseSensitive != writtenValue, "both fresh instances start alike")
+            var observedWrites: [Bool] = []
             let disposeBag = DisposeBag()
-            bystander.$options
-                .filter { options in options == writtenOptions }
-                .subscribeOnNext { options in observedWrites.append(options) }
+            bystander.$isRuntimeObjectFilterCaseSensitive
+                .filter { value in value == writtenValue }
+                .subscribeOnNext { value in observedWrites.append(value) }
                 .disposed(by: disposeBag)
 
             // Key-value observation of a defaults key is delivered on the
             // writing thread, before the setter returns.
-            writer.options = writtenOptions
+            writer.isRuntimeObjectFilterCaseSensitive = writtenValue
 
-            #expect(observedWrites.isEmpty, "this instance's options stream reported another instance's write")
+            #expect(observedWrites.isEmpty, "this instance's stream reported another instance's write")
             withExtendedLifetime(disposeBag) {}
         }
     }
 
     @Test("an isolated instance leaves the standard defaults alone")
     func isolatedInstanceLeavesStandardDefaultsAlone() {
-        restoringStandardGenerationOptions {
-            let standardOptionsBefore = UserDefaults.standard.data(forKey: Self.generationOptionsKey)
+        restoringStandardCaseSensitivity {
+            let standardValueBefore = UserDefaults.standard.object(forKey: Self.caseSensitivityKey) as? Bool
             let isolated = AppDefaults.isolated()
 
-            isolated.options = Self.toggled(isolated.options)
+            isolated.isRuntimeObjectFilterCaseSensitive.toggle()
 
             #expect(
-                UserDefaults.standard.data(forKey: Self.generationOptionsKey) == standardOptionsBefore,
+                UserDefaults.standard.object(forKey: Self.caseSensitivityKey) as? Bool == standardValueBefore,
                 "an isolated instance wrote the test process's standard defaults"
             )
         }
@@ -108,34 +111,24 @@ struct AppDefaultsIsolationTests {
     /// go when this returns.
     private static func namespaceOfReleasedInstance() -> UserDefaultsNamespace {
         let appDefaults = AppDefaults.isolated()
-        appDefaults.options = toggled(appDefaults.options)
+        appDefaults.isRuntimeObjectFilterCaseSensitive.toggle()
         #expect(appDefaults.userDefaultsNamespace.isolatedKeys?.isEmpty == false, "the write never reached the isolated suite")
         return appDefaults.userDefaultsNamespace
     }
 
-    /// The key the app keeps its Generation Options under in the standard
+    /// The key the app keeps the Match Case switch under in the standard
     /// defaults.
-    private static let generationOptionsKey = "generationOptions"
+    private static let caseSensitivityKey = "runtimeObjectFilterIsCaseSensitive"
 
-    /// Different from whatever `options` holds — including whatever an
-    /// earlier run left behind — so a leak cannot hide behind an equal value.
-    private static func toggled(
-        _ options: RuntimeObjectInterface.GenerationOptions
-    ) -> RuntimeObjectInterface.GenerationOptions {
-        var toggledOptions = options
-        toggledOptions.objcHeaderOptions.stripSynthesizedIvars.toggle()
-        return toggledOptions
-    }
-
-    /// Puts the test process's standard Generation Options back if `body`
-    /// changed them, which only a broken isolation does. Written only on a
+    /// Puts the test process's standard Match Case switch back if `body`
+    /// changed it, which only a broken isolation does. Written only on a
     /// difference, so a passing run never touches the standard defaults; a
     /// failing one does not leave its write behind for the next run to read.
-    private func restoringStandardGenerationOptions(_ body: () -> Void) {
-        let standardOptionsBefore = UserDefaults.standard.data(forKey: Self.generationOptionsKey)
+    private func restoringStandardCaseSensitivity(_ body: () -> Void) {
+        let standardValueBefore = UserDefaults.standard.object(forKey: Self.caseSensitivityKey) as? Bool
         defer {
-            if UserDefaults.standard.data(forKey: Self.generationOptionsKey) != standardOptionsBefore {
-                UserDefaults.standard.set(standardOptionsBefore, forKey: Self.generationOptionsKey)
+            if UserDefaults.standard.object(forKey: Self.caseSensitivityKey) as? Bool != standardValueBefore {
+                UserDefaults.standard.set(standardValueBefore, forKey: Self.caseSensitivityKey)
             }
         }
         body()

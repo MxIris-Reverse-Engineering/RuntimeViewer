@@ -184,7 +184,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         let transformerObservable: Observable<Transformer.Configuration>
         let marksCommentStructureObservable: Observable<Bool>
         // Fixed for the process: whether SourceEditor runs does not change while the app does.
-        // Merged the way `currentMergedGenerationOptions` merges it, like the comment structure.
+        // Merged the way `SettingsAccess.mergingRequestOptions(into:)` merges it, like the comment structure.
         let marksAttachedMacros: Bool
         let marksCImportedTypeNames: Bool
         #if canImport(AppKit) && !targetEnvironment(macCatalyst)
@@ -204,7 +204,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
                 }
             }
             .share(replay: 1, scope: .whileConnected)
-        // Merged the way `currentMergedGenerationOptions` merges it, so a link
+        // Merged the way `SettingsAccess.mergingRequestOptions(into:)` merges it, so a link
         // click warms the cache entry this fetch then hits.
         marksCommentStructureObservable = Observable<Bool>
             .tracking {
@@ -252,15 +252,25 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
             })
             .scan(0) { count, _ in count + 1 }
             .startWith(0)
+        // The effective Generation Options of the image the object on screen is in (proposal
+        // `generation-options-image-overrides`): a change to the global options or to this image's
+        // override refetches, one to another image's override does not. Paired with the object it
+        // was worked out for, so every object the pane is given still fetches once.
+        let runtimeEngine = documentState.runtimeEngine
+        let objectAndGenerationOptions = $runtimeObject
+            .flatMapLatest { [settings] runtimeObject -> Observable<(RuntimeObject, RuntimeObjectInterface.GenerationOptions)> in
+                settings.effectiveGenerationOptionsObservable(forImageAt: runtimeObject.imagePath, in: runtimeEngine)
+                    .map { (runtimeObject, $0) }
+            }
         let interfaceStream = Observable
             .combineLatest(
-                $runtimeObject,
-                appDefaults.$options.distinctUntilChanged(),
+                objectAndGenerationOptions,
                 transformerObservable.distinctUntilChanged(),
                 marksCommentStructureObservable.distinctUntilChanged(),
                 typeNameResolutionCount
             )
-            .flatMapLatest { [_commonLoading = self._commonLoading] runtimeObject, options, transformer, marksCommentStructure, _ -> Observable<FetchedInterface?> in
+            .flatMapLatest { [_commonLoading = self._commonLoading] objectAndGenerationOptions, transformer, marksCommentStructure, _ -> Observable<FetchedInterface?> in
+                let (runtimeObject, options) = objectAndGenerationOptions
                 var mergedOptions = options
                 mergedOptions.transformer = transformer
                 mergedOptions.marksCommentStructure = marksCommentStructure
@@ -396,6 +406,16 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         return try await fetchInterface()
     }
 
+    /// Where the note sends the user to turn Print Exported Declarations Only off: the global
+    /// options, and on the Mac the image's own sheet (proposal `generation-options-image-overrides`).
+    nonisolated static var generationOptionsLocation: String {
+        #if os(macOS)
+        "Settings › Generation Options, or for this image under Editor › Generation Options,"
+        #else
+        "Settings › Generation Options"
+        #endif
+    }
+
     /// The interface the pane shows for a fetched one: the same, except an object that Print
     /// Exported Declarations Only leaves empty — a Swift type or an Objective-C class its image
     /// does not export, or a category on such a class, reached through a link or listed while the
@@ -423,7 +443,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         return SemanticString {
             Comment("\(interface.object.displayName) prints nothing while Print Exported Declarations Only is on.")
             BreakLine()
-            Comment("Turn it off in Generation Options to show what \(interface.object.imageName) does not export.")
+            Comment("Turn it off in \(generationOptionsLocation) to show what \(interface.object.imageName) does not export.")
         }
         .frozen()
     }
@@ -651,7 +671,9 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
             .flatMapLatest { [weak self] runtimeObject, destination -> Signal<(RuntimeObjectInterface?, SelectionRoute.Destination)> in
                 guard let self else { return .empty() }
                 let interfaceProvider = self.interfaceProvider
-                let mergedOptions = self.currentMergedGenerationOptions
+                // The destination object's image: its options are what the pane that shows it
+                // fetches with.
+                let mergedOptions = self.mergedGenerationOptions(for: runtimeObject)
                 return Observable.async {
                     try await interfaceProvider(runtimeObject, mergedOptions)
                 }
@@ -684,13 +706,14 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         }
         .disposed(by: rx.disposeBag)
 
-        // The spelling is a Generation Option like any other: storing it refetches every pane's
-        // interface through `appDefaults.$options`.
+        // The spelling is a Generation Option like any other, and the tag switches it for the image
+        // the object is in: it is recorded as that image's override, which refetches every pane
+        // showing an object of the image (proposal `generation-options-image-overrides`).
         input.cImportedTypeNameSpellingToggled.emitOnNext { [weak self] in
             guard let self else { return }
-            var options = appDefaults.options
-            options.swiftInterfaceOptions.cImportedTypeNameSpelling = options.swiftInterfaceOptions.cImportedTypeNameSpelling.toggled
-            appDefaults.options = options
+            settings.generationOptions.updateOverride(forImageAt: runtimeObject.imagePath, in: documentState.runtimeEngine) { options in
+                options.swiftInterfaceOptions.cImportedTypeNameSpelling = options.swiftInterfaceOptions.cImportedTypeNameSpelling.toggled
+            }
         }
         .disposed(by: rx.disposeBag)
 

@@ -58,7 +58,9 @@ public final class ExportingProgressViewModel: ViewModel<ExportingRoute> {
             return
         }
 
-        var generationOptions = appDefaults.options
+        // The image's own effective Generation Options, as the content pane shows it (proposal
+        // `generation-options-image-overrides`).
+        var generationOptions = settings.generationOptions.effectiveOptions(forImageAt: exportingState.imagePath, in: documentState.runtimeEngine)
         generationOptions.transformer = settings.transformer
 
         let configuration = RuntimeInterfaceExportConfiguration(

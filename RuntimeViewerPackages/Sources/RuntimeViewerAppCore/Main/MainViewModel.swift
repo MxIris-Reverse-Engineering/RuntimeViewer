@@ -313,7 +313,7 @@ public final class MainViewModel: ViewModel<MainRoute> {
             .filterNil()
             .emitOnNext { [weak self] url, runtimeObject in
                 guard let self else { return }
-                var options = currentMergedGenerationOptions
+                var options = mergedGenerationOptions(for: runtimeObject)
                 options.interfaceLanguage = documentState.editorArea.focusedPane.activeTab.interfaceLanguage
                 Task {
                     do {
@@ -398,7 +398,7 @@ public final class MainViewModel: ViewModel<MainRoute> {
                             // Same cache + merged options as the save flow:
                             // sharing the visible object costs no engine
                             // round-trip and yields the displayed text.
-                            var options = await self.currentMergedGenerationOptions
+                            var options = await self.mergedGenerationOptions(for: runtimeObjectType)
                             options.interfaceLanguage = interfaceLanguage
                             let semanticString = try await documentState.interfaceCache.interface(for: runtimeObjectType, options: options)?.interfaceString
                             completion(semanticString?.string.data(using: .utf8), nil)

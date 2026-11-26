@@ -61,15 +61,15 @@ public final class AppDefaults: @unchecked Sendable {
     /// legacy files from the same directory, so an isolated instance migrates
     /// nothing.
     ///
-    /// The namespace matters as much as the directory. `$options` observes a
-    /// single user defaults key, so instances sharing the standard defaults
-    /// hear each other's writes — a Find session in one test searched again
-    /// whenever another test changed the Generation Options — and every write
-    /// stayed in the test process's defaults for the next run to read.
+    /// The namespace matters as much as the directory. A `@UserDefault`'s
+    /// publisher observes a single user defaults key, so instances sharing the
+    /// standard defaults hear each other's writes — a Find session in one test
+    /// once searched again whenever another test changed the Generation
+    /// Options, which were stored here then — and every write stayed in the
+    /// test process's defaults for the next run to read.
     package init(storageDirectoryURL: URL?, userDefaultsNamespace: UserDefaultsNamespace = .standard) {
         self.userDefaultsNamespace = userDefaultsNamespace
         let userDefaults = userDefaultsNamespace.userDefaults
-        _options = UserDefault(key: userDefaultsNamespace.key("generationOptions"), defaultValue: .init(), suite: userDefaults)
         _filterMode = UserDefault(key: userDefaultsNamespace.key("filterMode"), defaultValue: nil, suite: userDefaults)
         _isRuntimeObjectFilterCaseSensitive = UserDefault(key: userDefaultsNamespace.key("runtimeObjectFilterIsCaseSensitive"), defaultValue: false, suite: userDefaults)
         _bookmarkMigrationCompleted = UserDefault(key: userDefaultsNamespace.key("bookmarkMigrationCompleted"), defaultValue: false, suite: userDefaults)
@@ -123,9 +123,6 @@ public final class AppDefaults: @unchecked Sendable {
 
     /// Where the `@UserDefault` values below live; see `init`.
     let userDefaultsNamespace: UserDefaultsNamespace
-
-    @UserDefault
-    public var options: RuntimeObjectInterface.GenerationOptions
 
     @UserDefault
     public var filterMode: FilterMode?

@@ -84,6 +84,22 @@ struct NamingWordCloudViewModelTests {
         )
     }
 
+    /// The cloud counts the image as its content pane shows it: under the image's own effective
+    /// Generation Options (proposal `generation-options-image-overrides`).
+    @Test("the counting options are the cloud's image's own")
+    func wordCloudCountsUnderItsImagesOptions() async throws {
+        let harness = try await Self.makeHarness(engineID: "NamingWordCloudViewModelTests.imageOptions")
+        let engine = harness.environment.documentState.runtimeEngine
+
+        harness.environment.settings.generationOptions.updateOverride(forImageAt: TestImages.libobjc, in: engine) {
+            $0.objcHeaderOptions.addIvarOffsetComments = true
+        }
+
+        #expect(harness.viewModel.countingOptions.objcHeaderOptions.addIvarOffsetComments)
+        #expect(harness.viewModel.countingOptions.objcHeaderOptions.stripSynthesizedIvars, "a property still counts once")
+        #expect(!harness.environment.settings.generationOptions.global.objcHeaderOptions.addIvarOffsetComments)
+    }
+
     @Test("the type measures are counted from the object list once the image is indexed, without a corpus")
     func typeMeasures() async throws {
         let harness = try await Self.makeHarness(engineID: "NamingWordCloudViewModelTests.types")

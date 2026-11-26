@@ -235,7 +235,11 @@ public final class NamingWordCloudViewModel: ViewModel<NamingWordCloudRoute> {
 
         let sessions = documentState.$runtimeEngineSession.asObservable().distinctUntilChanged { $0 === $1 }
         let readsMembers = $preferences.asObservable().map(\.measure.readsMembers).distinctUntilChanged()
-        let generationOptions = appDefaults.$options.distinctUntilChanged()
+        // The image's own effective Generation Options (proposal `generation-options-image-overrides`):
+        // a change that leaves them as they were counts nothing again.
+        let generationOptions = sessions.flatMapLatest { [settings, imagePath] session in
+            settings.effectiveGenerationOptionsObservable(forImageAt: imagePath, in: session.engine)
+        }
         let reloads = reloadRelay.asObservable().startWith(())
 
         Observable.combineLatest(sessions, readsMembers, generationOptions, reloads) { session, readsMembers, _, _ in
@@ -364,10 +368,10 @@ public final class NamingWordCloudViewModel: ViewModel<NamingWordCloudRoute> {
         return members
     }
 
-    /// The document's Generation Options with synthesized accessors and ivars
+    /// The image's Generation Options with synthesized accessors and ivars
     /// hidden: a property counts once, not again as its getter, setter and ivar.
     var countingOptions: RuntimeObjectInterface.GenerationOptions {
-        var options = currentMergedGenerationOptions
+        var options = mergedGenerationOptions(forImageAt: imagePath)
         options.objcHeaderOptions.stripSynthesizedMethods = true
         options.objcHeaderOptions.stripSynthesizedIvars = true
         return options

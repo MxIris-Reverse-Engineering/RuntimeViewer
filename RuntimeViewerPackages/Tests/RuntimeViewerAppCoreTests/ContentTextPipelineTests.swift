@@ -100,10 +100,10 @@ struct ContentTextPipelineTests {
     @Test("a late report of an older interface does not end the loading of a newer one")
     func aLateReportOfAnOlderInterfaceDoesNotEndLoading() async throws {
         let interfaceDisplayedRelay = PublishRelay<ContentInterface.ID>()
-        let appDefaults = AppDefaults.isolated()
+        let settings = SettingsAccess.preview
         let (viewModel, mockRouter) = makeViewModel(
             runtimeObject: makeRuntimeObject(),
-            appDefaults: appDefaults,
+            settings: settings,
             interfaceProvider: { runtimeObject, _ in
                 RuntimeObjectInterface(object: runtimeObject, interfaceString: "class ContentPipelineFixture {}")
             }
@@ -124,7 +124,7 @@ struct ContentTextPipelineTests {
         let firstInterface = try #require(viewModel.interface)
 
         // A generation-option change prepares the same object anew. The store is the view model's own.
-        appDefaults.options.swiftInterfaceOptions.printFieldOffset.toggle()
+        settings.generationOptions.global.swiftInterfaceOptions.printFieldOffset.toggle()
         let secondPrepared = try await pollUntil(timeout: .seconds(10)) {
             viewModel.interface.map { $0.id != firstInterface.id } ?? false
         }
@@ -159,10 +159,10 @@ struct ContentTextPipelineTests {
     func failedFetchKeepsPipelineAlive() async throws {
         let fetchRecorder = InterfaceFetchRecorder(failingFirstFetches: 1)
         let fixtureRuntimeObject = makeRuntimeObject()
-        let appDefaults = AppDefaults.isolated()
+        let settings = SettingsAccess.preview
         let (viewModel, mockRouter) = makeViewModel(
             runtimeObject: fixtureRuntimeObject,
-            appDefaults: appDefaults,
+            settings: settings,
             interfaceProvider: { runtimeObject, _ in
                 if fetchRecorder.recordFetch() {
                     throw StubInterfaceFetchError()
@@ -181,7 +181,7 @@ struct ContentTextPipelineTests {
         // the split this subscription was already dead (`catchAndReturn` on
         // the outer chain completed it on the first error). The store is the
         // view model's own, so no other test hears the change.
-        appDefaults.options.swiftInterfaceOptions.printFieldOffset.toggle()
+        settings.generationOptions.global.swiftInterfaceOptions.printFieldOffset.toggle()
 
         let recovered = try await pollUntil(timeout: .seconds(10)) {
             viewModel.interface != nil
@@ -372,11 +372,11 @@ struct ContentTextPipelineTests {
 
     @Test("the pane shows the note for an interface fetched empty with the option on")
     func paneShowsTheNoteForAnEmptiedInterface() async throws {
-        let appDefaults = AppDefaults.isolated()
-        appDefaults.options.swiftInterfaceOptions.printExportedDeclarationsOnly = true
+        let settings = SettingsAccess.preview
+        settings.generationOptions.global.swiftInterfaceOptions.printExportedDeclarationsOnly = true
         let (viewModel, mockRouter) = makeViewModel(
             runtimeObject: makeRuntimeObject(),
-            appDefaults: appDefaults,
+            settings: settings,
             interfaceProvider: { runtimeObject, _ in
                 RuntimeObjectInterface(object: runtimeObject, interfaceString: "")
             }
@@ -399,13 +399,13 @@ struct ContentTextPipelineTests {
     /// name shadows that one, so it has to pin it as well.
     @Test("the suite's live dependency context resolves an isolated AppDefaults, not the app's own")
     func liveDependencyContextResolvesIsolatedAppDefaults() {
-        let generationOptionsKey = "generationOptions"
-        let standardOptionsBefore = UserDefaults.standard.data(forKey: generationOptionsKey)
+        let caseSensitivityKey = "runtimeObjectFilterIsCaseSensitive"
+        let standardValueBefore = UserDefaults.standard.object(forKey: caseSensitivityKey) as? Bool
         // Only a broken pin writes the standard defaults; put them back then,
         // so the failure does not leak into the next run.
         defer {
-            if UserDefaults.standard.data(forKey: generationOptionsKey) != standardOptionsBefore {
-                UserDefaults.standard.set(standardOptionsBefore, forKey: generationOptionsKey)
+            if UserDefaults.standard.object(forKey: caseSensitivityKey) as? Bool != standardValueBefore {
+                UserDefaults.standard.set(standardValueBefore, forKey: caseSensitivityKey)
             }
         }
 
@@ -413,12 +413,67 @@ struct ContentTextPipelineTests {
             @Dependency(\.appDefaults) var appDefaults
             return appDefaults
         }
-        appDefaults.options.objcHeaderOptions.stripSynthesizedIvars.toggle()
+        appDefaults.isRuntimeObjectFilterCaseSensitive.toggle()
 
         #expect(
-            UserDefaults.standard.data(forKey: generationOptionsKey) == standardOptionsBefore,
+            UserDefaults.standard.object(forKey: caseSensitivityKey) as? Bool == standardValueBefore,
             "the live context resolved the app's own AppDefaults, which writes the standard defaults"
         )
+    }
+
+    // MARK: - Each image prints with its own Generation Options
+
+    /// The pane fetches with the effective options of the image its object is in, and refetches when
+    /// they change — not when another image's do (proposal `generation-options-image-overrides`).
+    @Test("the pane fetches with the effective options of the object's image")
+    func contentPaneUsesTheEffectiveOptionsOfTheObjectsImage() async throws {
+        let settings = SettingsAccess.preview
+        let optionsRecorder = FetchedOptionsRecorder()
+        let runtimeObject = makeRuntimeObject()
+        let (viewModel, mockRouter) = makeViewModel(
+            runtimeObject: runtimeObject,
+            settings: settings,
+            interfaceProvider: { runtimeObject, options in
+                optionsRecorder.record(options)
+                return RuntimeObjectInterface(object: runtimeObject, interfaceString: "class ContentPipelineFixture {}")
+            }
+        )
+        let firstFetched = try await pollUntil(timeout: .seconds(10)) { optionsRecorder.fetchedOptions.count == 1 }
+        #expect(firstFetched)
+        #expect(optionsRecorder.fetchedOptions.last?.swiftInterfaceOptions.printFieldOffset == false)
+
+        settings.generationOptions.updateOverride(forImageAt: runtimeObject.imagePath, in: viewModel.documentState.runtimeEngine) {
+            $0.swiftInterfaceOptions.printFieldOffset = true
+        }
+
+        let refetched = try await pollUntil(timeout: .seconds(10)) { optionsRecorder.fetchedOptions.count == 2 }
+        #expect(refetched, "an override of the object's image never refetched")
+        #expect(optionsRecorder.fetchedOptions.last?.swiftInterfaceOptions.printFieldOffset == true)
+        withExtendedLifetime(mockRouter) {}
+    }
+
+    @Test("an override of another image does not refetch the pane")
+    func anOverrideOfAnotherImageDoesNotRefetchTheContentPane() async throws {
+        let settings = SettingsAccess.preview
+        let fetchRecorder = InterfaceFetchRecorder()
+        let (viewModel, mockRouter) = makeViewModel(
+            runtimeObject: makeRuntimeObject(),
+            settings: settings,
+            interfaceProvider: { runtimeObject, _ in
+                _ = fetchRecorder.recordFetch()
+                return RuntimeObjectInterface(object: runtimeObject, interfaceString: "class ContentPipelineFixture {}")
+            }
+        )
+        let firstFetched = try await pollUntil(timeout: .seconds(10)) { fetchRecorder.fetchCount == 1 }
+        #expect(firstFetched)
+
+        settings.generationOptions.updateOverride(forImageAt: "/usr/lib/libobjc.A.dylib", in: viewModel.documentState.runtimeEngine) {
+            $0.swiftInterfaceOptions.printFieldOffset = true
+        }
+        try await Task.sleep(for: .milliseconds(500))
+
+        #expect(fetchRecorder.fetchCount == 1, "another image's override refetched the pane")
+        withExtendedLifetime(mockRouter) {}
     }
 
     // MARK: - Fixtures
@@ -426,9 +481,10 @@ struct ContentTextPipelineTests {
     private func makeViewModel(
         runtimeObject: RuntimeObject,
         appDefaults: AppDefaults = .isolated(),
+        settings: SettingsAccess = Self.testSettings,
         interfaceProvider: @escaping ContentTextViewModel.InterfaceProvider
     ) -> (viewModel: ContentTextViewModel, router: MockRouter<ContentRoute>) {
-        withLiveDependencyContext(appDefaults: appDefaults) {
+        withLiveDependencyContext(appDefaults: appDefaults, settings: settings) {
             let documentState = DocumentState()
             let mockRouter = MockRouter<ContentRoute>()
             let viewModel = ContentTextViewModel(
@@ -450,6 +506,20 @@ struct ContentTextPipelineTests {
             children: [],
             properties: []
         )
+    }
+
+    /// Thread-safe record of the options each fetch was made with.
+    private final class FetchedOptionsRecorder: @unchecked Sendable {
+        private let lock = NSLock()
+        private var storedFetchedOptions: [RuntimeObjectInterface.GenerationOptions] = []
+
+        var fetchedOptions: [RuntimeObjectInterface.GenerationOptions] {
+            lock.withLock { storedFetchedOptions }
+        }
+
+        func record(_ options: RuntimeObjectInterface.GenerationOptions) {
+            lock.withLock { storedFetchedOptions.append(options) }
+        }
     }
 
     /// Thread-safe fetch recorder for the injected `InterfaceProvider`
@@ -514,15 +584,18 @@ struct ContentTextPipelineTests {
     /// the pipeline goes through this helper, so one omission at a call site
     /// would quietly reconnect the real files.
     ///
-    /// Pass `appDefaults` to share a store with the view model built inside,
-    /// so a test can change the options that view model reads.
+    /// Pass `appDefaults` or `settings` to share a store with the view model
+    /// built inside, so a test can change what that view model reads — the
+    /// Generation Options live in the settings — without the change reaching
+    /// any other test.
     private func withLiveDependencyContext<Result>(
         appDefaults: AppDefaults = .isolated(),
+        settings: SettingsAccess = Self.testSettings,
         _ operation: () throws -> Result
     ) rethrows -> Result {
         try withDependencies {
             $0.context = .live
-            $0.settings = Self.testSettings
+            $0.settings = settings
             $0.appDefaults = appDefaults
         } operation: {
             try operation()

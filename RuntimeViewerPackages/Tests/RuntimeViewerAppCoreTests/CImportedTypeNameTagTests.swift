@@ -76,20 +76,27 @@ struct CImportedTypeNameTagTests {
         #expect(Self.tags(of: interface, spelling: .swiftName).isEmpty)
     }
 
-    @Test("Clicking a tag stores the other spelling, and clicking it again the first")
+    @Test("Clicking a tag stores the other spelling for the object's image, and clicking it again the first")
     func togglingFlipsStoredSpelling() throws {
         let appDefaults = AppDefaults.isolated()
+        let settings = SettingsAccess.preview
+        let documentState = withDependencies {
+            $0.settings = settings
+            $0.appDefaults = appDefaults
+        } operation: {
+            DocumentState()
+        }
         let toggledRelay = PublishRelay<Void>()
         let router = MockRouter<ContentRoute>()
         // The live context, with this test's own store: the view model writes the spelling there.
         let viewModel = withDependencies {
             $0.context = .live
-            $0.settings = SettingsAccess.preview
+            $0.settings = settings
             $0.appDefaults = appDefaults
         } operation: {
             ContentTextViewModel(
                 runtimeObject: Self.runtimeObject,
-                documentState: DocumentState(),
+                documentState: documentState,
                 router: router,
                 interfaceProvider: { runtimeObject, _ in
                     RuntimeObjectInterface(object: runtimeObject, interfaceString: SemanticString(stringLiteral: "struct AnyWeakAttribute {}"))
@@ -102,13 +109,23 @@ struct CImportedTypeNameTagTests {
             interfaceDisplayed: .empty(),
             cImportedTypeNameSpellingToggled: toggledRelay.asSignal()
         ))
-        #expect(appDefaults.options.swiftInterfaceOptions.cImportedTypeNameSpelling == .swiftName)
+        let engine = documentState.runtimeEngine
+        func spelling() -> SwiftGenerationOptions.CImportedTypeNameSpelling {
+            settings.generationOptions.effectiveOptions(forImageAt: Self.runtimeObject.imagePath, in: engine).swiftInterfaceOptions.cImportedTypeNameSpelling
+        }
+        #expect(spelling() == .swiftName)
         toggledRelay.accept(())
-        #expect(appDefaults.options.swiftInterfaceOptions.cImportedTypeNameSpelling == .cName)
+        #expect(spelling() == .cName)
+        // Only the object's image: the global options, and so every other image, keep the Swift names
+        // (proposal `generation-options-image-overrides`).
+        #expect(settings.generationOptions.global.swiftInterfaceOptions.cImportedTypeNameSpelling == .swiftName)
+        #expect(settings.generationOptions.effectiveOptions(forImageAt: "/usr/lib/libobjc.A.dylib", in: engine).swiftInterfaceOptions.cImportedTypeNameSpelling == .swiftName)
         toggledRelay.accept(())
-        #expect(appDefaults.options.swiftInterfaceOptions.cImportedTypeNameSpelling == .swiftName)
+        #expect(spelling() == .swiftName)
+        // Back at the global value, the image overrides nothing.
+        #expect(settings.generationOptions.imageOverrides.isEmpty)
         // The internal switch the content pane merges in per request is never stored.
-        #expect(!appDefaults.options.marksCImportedTypeNames)
+        #expect(!settings.generationOptions.global.marksCImportedTypeNames)
         withExtendedLifetime(viewModel) {}
         withExtendedLifetime(router) {}
     }

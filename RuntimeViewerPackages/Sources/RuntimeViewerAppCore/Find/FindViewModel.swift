@@ -416,7 +416,7 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
         memberDeclarationLookupTask?.cancel()
         memberDeclarationLookupTask = nil
         if case let (member, declaration)? = Self.crossReferenceMember(of: node) {
-            memberDeclarationLookupTask = FindCrossReferenceNavigation.open(member, declaration: declaration, destination: destination, in: documentState, generationOptions: appDefaults.options)
+            memberDeclarationLookupTask = FindCrossReferenceNavigation.open(member, declaration: declaration, destination: destination, in: documentState, generationOptions: settings.generationOptions.effectiveOptions(forImageAt: member.object.imagePath, in: documentState.runtimeEngine))
             return
         }
         // The query the rows answer, not the one the mode path and the

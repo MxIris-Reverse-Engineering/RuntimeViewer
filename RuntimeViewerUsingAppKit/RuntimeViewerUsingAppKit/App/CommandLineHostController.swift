@@ -97,9 +97,10 @@ final class CommandLineHostController {
 private struct LiveApplicationOptionsReader: ApplicationOptionsReading {
     func readGenerationOptions() async -> RuntimeObjectInterface.GenerationOptions {
         await MainActor.run {
-            @Dependency(\.appDefaults) var appDefaults
             @Dependency(\.settings) var settings
-            var options = appDefaults.options
+            // The global options only: an image's override in the app does not reach the CLI
+            // (proposal `generation-options-image-overrides`).
+            var options = settings.generationOptions.global
             options.transformer = settings.transformer
             return options
         }

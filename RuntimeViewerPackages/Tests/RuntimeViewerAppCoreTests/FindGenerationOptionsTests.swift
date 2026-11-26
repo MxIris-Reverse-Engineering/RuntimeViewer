@@ -38,11 +38,11 @@ struct FindGenerationOptionsTests {
         })
 
         // The environment's own store: no other test reads these options.
-        let appDefaults = environment.appDefaults
+        let settings = environment.settings
         var strippingOptions = RuntimeObjectInterface.GenerationOptions()
         strippingOptions.objcHeaderOptions.stripSynthesizedIvars = true
         strippingOptions.objcHeaderOptions.stripSynthesizedMethods = true
-        appDefaults.options = strippingOptions
+        settings.generationOptions.global = strippingOptions
 
         let strippedIvarLines = Self.textMatches(in: try await search(FindQuery(mode: .text, text: "_value", isCaseSensitive: true), with: session))
         #expect(strippedIvarLines.isEmpty, "the stripped ivar is found: \(strippedIvarLines.map(\.lineText))")
@@ -64,7 +64,7 @@ struct FindGenerationOptionsTests {
         }
 
         // Stop stripping: found at the next search, from the same corpus.
-        appDefaults.options = RuntimeObjectInterface.GenerationOptions()
+        settings.generationOptions.global = RuntimeObjectInterface.GenerationOptions()
         let unstrippedIvarLines = Self.textMatches(in: try await search(FindQuery(mode: .text, text: "_value", isCaseSensitive: true), with: session))
         #expect(!unstrippedIvarLines.isEmpty, "the ivar is shown again but not found")
         let unstrippedMembers = Self.memberMatches(in: try await search(FindQuery(mode: .members, text: "value", isCaseSensitive: true), with: session))
@@ -89,17 +89,17 @@ struct FindGenerationOptionsTests {
         _ = try await engine.buildInterfaceCorpus(for: TestImages.foundation, transformer: .default)
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         let session = environment.make { environment.documentState.findSession }
-        let appDefaults = environment.appDefaults
+        let settings = environment.settings
         var strippingOptions = RuntimeObjectInterface.GenerationOptions()
         strippingOptions.objcHeaderOptions.stripSynthesizedIvars = true
-        appDefaults.options = strippingOptions
+        settings.generationOptions.global = strippingOptions
 
         let strippedIvarLines = Self.textMatches(in: try await search(FindQuery(mode: .text, text: "_value", isCaseSensitive: true), with: session))
         #expect(strippedIvarLines.isEmpty, "the stripped ivar is found: \(strippedIvarLines.map(\.lineText))")
 
         // Edited, not run: Return was never pressed.
         session.update { $0.mode = .ancestorTypes }
-        appDefaults.options = RuntimeObjectInterface.GenerationOptions()
+        settings.generationOptions.global = RuntimeObjectInterface.GenerationOptions()
         try await settleMainQueue()
         _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 60) { !$0 }
 
@@ -113,16 +113,14 @@ struct FindGenerationOptionsTests {
         _ = try await engine.buildInterfaceCorpus(for: TestImages.foundation, transformer: .default)
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         let session = environment.make { environment.documentState.findSession }
-        let appDefaults = environment.appDefaults
+        let settings = environment.settings
 
         _ = try await search(FindQuery(mode: .text, text: "value", isCaseSensitive: true), with: session)
         #expect(!Self.textMatches(in: session.results).isEmpty)
 
         // Edited, not run.
         session.update { $0.mode = .members }
-        var changedOptions = appDefaults.options
-        changedOptions.objcHeaderOptions.stripSynthesizedIvars.toggle()
-        appDefaults.options = changedOptions
+        settings.generationOptions.global.objcHeaderOptions.stripSynthesizedIvars.toggle()
         try await settleMainQueue()
         _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 60) { !$0 }
 

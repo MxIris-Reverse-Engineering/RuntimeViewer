@@ -32,9 +32,7 @@ struct FindSessionLifecycleTests {
         documentState = nil
         #expect(releasedDocumentState == nil)
 
-        var changedOptions = environment.appDefaults.options
-        changedOptions.objcHeaderOptions.stripSynthesizedIvars.toggle()
-        environment.appDefaults.options = changedOptions
+        environment.settings.generationOptions.global.objcHeaderOptions.stripSynthesizedIvars.toggle()
         try await settleMainQueue()
 
         // Before the fix the rerun read the freed document through `unowned`
@@ -53,9 +51,7 @@ struct FindSessionLifecycleTests {
 
         session.documentWillClose()
 
-        var changedOptions = environment.appDefaults.options
-        changedOptions.objcHeaderOptions.stripSynthesizedIvars.toggle()
-        environment.appDefaults.options = changedOptions
+        environment.settings.generationOptions.global.objcHeaderOptions.stripSynthesizedIvars.toggle()
 
         let searchingStates = try await values(from: session.$isSearching.asDriver(), during: 1)
         #expect(!searchingStates.contains(true), "a Generation Options change started a search after the document closed")
