@@ -119,12 +119,44 @@ final class ImageGenerationOptionsViewController: BaseViewController<ImageGenera
 
     private lazy var rows: [OptionRow] = RuntimeViewerSettings.Settings.GenerationOption.allCases.map(OptionRow.init)
 
-    private lazy var stackView = VStackView(alignment: .leading, spacing: 10) {
-        VStackView(alignment: .leading, spacing: 2) {
-            titleLabel
-            subtitleLabel
-        }
+    private lazy var headerStack = VStackView(alignment: .leading, spacing: 2) {
+        titleLabel
+        subtitleLabel
     }
+
+    private let optionsStack = VStackView(alignment: .leading, spacing: 10) {}
+
+    /// The options scroll between the header and the buttons, so the sheet is never taller than
+    /// the window it is on.
+    private let optionsScrollView = ScrollView().then {
+        $0.hasVerticalScroller = true
+        $0.hasHorizontalScroller = false
+        $0.autohidesScrollers = true
+        $0.borderType = .noBorder
+        $0.drawsBackground = false
+    }
+
+    private lazy var buttonBar = HStackView(spacing: 8) {
+        revertAllButton
+        globalOptionsButton
+        NSView()
+        doneButton
+    }
+
+    /// The scroll view's document: flipped, so the options start at the top.
+    private final class DocumentView: NSView {
+        override var isFlipped: Bool { true }
+    }
+
+    // MARK: - Layout
+
+    /// The tallest the sheet may be, which the coordinator sets from the window it presents the
+    /// sheet on before the view loads; `nil` for no limit. Options that do not fit scroll.
+    var maximumContentHeight: CGFloat?
+
+    private static let margin: CGFloat = 20
+
+    private static let spacingAroundOptions: CGFloat = 12
 
     // MARK: - Relays
 
@@ -136,37 +168,69 @@ final class ImageGenerationOptionsViewController: BaseViewController<ImageGenera
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        containerView.hierarchy {
-            stackView
-        }
-
-        stackView.snp.makeConstraints { make in
-            make.edges.equalToSuperview().inset(20)
-        }
-
         for section in RuntimeViewerSettings.Settings.GenerationOption.Section.allCases {
-            stackView.addArrangedSubview(Label(section.title).then {
+            optionsStack.addArrangedSubview(Label(section.title).then {
                 $0.textColor = .secondaryLabelColor
             })
             for row in rows where row.option.section == section {
-                stackView.addArrangedSubview(row.view)
+                optionsStack.addArrangedSubview(row.view)
                 row.segmentedControl?.target = self
                 row.segmentedControl?.action = #selector(segmentedControlChanged(_:))
             }
         }
 
-        let buttonBar = HStackView(spacing: 8) {
-            revertAllButton
-            globalOptionsButton
-            NSView()
-            doneButton
+        let documentView = DocumentView()
+        documentView.hierarchy {
+            optionsStack
         }
-        stackView.addArrangedSubview(buttonBar)
-        buttonBar.snp.makeConstraints { make in
-            make.width.equalToSuperview()
+        optionsScrollView.documentView = documentView
+
+        containerView.hierarchy {
+            headerStack
+            optionsScrollView
+            buttonBar
         }
 
-        preferredContentSize = stackView.fittingSize.inset(20)
+        headerStack.snp.makeConstraints { make in
+            make.top.leading.trailing.equalToSuperview().inset(Self.margin)
+        }
+
+        optionsScrollView.snp.makeConstraints { make in
+            make.top.equalTo(headerStack.snp.bottom).offset(Self.spacingAroundOptions)
+            make.leading.trailing.equalToSuperview()
+            make.bottom.equalTo(buttonBar.snp.top).offset(-Self.spacingAroundOptions)
+        }
+
+        buttonBar.snp.makeConstraints { make in
+            make.leading.trailing.bottom.equalToSuperview().inset(Self.margin)
+        }
+
+        documentView.snp.makeConstraints { make in
+            make.top.leading.trailing.equalToSuperview()
+            make.width.equalTo(optionsScrollView.contentView)
+        }
+
+        optionsStack.snp.makeConstraints { make in
+            make.top.bottom.equalToSuperview()
+            make.leading.trailing.equalToSuperview().inset(Self.margin)
+        }
+
+        preferredContentSize = fittingContentSize()
+    }
+
+    /// As large as the header, every option and the buttons need, but no taller than
+    /// `maximumContentHeight`; a scroller that takes room gets it when the options scroll.
+    private func fittingContentSize() -> CGSize {
+        let headerSize = headerStack.fittingSize
+        let optionsSize = optionsStack.fittingSize
+        let buttonBarSize = buttonBar.fittingSize
+        let naturalHeight = Self.margin + headerSize.height + Self.spacingAroundOptions + optionsSize.height + Self.spacingAroundOptions + buttonBarSize.height + Self.margin
+        var width = max(headerSize.width, optionsSize.width, buttonBarSize.width) + Self.margin * 2
+        guard let maximumContentHeight, naturalHeight > maximumContentHeight else {
+            return CGSize(width: width, height: naturalHeight)
+        }
+        width += NSScroller.scrollerWidth(for: .regular, scrollerStyle: optionsScrollView.scrollerStyle)
+        return CGSize(width: width, height: maximumContentHeight)
     }
 
     // MARK: - Actions
@@ -211,11 +275,5 @@ final class ImageGenerationOptionsViewController: BaseViewController<ImageGenera
                 }
             }
             .disposed(by: rx.disposeBag)
-    }
-}
-
-extension CGSize {
-    fileprivate func inset(_ value: CGFloat) -> CGSize {
-        .init(width: width + value * 2, height: height + value * 2)
     }
 }

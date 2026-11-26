@@ -107,6 +107,11 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             )
         case .imageGenerationOptions(let imagePath):
             let viewController = ImageGenerationOptionsViewController()
+            // A sheet taller than its window runs past the window's bottom edge: it stops short of
+            // the window's content area and scrolls its options instead.
+            if let window = rootWindowController.window {
+                viewController.maximumContentHeight = max(240, window.contentLayoutRect.height - 40)
+            }
             let viewModel = ImageGenerationOptionsViewModel(imagePath: imagePath, documentState: documentState, router: self)
             viewController.loadViewIfNeeded()
             viewController.setupBindings(for: viewModel)
