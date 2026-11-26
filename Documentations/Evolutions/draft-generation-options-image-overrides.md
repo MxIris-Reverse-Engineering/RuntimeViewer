@@ -439,7 +439,7 @@ public final class ImageGenerationOptionsViewModel: ViewModel<MainRoute> {
 
 ## 落地步骤
 
-1. **设置模型、选项清单与迁移** —— 改动地图里 `RuntimeViewerSettings` 的五行与 `RuntimeViewerSettingsTests` 的两行
+1. **设置模型、选项清单与迁移**（已完成） —— 改动地图里 `RuntimeViewerSettings` 的五行与 `RuntimeViewerSettingsTests` 的两行
    - 行为：`effectiveOptionsEqualsGlobalWithoutOverride`
    - 行为：`overriddenOptionUsesImageValueAndOthersFollowGlobal`
    - 行为：`changingGlobalReachesOptionsTheImageDoesNotOverride`
@@ -452,7 +452,7 @@ public final class ImageGenerationOptionsViewModel: ViewModel<MainRoute> {
    - 行为：`unreadableLegacyOptionsLeaveDefaultsAndKeepTheOldValue`
    - 行为：`legacyOptionsDoNotOverwriteAGlobalAlreadyChanged`
    - 行为：`settingsPersistenceCoversGenerationOptions`
-2. **按镜像解析，换掉 `AppDefaults.options`** —— `RuntimeViewerAppCore` 里 Base、Content、Main（保存与复制）、Exporting、BatchExporting、NamingWordCloud、Storage 各行，`ImageGenerationOptionsResolutionTests` 与改动的测试
+2. **按镜像解析，换掉 `AppDefaults.options`**（已完成） —— `RuntimeViewerAppCore` 里 Base、Content、Main（保存与复制）、Exporting、BatchExporting、NamingWordCloud、Storage 各行，`ImageGenerationOptionsResolutionTests` 与改动的测试
    - 行为：`contentPaneUsesTheEffectiveOptionsOfTheObjectsImage`
    - 行为：`anOverrideOfAnotherImageDoesNotRefetchTheContentPane`
    - 行为：`anOverrideOfThisImageRefetchesTheContentPane`

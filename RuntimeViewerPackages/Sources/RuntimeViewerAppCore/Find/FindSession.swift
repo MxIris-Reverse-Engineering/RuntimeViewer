@@ -232,6 +232,10 @@ public final class FindSession {
             .subscribeOnNext { [weak self] _ in
                 guard let self else { return }
                 MainActor.assumeIsolated {
+                    // A change that leaves the options this engine's images are
+                    // read under as they were — another engine's override —
+                    // runs nothing again.
+                    guard let shownSearch = self.shownSearch, shownSearch.generationOptions != self.currentGenerationOptions() else { return }
                     self.rerunShownSearch()
                 }
             }
@@ -369,7 +373,7 @@ public final class FindSession {
             return
         }
         prioritizeCorpora(of: scopeImagePaths)
-        let generationOptions = settings.generationOptions.global
+        let generationOptions = currentGenerationOptions()
         if query.mode.relationship == nil {
             shownSearch = ShownSearch(query: query, generationOptions: generationOptions, scopeImagePaths: scopeImagePaths)
         }
@@ -412,12 +416,22 @@ public final class FindSession {
     /// into, which stays as it is. Relationship searches depend on neither.
     private func rerunShownSearch() {
         guard let shownSearch else { return }
-        let generationOptions = settings.generationOptions.global
+        let generationOptions = currentGenerationOptions()
         cancelCurrentRun()
         resetResults()
         self.shownSearch = ShownSearch(query: shownSearch.query, generationOptions: generationOptions, scopeImagePaths: shownSearch.scopeImagePaths)
         prioritizeCorpora(of: shownSearch.scopeImagePaths)
         startSearch(shownSearch.query, imagePaths: shownSearch.scopeImagePaths, generationOptions: generationOptions, isWidening: false)
+    }
+
+    /// The options a search reads the document's engine's images under now, as the content pane
+    /// shows them: the global options and each image's own (proposal
+    /// `generation-options-image-overrides`). The global ones alone once the document has gone.
+    private func currentGenerationOptions() -> FindGenerationOptions {
+        guard let engine = documentState?.runtimeEngine else {
+            return FindGenerationOptions(global: settings.generationOptions.global)
+        }
+        return FindGenerationOptions(settings.generationOptions, engine: engine)
     }
 
     /// Empties the results and everything the search on screen gathered.
@@ -497,7 +511,7 @@ public final class FindSession {
     /// be searched the same way and merged in.
     private struct ShownSearch {
         let query: FindQuery
-        let generationOptions: RuntimeObjectInterface.GenerationOptions
+        let generationOptions: FindGenerationOptions
         /// The images the scope stood for when the search ran; `nil` for
         /// every indexed image. A corpus built later is read only inside it.
         let scopeImagePaths: Set<String>?
@@ -533,7 +547,7 @@ public final class FindSession {
     /// Runs `query` over `imagePaths` — every built image when `nil` — and
     /// folds what it finds into the results. A search that widens one already
     /// shown keeps the results it is merged into when it fails.
-    private func startSearch(_ query: FindQuery, imagePaths: Set<String>?, generationOptions: RuntimeObjectInterface.GenerationOptions, isWidening: Bool) {
+    private func startSearch(_ query: FindQuery, imagePaths: Set<String>?, generationOptions: FindGenerationOptions, isWidening: Bool) {
         cancelCurrentRun()
         // The session outlived its document: there is nothing to search.
         guard let engine = documentState?.runtimeEngine else {
@@ -578,7 +592,7 @@ public final class FindSession {
     /// A query with find patterns goes out as a regular expression, the
     /// engine's form for anything that is not literal text; see
     /// `FindQueryTerm.searchText(literalMatchMode:isRegularExpression:)`.
-    private func searchRequest(for query: FindQuery, imagePaths: Set<String>?, generationOptions: RuntimeObjectInterface.GenerationOptions) -> SearchRequest {
+    private func searchRequest(for query: FindQuery, imagePaths: Set<String>?, generationOptions: FindGenerationOptions) -> SearchRequest {
         switch query.mode {
         case .text, .regularExpression:
             let searchText = query.textSearchText
@@ -588,7 +602,8 @@ public final class FindSession {
                 isCaseSensitive: query.isCaseSensitive,
                 scope: .all,
                 resultLimit: max(0, Self.resultLimit - textMatchGroups.matchCount),
-                generationOptions: generationOptions,
+                generationOptions: generationOptions.global,
+                generationOptionsByImagePath: generationOptions.queryOptionsByImagePath,
                 imagePaths: imagePaths
             ))
         case .members, .callHierarchy, .callees, .typeReferences:
@@ -601,7 +616,8 @@ public final class FindSession {
                 kinds: query.memberKindFilter.kinds,
                 isCaseSensitive: query.isCaseSensitive,
                 resultLimit: max(0, Self.resultLimit - memberMatchGroups.matchCount),
-                generationOptions: generationOptions,
+                generationOptions: generationOptions.global,
+                generationOptionsByImagePath: generationOptions.queryOptionsByImagePath,
                 imagePaths: imagePaths
             ))
         case .ancestorTypes, .descendantTypes, .conformingTypes:
@@ -796,7 +812,7 @@ public final class FindSession {
         let run = SearchRun()
         currentRun = run
         isSearching = true
-        let generationOptions = settings.generationOptions.global
+        let generationOptions = FindGenerationOptions(settings.generationOptions, engine: engine)
         // As `startSearch`: the task holds the run, never the session.
         searchTask = Task { [weak self] in
             let outcome: Result<FindCrossReferenceRootResolver.Resolution, any Swift.Error>

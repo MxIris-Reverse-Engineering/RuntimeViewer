@@ -129,6 +129,51 @@ struct FindGenerationOptionsTests {
         #expect(session.query.mode == .members, "the edit in progress was overwritten")
     }
 
+    // MARK: - Each image under its own options
+
+    /// A text search reads each image under the options the content pane prints it with, so an
+    /// override of one image runs the search on screen again and changes what that image answers
+    /// (proposal `generation-options-image-overrides`).
+    @Test("an override of an image runs the search on screen again and reads that image under its own options")
+    func changingAnOverrideRerunsTheShownSearch() async throws {
+        let engine = try await TestRuntimeEngine.shared()
+        _ = try await engine.buildInterfaceCorpus(for: TestImages.foundation, transformer: .default)
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        let session = environment.make { environment.documentState.findSession }
+        let settings = environment.settings
+        settings.generationOptions.global.objcHeaderOptions.stripSynthesizedIvars = true
+
+        let strippedIvarLines = Self.textMatches(in: try await search(FindQuery(mode: .text, text: "_value", isCaseSensitive: true), with: session))
+        #expect(strippedIvarLines.isEmpty, "the stripped ivar is found: \(strippedIvarLines.map(\.lineText))")
+
+        // Foundation alone shows its synthesized ivars again; the global options still strip them.
+        settings.generationOptions.updateOverride(forImageAt: TestImages.foundation, in: engine) {
+            $0.objcHeaderOptions.stripSynthesizedIvars = false
+        }
+        try await settleMainQueue()
+        _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 60) { !$0 }
+
+        #expect(!Self.textMatches(in: session.results).isEmpty, "the search on screen did not read Foundation under its own options")
+        #expect(settings.generationOptions.global.objcHeaderOptions.stripSynthesizedIvars)
+    }
+
+    @Test("an override of another engine's image runs nothing again")
+    func anotherEnginesOverrideRunsNothingAgain() async throws {
+        let engine = try await TestRuntimeEngine.shared()
+        _ = try await engine.buildInterfaceCorpus(for: TestImages.foundation, transformer: .default)
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        let session = environment.make { environment.documentState.findSession }
+        _ = try await search(FindQuery(mode: .text, text: "_value", isCaseSensitive: true), with: session)
+
+        let anotherEngine = Settings.Indexing.EngineReference(key: "scope:another-engine", name: "Another", hostName: "")
+        environment.settings.generationOptions.updateOverride(forImageAt: TestImages.foundation, engine: anotherEngine) {
+            $0.objcHeaderOptions.stripSynthesizedIvars = true
+        }
+
+        let searchingStates = try await values(from: session.$isSearching.asDriver(), during: 1)
+        #expect(!searchingStates.contains(true), "another engine's override ran the search on screen again")
+    }
+
     // MARK: - Helpers
 
     private func search(_ query: FindQuery, with session: FindSession) async throws -> FindSession.Results {
