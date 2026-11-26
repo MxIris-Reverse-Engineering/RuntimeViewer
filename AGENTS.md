@@ -256,8 +256,9 @@ The floor is `from: "0.21.0"`, which `RuntimeViewerCommandLine` repeats: `0.21.0
 `@FrameworkToolboxExtension` works out by itself whether the extended protocol is class-bound, and with an older
 one `SwiftDeclaration.Definition`'s generated `box` setter assigns `self`, which crashes the compiler in SILGen.
 SFSymbols is declared `from: "0.4.0"`, the first release with `nsuiImage` (it deprecated the misspelled
-`nsuiImgae`). AppKitPlus-Release is declared `from: "0.22.0"`, the first release whose
-`NSPopUpPathControl` draws a symbol icon whole, sized to the control's font as Xcode's jump bar does: before it,
+`nsuiImgae`). AppKitPlus-Release is declared `from: "0.24.0"`, the first release with `NSResponderDebugPanel`,
+which a Debug build's Debug ▸ Responder Debugger shows; it needs Xcode 27.2, the version the release workflow
+selects. `0.22.0` was the first whose `NSPopUpPathControl` draws a symbol icon whole, sized to the control's font as Xcode's jump bar does: before it,
 the jump bar cut the right side off the image kinds' symbols wider than 16 points, such as the framework one.
 `0.18.0` brought what the
 sidebar's text-token filter fields need — a comparison type's `valuePrefix` / `valueSuffix`, no menu for a

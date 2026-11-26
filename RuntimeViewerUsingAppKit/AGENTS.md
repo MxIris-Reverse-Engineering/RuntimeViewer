@@ -553,7 +553,7 @@ shape it has.
 `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/`, registered as a `@Dependency` singleton (root
 `AGENTS.md`, *Singletons & Dependency Injection*). Current examples:
 - `AppearanceController` — observes `settings.general.appearance` and updates `NSApp.appearance`
-- `DebugMenuController` — installs the Debug menu and owns the Export Logs flow; the entries themselves come from RuntimeViewerAppCore's `ApplicationLogs`, shared with the iOS apps
+- `DebugMenuController` — installs the Debug menu and owns the Export Logs flow; the entries themselves come from RuntimeViewerAppCore's `ApplicationLogs`, shared with the iOS apps. In a Debug build the menu also has Responder Debugger, which shows and hides AppKitPlus's `NSResponderDebugPanel` — the responder chain, the key view loop and the view under the mouse, in a panel that never takes key status, so it is the tool for a first responder parked in the wrong place
 - `HelperServiceVersionChecker` — runs the helper version probe and presents reinstall alerts
 - `UpdaterService` — owns the Sparkle updater lifecycle
 - `MainMenuController` — assembles the main menu in code (the replacement for `MainMenu.xib`)
