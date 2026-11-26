@@ -1,9 +1,12 @@
 import AppKit
+import AppKitPlus
 import FoundationToolbox
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 import DependenciesMacros
 
+/// The Debug menu: Export Logs… in every build, and in a Debug build also Responder Debugger,
+/// which shows AppKitPlus's responder debug panel.
 @MainActor
 @Loggable(.private)
 final class DebugMenuController: NSObject {
@@ -26,10 +29,33 @@ final class DebugMenuController: NSObject {
         exportLogsItem.target = self
         debugMenu.addItem(exportLogsItem)
 
+        #if DEBUG
+        debugMenu.addItem(.separator())
+        // No key equivalent: ⌥⌘D, the one AppKitPlus's example app gives it, is the system's
+        // shortcut for turning Dock hiding on and off and never reaches the app.
+        let responderDebuggerItem = NSMenuItem(title: "Responder Debugger", action: #selector(toggleResponderDebugPanel(_:)), keyEquivalent: "")
+        responderDebuggerItem.target = self
+        debugMenu.addItem(responderDebuggerItem)
+        #endif
+
         let debugMenuItem = NSMenuItem(title: "Debug", action: nil, keyEquivalent: "")
         debugMenuItem.submenu = debugMenu
         NSApp.mainMenu?.addItem(debugMenuItem)
     }
+
+    #if DEBUG
+    /// Shows or hides the panel that traces the responder chain, the key view loop and the view
+    /// under the mouse. It never becomes the key or the main window, so it can be shown over the
+    /// window it describes without changing that window's first responder.
+    @objc private func toggleResponderDebugPanel(_ sender: Any?) {
+        let panel = NSResponderDebugPanel.shared
+        if panel.isVisible {
+            panel.orderOut(sender)
+        } else {
+            panel.orderFront(sender)
+        }
+    }
+    #endif
 
     @objc private func exportLogs() {
         let savePanel = NSSavePanel()
@@ -52,6 +78,19 @@ final class DebugMenuController: NSObject {
         }
     }
 }
+
+#if DEBUG
+extension DebugMenuController: NSMenuItemValidation {
+    /// Ticks Responder Debugger while the panel is on screen. Reads `sharedPanelExists` first,
+    /// so that opening the menu does not create the panel.
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(toggleResponderDebugPanel(_:)) {
+            menuItem.state = NSResponderDebugPanel.sharedPanelExists && NSResponderDebugPanel.shared.isVisible ? .on : .off
+        }
+        return true
+    }
+}
+#endif
 
 // MARK: - Dependencies
 
