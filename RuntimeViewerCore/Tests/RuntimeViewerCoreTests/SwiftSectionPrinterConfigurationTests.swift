@@ -34,8 +34,62 @@ struct SwiftSectionPrinterConfigurationTests {
         return (engine, section)
     }
 
-    private static func update(_ section: RuntimeSwiftSection<RuntimeLoadedImageReading>, with options: SwiftGenerationOptions) async throws {
-        try await section.updateConfiguration(using: options, transformer: .init(), marksCommentStructure: false, marksAttachedMacros: false)
+    private static func update(_ section: RuntimeSwiftSection<RuntimeLoadedImageReading>, with options: SwiftGenerationOptions, objcTransformer: Transformer.ObjCConfiguration = .init()) async throws {
+        try await section.updateConfiguration(using: options, transformer: .init(), objcTransformer: objcTransformer, marksCommentStructure: false, marksAttachedMacros: false)
+    }
+
+    /// The Objective-C side's C Type Replacement setting spelling `double` as `CGFloat`.
+    private static let doubleAsCGFloat = Transformer.ObjCConfiguration(cType: .init(isEnabled: true, replacements: [.double: "CGFloat"]))
+
+    /// A recovered Objective-C instance variable type is spelled with the
+    /// Objective-C side's C Type Replacement setting (proposal
+    /// `objc-ivar-type-recovery` in MachOSwiftSection), so both sides of a
+    /// class spell a C primitive alike. A change of the setting reconfigures
+    /// the printer like a changed option, and an equal one leaves it alone.
+    @Test("enabled C type replacements reach the printer once, and leaving them out takes them back")
+    func cTypeReplacementsReachThePrinter() async throws {
+        let section = try await Self.sharedSection.value.section
+        let options = SwiftGenerationOptions()
+        try await Self.update(section, with: options)
+        let configurationUpdates = await section.printerConfigurationUpdateCount
+
+        try await Self.update(section, with: options, objcTransformer: Self.doubleAsCGFloat)
+        try await Self.update(section, with: options, objcTransformer: Self.doubleAsCGFloat)
+
+        #expect(await section.printerCTypeReplacements == [.double: "CGFloat"])
+        #expect(await section.printerConfigurationUpdateCount == configurationUpdates + 1)
+
+        try await Self.update(section, with: options)
+
+        #expect(await section.printerCTypeReplacements.isEmpty)
+    }
+
+    @Test("a disabled C type module hands the printer no replacements")
+    func disabledCTypeModuleHandsNoReplacements() async throws {
+        let section = try await Self.sharedSection.value.section
+        var objcTransformer = Self.doubleAsCGFloat
+        objcTransformer.cType.isEnabled = false
+
+        try await Self.update(section, with: SwiftGenerationOptions(), objcTransformer: objcTransformer)
+
+        #expect(await section.printerCTypeReplacements.isEmpty)
+    }
+
+    /// The corpus is printed with the transformer Find searches with, so a
+    /// search for `CGFloat` finds the instance variables the display shows
+    /// with it.
+    @Test("the corpus printer prints with the C type replacements of the transformer it is given")
+    func corpusPrinterTakesTheReplacements() async throws {
+        let (engine, section) = try await Self.sharedSection.value
+        let object = try #require(try await engine.objects(in: Self.testBundlePath).first(where: \.kind.isSwift))
+
+        _ = try await section.corpusPrints(of: [object], transformer: Transformer.Configuration(objc: Self.doubleAsCGFloat))
+
+        #expect(await section.corpusPrinterCTypeReplacements == [.double: "CGFloat"])
+
+        _ = try await section.corpusPrints(of: [object], transformer: Transformer.Configuration())
+
+        #expect(await section.corpusPrinterCTypeReplacements == [:])
     }
 
     @Test("updating with the options a section already has leaves its printer alone")

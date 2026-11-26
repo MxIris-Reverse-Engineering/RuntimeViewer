@@ -88,7 +88,7 @@ actor RuntimeSwiftSection<Reading: RuntimeImageReading>: RuntimeSwiftSectioning 
     /// the transformer changes; see `corpusPrinter(for:)`.
     private var corpusPrinter: SwiftDeclarationPrinter<MachO>?
 
-    private var corpusPrinterTransformer: Transformer.SwiftConfiguration?
+    private var corpusPrinterTransformer: Transformer.Configuration?
 
     /// Keyed by `RuntimeObjectKey` (identity without `children`) so the
     /// sidebar's `parent.withAppendedChild(child)` replacement after a
@@ -126,6 +126,18 @@ actor RuntimeSwiftSection<Reading: RuntimeImageReading>: RuntimeSwiftSectioning 
     private(set) var printerConfigurationUpdateCount = 0
 
     private(set) var opaqueTypeResolverRegistrationCount = 0
+
+    /// The C type spellings `printer` prints a recovered Objective-C
+    /// instance variable type with. Read by tests.
+    var printerCTypeReplacements: [Transformer.CType.Pattern: String] {
+        printer.configuration.cTypeReplacements
+    }
+
+    /// The C type spellings the corpus printer prints with, `nil` before
+    /// there is one. Read by tests.
+    var corpusPrinterCTypeReplacements: [Transformer.CType.Pattern: String]? {
+        corpusPrinter?.configuration.cTypeReplacements
+    }
 
     /// The SDK platform the type index reads for this image, by its raw value
     /// (`RuntimeTypeNames.platformName(of:)`); `nil` for an image naming no
@@ -1912,13 +1924,14 @@ extension RuntimeSwiftSection {
         try await updateConfiguration(
             using: options.swiftInterfaceOptions,
             transformer: options.transformer.swift,
+            objcTransformer: options.transformer.objc,
             marksCommentStructure: options.marksCommentStructure,
             marksAttachedMacros: options.marksAttachedMacros,
             marksCImportedTypeNames: options.marksCImportedTypeNames
         )
     }
 
-    func updateConfiguration(using options: SwiftGenerationOptions, transformer: Transformer.SwiftConfiguration, marksCommentStructure: Bool, marksAttachedMacros: Bool, marksCImportedTypeNames: Bool = false) async throws {
+    func updateConfiguration(using options: SwiftGenerationOptions, transformer: Transformer.SwiftConfiguration, objcTransformer: Transformer.ObjCConfiguration = .init(), marksCommentStructure: Bool, marksAttachedMacros: Bool, marksCImportedTypeNames: Bool = false) async throws {
         #log(.debug, "Updating Swift section configuration")
 
         let oldPrintConfiguration = printer.configuration
@@ -1931,6 +1944,7 @@ extension RuntimeSwiftSection {
             oldConfiguration: oldPrintConfiguration,
             transformer: transformer,
             transformerChanged: transformerChanged,
+            objcTransformer: objcTransformer,
         )
         newPrintConfiguration.marksCommentStructure = marksCommentStructure
         // An attribute region belongs to the innermost definition region
@@ -2043,6 +2057,7 @@ extension RuntimeSwiftSection {
         oldConfiguration: SwiftDeclarationPrintConfiguration,
         transformer: Transformer.SwiftConfiguration,
         transformerChanged: Bool,
+        objcTransformer: Transformer.ObjCConfiguration,
     ) -> SwiftDeclarationPrintConfiguration {
         let swiftInterfaceMemberSortOrder: SwiftDeclarationMemberSortOrder = switch options.memberSortOrder {
         case .byCategory: .byCategory
@@ -2075,6 +2090,11 @@ extension RuntimeSwiftSection {
         if transformerChanged {
             newConfiguration.applyTransformers(transformer)
         }
+        // The Objective-C side's C Type Replacement spells the C primitive types
+        // a recovered Objective-C instance variable has, so both sides of a class
+        // spell them alike (proposal `objc-ivar-type-recovery` in MachOSwiftSection).
+        // A plain value, compared by value, so it is set on every build.
+        newConfiguration.applyTransformers(objcTransformer)
         return newConfiguration
     }
 }
@@ -2324,7 +2344,7 @@ extension RuntimeSwiftSection {
     /// build and families of one image print side by side.
     nonisolated func corpusPrints(of family: [RuntimeObject], transformer: Transformer.Configuration) async throws -> [RuntimeInterfaceCorpusPrintOutcome] {
         guard let root = family.first else { return [] }
-        let inputs = await corpusPrintingInputs(for: family, transformer: transformer.swift)
+        let inputs = await corpusPrintingInputs(for: family, transformer: transformer)
         let objectsPrintedOnTheirOwn = Self.objectsKeptInsideUnexportedObjects(below: root)
         var outcomes: [RuntimeInterfaceCorpusPrintOutcome] = []
         outcomes.reserveCapacity(family.count)
@@ -2399,7 +2419,7 @@ extension RuntimeSwiftSection {
 
     /// What a family's corpus prints take from the section's state: each
     /// object's definitions, or why it has none, and the printer.
-    private func corpusPrintingInputs(for family: [RuntimeObject], transformer: Transformer.SwiftConfiguration) async -> (definitions: [Result<[PrintedDefinition], any Swift.Error>], printer: SwiftDeclarationPrinter<MachO>) {
+    private func corpusPrintingInputs(for family: [RuntimeObject], transformer: Transformer.Configuration) async -> (definitions: [Result<[PrintedDefinition], any Swift.Error>], printer: SwiftDeclarationPrinter<MachO>) {
         let typeNameResolution = await currentTypeNameResolution(isEnabled: true)
         return (family.map { object in Result { try printedDefinitions(for: object) } }, corpusPrinter(for: transformer, typeNameResolution: typeNameResolution))
     }
@@ -2418,7 +2438,11 @@ extension RuntimeSwiftSection {
     /// resolved names the display shows, and the corpus store keeps a corpus
     /// with them apart from one without (`RuntimeInterfaceCorpusSnapshot`).
     /// A new type index generation rebuilds the printer.
-    private func corpusPrinter(for transformer: Transformer.SwiftConfiguration, typeNameResolution: (resolver: any TypeNameResolving, generation: Int)?) -> SwiftDeclarationPrinter<MachO> {
+    ///
+    /// Both halves of the transformer go in: the Swift modules, and the
+    /// Objective-C side's C type replacements, which spell the C primitive
+    /// types of recovered Objective-C instance variables as the display does.
+    private func corpusPrinter(for transformer: Transformer.Configuration, typeNameResolution: (resolver: any TypeNameResolving, generation: Int)?) -> SwiftDeclarationPrinter<MachO> {
         if let corpusPrinter, corpusPrinterTransformer == transformer, corpusPrinterTypeNameResolverGeneration == typeNameResolution?.generation {
             return corpusPrinter
         }
@@ -2426,8 +2450,9 @@ extension RuntimeSwiftSection {
         var configuration = buildPrintConfiguration(
             from: RuntimeObjectInterface.GenerationOptions.mcp.swiftInterfaceOptions,
             oldConfiguration: printer.configuration,
-            transformer: transformer,
+            transformer: transformer.swift,
             transformerChanged: true,
+            objcTransformer: transformer.objc,
         )
         configuration.marksOptionalContent = true
         configuration.marksNestedDefinitions = true
