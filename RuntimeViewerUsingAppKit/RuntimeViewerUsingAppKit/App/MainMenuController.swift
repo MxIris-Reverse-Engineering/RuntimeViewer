@@ -387,8 +387,22 @@ extension MainMenuController {
     /// After Navigate, where Xcode keeps its own Editor menu.
     private func editorMenuItem() -> NSMenuItem {
         NSMenuItem("Editor") {
+            imageGenerationOptionsItem()
+            NSMenuItem.separator()
             codeFoldingMenuItem()
         }
+    }
+
+    /// The Generation Options of the image on screen, in a sheet (proposal
+    /// `generation-options-image-overrides`); `MainWindowController.validateMenuItem` names the
+    /// image in the title and disables the item while there is none. The global options are in
+    /// Settings › Generation Options.
+    private func imageGenerationOptionsItem() -> NSMenuItem {
+        NSMenuItem(
+            "Generation Options for This Image…",
+            action: #selector(MainWindowController.showImageGenerationOptions(_:)),
+        )
+        .image(NSImage(systemSymbolName: "ellipsis.curlybraces", accessibilityDescription: nil))
     }
 
     /// Xcode's Editor ▸ Code Folding, with its titles, symbols and shortcuts

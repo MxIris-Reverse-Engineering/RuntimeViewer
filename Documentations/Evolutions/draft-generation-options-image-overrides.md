@@ -460,7 +460,7 @@ public final class ImageGenerationOptionsViewModel: ViewModel<MainRoute> {
    - 行为：`saveAndCopyUseTheObjectsImageOptions`
    - 行为：`batchExportUsesEachImagesOwnOptions`
    - 行为：`wordCloudCountsUnderItsImagesOptions`
-3. **Find 按镜像投影** —— Core 的四行、AppCore 的 Find 与交叉引用各行、Find 的测试
+3. **Find 按镜像投影**（已完成） —— Core 的四行、AppCore 的 Find 与交叉引用各行、Find 的测试
    - 行为：`searchProjectsEachImageUnderItsOwnOptions`
    - 行为：`searchWithoutPerImageTableMatchesTodaysResults`
    - 行为：`queryEncodedWithoutTheTableStillDecodes`

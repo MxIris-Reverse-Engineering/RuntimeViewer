@@ -514,7 +514,7 @@ MachOSwiftSection's evolution 0063 (`0063-private-declarations.md`).
 which asks the view layer, and returns `.none()` when the anchor is not on screen. Three shapes exist:
 
 - A fixed control the coordinator can reach — `MainCoordinator.popoverAnchorView(of:)` takes the
-  toolbar item's button for the Generation Options and MCP status popovers.
+  toolbar item's button for the MCP status popover.
 - A control the view controller holds — the controller exposes it, as
   `SidebarRuntimeObjectViewController.filterScopeAnchorView` does for the scope popover.
   `NSFilterControlBarItem` hands out its button only as the sender of its action, so that controller

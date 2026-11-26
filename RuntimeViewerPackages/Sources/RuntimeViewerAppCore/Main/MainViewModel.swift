@@ -47,7 +47,6 @@ public final class MainViewModel: ViewModel<MainRoute> {
         public let saveClick: Signal<Void>
         /// The engine identifier of a source chosen in the runtime source picker's list.
         public let switchSource: Signal<String>
-        public let generationOptionsClick: Signal<Void>
         public let increaseFontSize: Signal<Void>
         public let decreaseFontSize: Signal<Void>
         public let resetFontSize: Signal<Void>
@@ -281,7 +280,6 @@ public final class MainViewModel: ViewModel<MainRoute> {
         }
         .disposed(by: rx.disposeBag)
 
-        input.generationOptionsClick.emit(with: self) { owner, _ in owner.router.trigger(.generationOptions) }.disposed(by: rx.disposeBag)
 
         input.mcpStatusClick.emit(with: self) { owner, _ in owner.router.trigger(.mcpStatus) }.disposed(by: rx.disposeBag)
 

@@ -108,7 +108,7 @@ Foundation 这类只为 macOS 构建或双平台的镜像由 `local` 回答，UI
 |---|---|
 | `default` | 库默认值：宏生成的成员折叠，`@Observable` 类打印成源码的样子（类上带 `@Observation.Observable`，被跟踪的属性是普通的 `var`） |
 | `full`（或 `--full`） | 全部注释与布局细节打开，宏按二进制里的样子展开，等于 App 里 MCP 用的那套（`GenerationOptions.mcp`） |
-| `app` | RuntimeViewer App 当前配置：生成选项从 App 的 `UserDefaults` 域里 `generationOptions` 键读，transformer 配置从 `~/Library/Application Support/RuntimeViewer[-Debug]/settings.json` 的 `transformer` 键读；哪一半读不到就用那一半的默认值 |
+| `app` | RuntimeViewer App 当前的全局配置：生成选项从 `~/Library/Application Support/RuntimeViewer[-Debug]/settings.json` 的 `generationOptions.global` 读（旧版 App 把它存在自己 `UserDefaults` 域的 `generationOptions` 键里，settings.json 里没有时读那里），transformer 配置从同一文件的 `transformer` 键读；哪一半读不到就用那一半的默认值。App 里给单个镜像设的选项（Editor › Generation Options for “…”）不带到 CLI |
 
 ### 交叉引用的目标写法
 

@@ -111,7 +111,6 @@ struct MainViewModelTests {
             navigationHistorySelected: .empty(),
             saveClick: .empty(),
             switchSource: .empty(),
-            generationOptionsClick: .empty(),
             increaseFontSize: .empty(),
             decreaseFontSize: .empty(),
             resetFontSize: .empty(),

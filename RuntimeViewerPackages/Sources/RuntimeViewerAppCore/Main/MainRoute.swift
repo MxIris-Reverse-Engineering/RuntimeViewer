@@ -10,11 +10,13 @@ import RuntimeViewerArchitectures
 @CaseCheckable(.public)
 public enum MainRoute: Routable {
     case main(RuntimeEngine)
-    /// The Generation Options popover. Like every route, it carries no view:
-    /// `MainCoordinator` takes the toolbar item's button to anchor it at.
-    case generationOptions
+    /// Editor ▸ Generation Options for “<image>”…: the Generation Options of
+    /// the image at this path, in a sheet (proposal
+    /// `generation-options-image-overrides`).
+    case imageGenerationOptions(imagePath: String)
     case attachToProcess
-    /// The MCP status popover, anchored the same way as `generationOptions`.
+    /// The MCP status popover. Like every route, it carries no view:
+    /// `MainCoordinator` takes the toolbar item's button to anchor it at.
     case mcpStatus
     case dismiss
     case exportInterfaces

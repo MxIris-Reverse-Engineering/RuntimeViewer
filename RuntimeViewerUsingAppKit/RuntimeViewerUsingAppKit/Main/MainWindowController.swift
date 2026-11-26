@@ -115,7 +115,6 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             ).map(\.item.index),
             saveClick: toolbarController.saveItem.button.rx.click.asSignal(),
             switchSource: Signal.merge(runtimeSourcePopoverAdapter.sourceSelected, runtimeSourceMenuAdapter.sourceSelected),
-            generationOptionsClick: toolbarController.generationOptionsItem.button.rx.click.asSignal(),
             increaseFontSize: increaseFontSizeRelay.asSignal(),
             decreaseFontSize: decreaseFontSizeRelay.asSignal(),
             resetFontSize: resetFontSizeRelay.asSignal(),
@@ -530,6 +529,14 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         viewModel?.router.trigger(.namingWordCloud(imagePath: imagePath))
     }
 
+    /// Editor ▸ Generation Options for “<image>”…: the Generation Options of the image the focused
+    /// pane shows, or of the sidebar's on an empty tab, in a sheet (proposal
+    /// `generation-options-image-overrides`).
+    @objc func showImageGenerationOptions(_ sender: Any?) {
+        guard let imagePath = documentState.imagePathForGenerationOptions else { return }
+        viewModel?.router.trigger(.imageGenerationOptions(imagePath: imagePath))
+    }
+
     // MARK: - Font Size Actions
 
     @objc func increaseFontSize(_ sender: Any?) {
@@ -674,6 +681,12 @@ extension MainWindowController: NSMenuItemValidation {
         // A word cloud is of one image: the one the sidebar has open.
         if menuItem.action == #selector(showNamingWordCloud(_:)) {
             return documentState.currentImageNode != nil
+        }
+        // Named after the image it acts on, as Xcode names its per-file commands.
+        if menuItem.action == #selector(showImageGenerationOptions(_:)) {
+            let imagePath = documentState.imagePathForGenerationOptions
+            menuItem.title = imagePath.map { "Generation Options for “\(NavigationEntry.imageName(ofImageAt: $0))”…" } ?? "Generation Options for This Image…"
+            return imagePath != nil
         }
         return true
     }

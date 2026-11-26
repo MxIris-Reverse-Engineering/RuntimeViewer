@@ -5,6 +5,7 @@ import Dependencies
 import CocoaCoordinator
 import RuntimeViewerSettingsUI
 import RuntimeViewerAppCore
+import RuntimeViewerSettings
 
 /// `@unchecked` because `Coordinator` descends from `NSResponder`, which is not
 /// `Sendable`. Every member of `Router` is `@MainActor`, and the sole instance
@@ -21,6 +22,9 @@ private final class AppCoordinator: Coordinator<AppRoute, AppTransition>, @unche
         switch route {
         case .settings:
             settingsWindowController.showWindow(nil)
+            return .none()
+        case .settingsPage(let page):
+            settingsWindowController.show(page)
             return .none()
         }
     }

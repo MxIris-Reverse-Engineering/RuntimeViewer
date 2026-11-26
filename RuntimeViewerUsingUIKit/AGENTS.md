@@ -93,7 +93,8 @@ Background: `Documentations/Evolutions/0100-settings-storage-on-ios.md`.
   tells `MainCoordinator` through `SidebarCoordinatorDelegate`; `MainRoute.settings` presents
   `RuntimeViewerSettingsUI`'s `SettingsViewController` as a form sheet, a fresh one each time.
 - **The pages are the macOS ones** — Appearance (the General page's appearance section,
-  `AppearanceSettingsSection`), Theme, Transformer — hosted by UIFoundation's iOS
+  `AppearanceSettingsSection`), Theme, Generation Options (its global options only: an image's own
+  are set from the Mac's Editor menu, which iOS has no counterpart of), Transformer — hosted by UIFoundation's iOS
   `SettingsViewController`. A page joins the list when what it configures works on iOS; a page that
   reaches for AppKit gets a UIKit branch, as the Transformer page's template editor has
   (`TokenTemplateTextField+UIKit.swift`, with the placeholder rules shared with AppKit in

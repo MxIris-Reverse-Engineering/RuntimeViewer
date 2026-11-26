@@ -2,10 +2,13 @@
 
 import Dependencies
 import RuntimeViewerArchitectures
+import RuntimeViewerSettings
 
 /// The app's own windows, which a view model asks for through `appRouter`.
 public enum AppRoute: Routable {
     case settings
+    /// The settings window on one of its pages.
+    case settingsPage(Settings.PageIdentifier)
 }
 
 /// The router that opens the app's own windows. Its live value, the app's coordinator, lives in
