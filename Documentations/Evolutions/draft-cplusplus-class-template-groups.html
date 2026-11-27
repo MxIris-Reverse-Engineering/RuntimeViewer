@@ -163,7 +163,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
   <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">Draft</span></p>
   <h1><span class="proposal-number">Draft</span> C++ 类模板的特化收进一个节点</h1>
   <dl class="meta">
-    <div><dt>状态</dt><dd><span class="status status-accepted">Accepted</span></dd></div>
+    <div><dt>状态</dt><dd><span class="status status-in-progress">In Progress</span></dd></div>
     <div><dt>最后更新</dt><dd>2026-11-27</dd></div>
     <div><dt>项目类型</dt><dd>App</dd></div>
     <div><dt>原文</dt><dd><code>draft-cplusplus-class-template-groups.md</code></dd></div>
@@ -282,13 +282,17 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
       <tr><td><code>RuntimeViewerAppCore/NamingWordCloud/NamingWordCounter.swift</code> · <code>kindName(of:)</code></td><td><span class="tag tag-changed">修改</span></td><td>补 <code>"template"</code></td><td>穷举 switch</td><td class="numeric">1</td></tr>
       <tr><td><code>RuntimeViewerCore/…/Sections/CPlusPlus/CPlusPlusObjectTreeBuilder.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>Scope.baseName</code>；<code>objects(globalScope:classes:)</code> 与 <code>ClassName</code>；<code>Node.baseName</code>；私有 <code>childObjects(…)</code> 归组</td><td>方案第 2 条</td><td class="numeric">2</td></tr>
       <tr><td><code>RuntimeViewerCore/…/Sections/CPlusPlus/RuntimeCPlusPlusSection.swift</code> · <code>init</code>、<code>treeScope(of:in:)</code></td><td><span class="tag tag-changed">修改</span></td><td>把两处 <code>baseName</code> 交给 builder</td><td>方案第 2 条</td><td class="numeric">2</td></tr>
-      <tr><td><code>RuntimeViewerCore/…/Sections/CPlusPlus/RuntimeObject+CPlusPlusClassTemplates.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>replacingCPlusPlusClassTemplatesWithSpecializations</code></td><td>引擎、界面、导出三处共用</td><td class="numeric">2</td></tr>
+      <tr><td><code>RuntimeViewerCore/…/Sections/CPlusPlus/RuntimeObject+CPlusPlusClassTemplates.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>replacingCPlusPlusClassTemplatesWithSpecializations</code>（递归）</td><td>引擎给没声明的请求方换回平铺的树</td><td class="numeric">2</td></tr>
       <tr><td><code>RuntimeViewerCore/…/Engine/RuntimeEngine+Commands.swift</code> · <code>ObjectsInImageCommand</code></td><td><span class="tag tag-changed">修改</span></td><td>加 <code>includesCPlusPlusClassTemplates: Bool?</code></td><td>线上兼容</td><td class="numeric">2</td></tr>
       <tr><td><code>RuntimeViewerCore/…/Engine/RuntimeEngine.swift</code> · <code>_objects</code> 两个重载、<code>_localObjectsWithProgress</code></td><td><span class="tag tag-changed">修改</span></td><td>没设新字段时换回平铺的特化</td><td>线上兼容</td><td class="numeric">2</td></tr>
       <tr><td><code>RuntimeViewerCore/…/Sections/CPlusPlus/CPlusPlusInterfacePrinter.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>ClassTemplateDeclaration</code> 与它的 <code>interface(of:)</code></td><td>选中模板节点的界面</td><td class="numeric">3</td></tr>
-      <tr><td><code>RuntimeViewerCore/…/Sections/CPlusPlus/RuntimeCPlusPlusSection.swift</code> · <code>interface(for:options:)</code> 与两处声明表</td><td><span class="tag tag-changed">修改</span></td><td>模板分支；命名空间与类的声明表先换成特化</td><td>界面文字不变</td><td class="numeric">3</td></tr>
-      <tr><td><code>RuntimeViewerCore/…/Export/RuntimeObject+Export.swift</code> · <code>exportedObjects</code></td><td><span class="tag tag-changed">修改</span></td><td>只写特化、不写模板节点</td><td>导出不变</td><td class="numeric">4</td></tr>
+      <tr><td><code>RuntimeViewerCore/…/Sections/CPlusPlus/Array+CPlusPlusClassTemplates.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>openingCPlusPlusClassTemplateNodes</code>：只展开一层，C++ 对象按原顺序重排</td><td>声明表与导出共用，不必深拷贝子树</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerCore/…/Sections/CPlusPlus/RuntimeCPlusPlusSection.swift</code> · <code>interface(for:options:)</code> 与两处声明表</td><td><span class="tag tag-changed">修改</span></td><td>模板分支；命名空间与类的声明表经 <code>declared(in:)</code> 展开</td><td>界面文字不变</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerCore/…/Export/RuntimeObject+Export.swift</code> · <code>exportedObjects</code></td><td><span class="tag tag-changed">修改</span></td><td>只写特化、不写模板节点；子节点保持原顺序</td><td>导出不变</td><td class="numeric">4</td></tr>
+      <tr><td><code>RuntimeViewerCore/…/Export/Array+RuntimeObjectExport.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>public var [RuntimeObject].exportedObjects</code></td><td>顶层模板节点也按原顺序写</td><td class="numeric">4</td></tr>
+      <tr><td><code>RuntimeEngine+Export.swift</code>、<code>ExportingConfigurationViewModel.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>改用数组的 <code>exportedObjects</code></td><td>写出与计数一致</td><td class="numeric">4</td></tr>
       <tr><td><code>CPlusPlusObjectKindTests</code>、<code>CPlusPlusPresentationTests</code></td><td><span class="tag tag-changed">修改</span></td><td>顺序、JSON、说明、图标、过滤范围</td><td>第 1 步的行为</td><td class="numeric">1</td></tr>
+      <tr><td><code>RuntimeObjectTests</code>、<code>RuntimeObjectScopeTests</code></td><td><span class="tag tag-changed">修改</span></td><td>类型总数 24；无勾选框的类型多了模板节点</td><td>既有测试枚举了全部类型</td><td class="numeric">1</td></tr>
       <tr><td><code>CPlusPlusObjectTreeBuilderTests</code>、<code>ObjectsInImageCPlusPlusWireTests</code>、<code>CPlusPlusSectionTests</code></td><td><span class="tag tag-changed">修改</span></td><td>归组规则、线上字段、libc++ 实测</td><td>第 2 步的行为</td><td class="numeric">2</td></tr>
       <tr><td><code>CPlusPlusInterfacePrinterTests</code>、<code>CPlusPlusSectionTests</code></td><td><span class="tag tag-changed">修改</span></td><td>模板界面、命名空间界面不变</td><td>第 3 步的行为</td><td class="numeric">3</td></tr>
       <tr><td><code>CPlusPlusExportTests</code></td><td><span class="tag tag-changed">修改</span></td><td>导出跳过模板节点</td><td>第 4 步的行为</td><td class="numeric">4</td></tr>
@@ -382,7 +386,8 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
         <span class="token-keyword">self</span>.includesCPlusPlusClassTemplates = includesCPlusPlusObjects ? <span class="token-keyword">true</span> : <span class="token-keyword">nil</span>
     }
 }</code></pre>
-      <p>模板节点换成它的特化（递归、重新排序），其余对象原样、子树同样处理。<code>_objects</code> 两个重载与 <code>_localObjectsWithProgress</code> 多一个参数，为假时套用它。测试再冻结一份「0103 版的请求」。</p>
+      <p>模板节点换成它的特化（递归、重新排序），其余对象原样、子树同样处理。<code>_objects</code> 两个重载与 <code>_localObjectsWithProgress</code> 多一个参数，为假时套用它；它只给引擎用。测试再冻结一份「0103 版的请求」。</p>
+      <p>命名空间与类的声明表、导出改用一层展开的 <code>[RuntimeObject].openingCPlusPlusClassTemplateNodes</code>：模板节点下只有特化，一层就够，C++ 对象按有模板节点之前的顺序重排。导出另有 <code>public var [RuntimeObject].exportedObjects</code>，顶层也按原顺序，单文件格式拼出的 <code>.hpp</code> 与以前逐字相同。</p>
     </div>
   </details>
   <details>
@@ -462,7 +467,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <section id="steps">
   <h2>落地步骤</h2>
   <ol>
-    <li><strong>新对象类型与各处穷举</strong>（改动地图第 1–6 行）
+    <li><strong>新对象类型与各处穷举</strong>（已完成，改动地图第 1–6 行）
       <ul>
         <li><code>cPlusPlusClassTemplateSortsBetweenClassesAndNamespaces</code></li>
         <li><code>cPlusPlusClassTemplateRoundTripsThroughJSON</code></li>
@@ -473,7 +478,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
         <li><code>classTemplateNodeHasNoHierarchy</code></li>
       </ul>
     </li>
-    <li><strong>对象树归组与线上字段</strong>（第 7–11 行）
+    <li><strong>对象树归组与线上字段</strong>（已完成，第 7–11 行）
       <ul>
         <li><code>specializationsOfOneTemplateSitUnderOneNodeNamedAfterIt</code></li>
         <li><code>aSingleSpecializationIsGroupedToo</code></li>
@@ -493,7 +498,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
         <li><code>libcxxListsBasicStringAsAClassTemplateOfItsSpecializations</code></li>
       </ul>
     </li>
-    <li><strong>模板节点的界面</strong>（第 12–13 行）
+    <li><strong>模板节点的界面</strong>（已完成，第 12–13 行）
       <ul>
         <li><code>classTemplatePrintsItsSpecializationsSpelledInFull</code></li>
         <li><code>classTemplateSpecializationTokensLinkToTheSpecializations</code></li>
@@ -501,7 +506,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
         <li><code>libcxxClassTemplateInterfaceListsItsSpecializations</code></li>
       </ul>
     </li>
-    <li><strong>导出与文档</strong>（第 14 行与文档两行）
+    <li><strong>导出与文档</strong>（已完成，第 14 行与文档两行）
       <ul>
         <li><code>exportWritesTheSpecializationsOfATemplateButNotTheNode</code></li>
         <li><code>exportOfAnImageWithTemplatesWritesTheSameFilesAsBefore</code></li>
@@ -514,7 +519,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <section id="log">
   <h2>决策日志</h2>
   <details>
-    <summary>4 条，最近一条：加线上字段</summary>
+    <summary>10 条，最近一条：实现完成，待用户看过后收尾</summary>
     <div class="details-body">
       <div class="table-wrap">
       <table>
@@ -524,6 +529,12 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
           <tr><td class="numeric">2026-11-27</td><td>澄清提问（默认档一轮）</td><td>只有一个特化的模板也归组；选中模板节点时列出全部特化、可点击跳转；特化行显示全名。</td></tr>
           <tr><td class="numeric">2026-11-27</td><td>排序改为单独成块</td><td>调研前说过与类混排，写提案时改为类之后、命名空间之前单独成块：混排会让侧栏顶层分区的先后不确定。</td></tr>
           <tr><td class="numeric">2026-11-27</td><td>加线上字段</td><td>照 <code>includesCPlusPlusObjects</code> 的先例，旧请求方拿到平铺的树。</td></tr>
+          <tr><td class="numeric">2026-11-27</td><td>Accepted</td><td>用户批准，开始实现。</td></tr>
+          <tr><td class="numeric">2026-11-27</td><td>声明表与导出改用一层展开</td><td>新增 <code>openingCPlusPlusClassTemplateNodes</code> 与数组的 <code>exportedObjects</code>，不必每次打印都重建子树，顶层也按原顺序。</td></tr>
+          <tr><td class="numeric">2026-11-27</td><td>第 2–4 步合成一个提交</td><td>改动交织在同几个文件里；测试按步写全，一次验证。</td></tr>
+          <tr><td class="numeric">2026-11-27</td><td>验证改用本地依赖</td><td>基线上远端解析的包构建就编不过（锁文件钉的 MachOSwiftSection 需要未发版的 MachOKitExtensions），在 Ultra 上 <code>USING_LOCAL_DEPENDENCIES=1</code> 原地构建。</td></tr>
+          <tr><td class="numeric">2026-11-27</td><td>不改根 AGENTS.md</td><td>根 <code>AGENTS.md</code> 已超过 64 KiB；约定写进通信架构文档第六例与类型注释。</td></tr>
+          <tr><td class="numeric">2026-11-27</td><td>实现完成，待用户看过后收尾</td><td>Ultra 上 Core 全量 940 个、AppCore 全量 1121 个跑完，红的都是既有红灯（基线同样红，或单独重跑全过）；没有整编 App，AppUI 测试没跑。不需要配套专题文章，不进术语表。</td></tr>
         </tbody>
       </table>
       </div>
