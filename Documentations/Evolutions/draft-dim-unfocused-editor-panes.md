@@ -184,6 +184,7 @@ RuntimeViewerAppCore
 RuntimeViewerAppUI
 + UnfocusedEditorPaneDimming                  (OKLCH factors, gamut clip, flatten)
 +   extension Settings.Theme.Preset.dimmedForUnfocusedEditorPane()
++   dimmedColorTheme(_:colorScheme:)          (.xccolortheme dictionary, macOS only)
   ResolvedTheme
 +   isDimmedForUnfocusedEditorPane: Bool
 +   dimmedForUnfocusedEditorPane() -> ResolvedTheme
@@ -197,7 +198,7 @@ RuntimeViewerUsingAppKit
   ContentTextViewController
 ~   ContentTextRenderer(interfaces:isDimmed:)
   SourceEditorThemeConversion
-~   themeDictionary(from:basedOn: + baseThemeDimming:)
+~   themeDictionary(from:basedOn: + baseThemeDimming:)  -> UnfocusedEditorPaneDimming.dimmedColorTheme
 ```
 
 焦点切换的数据流：
@@ -461,7 +462,7 @@ Theme 关掉，位置与 Xcode（主题设置里）对应。
    - 行为：`focusingThePaneUndimsIt`
    - 行为：`theFocusedPaneOfSeveralIsNotDimmed`
    - 行为：`turningTheSettingOffUndimsEveryPane`
-4. **App 接线与 SourceEditor 基础主题** —— 第 12–16 行
+4. **App 接线与 SourceEditor 基础主题**（已完成，手工验收待用户） —— 第 12–16 行
    - 行为：`colorThemeColorsAreDimmedByTheirKeysLevel`
    - 行为：`otherColorsAreDimmedAsText`
    - 行为：`translucentColorThemeTextIsFlattenedOverTheBackground`
@@ -469,7 +470,7 @@ Theme 关掉，位置与 Xcode（主题设置里）对应。
    - 行为：`fontsLineSpacingAndVersionAreLeftAlone`
    - 手工验收（交给用户目视）：两栏左右分开、各开一个类型，点左栏右栏变暗、点右栏左栏变暗；只有一栏时不变；
      关掉开关两栏都正常；深浅外观各看一次。
-5. **文档** —— 第 17–18 行：`RuntimeViewerUsingAppKit/AGENTS.md` 加一句；提案改为实现后的样子，两份索引更新。
+5. **文档**（已完成） —— 第 17–18 行：`RuntimeViewerUsingAppKit/AGENTS.md` 加一句；提案改为实现后的样子，两份索引更新。
 
 构建与测试按远程编译走（包测试过 `queued-build`，App 与 bridge 测试用 Tuist 或 Debug workspace，见项目 `AGENTS.md`）。
 
@@ -485,3 +486,7 @@ Theme 关掉，位置与 Xcode（主题设置里）对应。
 |------|------|------|
 | 2026-11-27 | Created as Draft | 用户要求照 Xcode 27 让多栏时没有焦点的编辑栏变暗。先逆向 Xcode 27.2：变暗是 OKLCH 里按对比级别重算主题色，系数、经典主题的规则、范围（不含标签栏与路径栏）、焦点来源与无动画均已核实，方案照此设计 |
 | 2026-11-27 | Accepted | 用户批准，开始实现；实现放在功能分支 `feature/dim-unfocused-editor-panes`（worktree `.worktrees/RuntimeViewer-DimUnfocusedEditorPanes`） |
+| 2026-11-27 | 基础主题的变暗挪进 AppUI | 提案原以为桥接测试 target 编进了 App 的 `SourceEditorThemeConversion.swift`，实际它只编 bridge 框架，App target 也没有单元测试 target。改为 AppUI 的 `UnfocusedEditorPaneDimming.dimmedColorTheme(_:colorScheme:)`（只在 macOS 编），在 AppUITests 里测，转换只调用它；行为清单换成实际的测试名，原来的「主题色不变暗两次」「不变暗时原样」两条由转换的写法保证（先变暗基础主题再写入已变暗的主题色；`nil` 时不调用），不另测 |
+| 2026-11-27 | 宏展开内嵌视图不另做 | `InlineExpansionView` 里的编辑器用同一份主题，跟着变暗；标题与关闭按钮用系统的 `tertiaryLabelColor`，与标签栏一样不属于主题，不变 |
+| 2026-11-27 | 验证改用本地依赖模式 | next 的锁文件钉的 MachOSwiftSection（947d5321）用到 MachOKitExtensions 还没发版的 `recordsFunctionAddressReferences`（最新 tag 3.3.0 没有），按锁文件编包或 App 在 next 上同样失败，与本提案无关。本次在 Ultra 上用 `USING_LOCAL_DEPENDENCIES=1` 原地编包、用 `TuistScript.sh --local-dependencies` 编 App |
+| 2026-11-27 | 实现完成，待用户看过后收尾 | 五步都已提交。Ultra 上验证：包的相关测试（四个测试 target 里的十个套件，含全部新增测试）通过，Tuist workspace 编 `RuntimeViewer macOS`（Debug，关签名）通过，均为本地依赖模式。文档：`RuntimeViewerUsingAppKit/AGENTS.md` 的编辑栏一节加了一条，说明新的主题化内容要从渲染器的主题取色；不需要另写使用指南或实现说明（契约在类型注释里，系数与出处在 `UnfocusedEditorPaneDimming` 的注释和 RE 笔记里）；没有新术语。界面目视（两栏切换、深浅外观）交给用户 |

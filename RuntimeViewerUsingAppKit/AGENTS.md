@@ -694,6 +694,14 @@ Background, with the reverse-engineered addresses: `Documentations/Evolutions/00
   `EditorArea.canClosePane(_:)`. The sidebar going back to the image list leaves the editor area as it
   is, so this is how the user clears it; ⌘W on the only tab of the only pane still closes the window. The
   content's safe area makes room for the bars on show.
+- **A pane without the focus draws its interface dimmed** (proposal `dim-unfocused-editor-panes`), as
+  Xcode 27.2's "Dim unfocused editor panes" does: not an overlay or an alpha, but every theme colour
+  recomputed in OKLCH (`UnfocusedEditorPaneDimming`, RuntimeViewerAppUI). Which pane is dimmed is
+  `ContentTextViewModel.Output.isEditorPaneDimmed` — more than one pane, another one focused, Settings ›
+  Theme's switch on — and both content views hand it to their `ContentTextRenderer(…, isDimmed:)`, whose
+  theme is then `ResolvedTheme.dimmedForUnfocusedEditorPane()`. **New themed content in a pane takes its
+  colours from that renderer's theme**, or it stays bright in a dimmed pane. The tab bar and the jump bar
+  keep their own unfocused look and are not dimmed, as in Xcode.
 - **An empty tab shows the start page** (proposal `editor-start-page`): Xcode 27.2's initial editor,
   `ContentPlaceholderViewController` over `ContentPlaceholderViewModel` — an Open Quickly field that searches
   the engine's images by name and the objects of the images it has indexed (`OpenQuicklyCatalog`, which

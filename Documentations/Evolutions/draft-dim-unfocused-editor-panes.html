@@ -214,7 +214,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 
   <h3>改了什么</h3>
   <div class="figure">
-  <svg viewBox="0 0 1100 545" role="img" aria-label="What changes, by module">
+  <svg viewBox="0 0 1100 560" role="img" aria-label="What changes, by module">
     <!-- RuntimeViewerSettings / SettingsUI -->
     <rect class="group" x="10" y="10" width="520" height="178" rx="10"/>
     <text class="group-label" x="22" y="30">RuntimeViewerSettings / RuntimeViewerSettingsUI</text>
@@ -230,12 +230,12 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
     <path class="arrow arrow-weak" d="M 515 69 L 540 69 L 540 144 L 565 144"/>
 
     <!-- RuntimeViewerAppUI -->
-    <rect class="group" x="10" y="215" width="520" height="315" rx="10"/>
+    <rect class="group" x="10" y="215" width="520" height="330" rx="10"/>
     <text class="group-label" x="22" y="235">RuntimeViewerAppUI</text>
     <rect class="box-changed" x="25" y="250" width="490" height="50" rx="6"/><text x="35" y="270">ContentTextRenderer</text><text class="caption" x="35" y="288">init(interfaces:themes: + isDimmed: Driver&lt;Bool&gt; = .just(false))</text>
     <rect class="box-changed" x="25" y="318" width="490" height="62" rx="6"/><text x="35" y="338">ResolvedTheme</text><text class="caption" x="35" y="355">+ isDimmedForUnfocusedEditorPane: Bool</text><text class="caption" x="35" y="370">+ dimmedForUnfocusedEditorPane() -&gt; ResolvedTheme</text>
     <rect class="box-added" x="25" y="398" width="490" height="50" rx="6"/><text x="35" y="418">extension Settings.Theme.Preset</text><text class="caption" x="35" y="436">+ dimmedForUnfocusedEditorPane()   per-slot rules for a classic theme</text>
-    <rect class="box-added" x="25" y="466" width="490" height="50" rx="6"/><text x="35" y="486">UnfocusedEditorPaneDimming</text><text class="caption" x="35" y="504">OKLCH factors, gamut clip, flatten</text>
+    <rect class="box-added" x="25" y="466" width="490" height="66" rx="6"/><text x="35" y="486">UnfocusedEditorPaneDimming</text><text class="caption" x="35" y="504">OKLCH factors, gamut clip, flatten</text><text class="caption" x="35" y="521">+ dimmedColorTheme(_:colorScheme:)  (.xccolortheme dictionary, macOS only)</text>
     <path class="arrow" d="M 270 300 L 270 318"/>
     <path class="arrow" d="M 270 380 L 270 398"/>
     <path class="arrow" d="M 270 448 L 270 466"/>
@@ -245,13 +245,13 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
     <text class="group-label" x="562" y="235">RuntimeViewerUsingAppKit</text>
     <rect class="box-changed" x="565" y="250" width="225" height="62" rx="6"/><text x="575" y="270">ContentTextViewController</text><text class="caption" x="575" y="288">ContentTextRenderer(</text><text class="caption" x="575" y="303">  interfaces:isDimmed:)</text>
     <rect class="box-changed" x="805" y="250" width="270" height="62" rx="6"/><text x="815" y="270">ContentSourceEditorViewController</text><text class="caption" x="815" y="288">ContentTextRenderer(…, isDimmed:)</text><text class="caption" x="815" y="303">applyCurrentTheme(): dims base theme</text>
-    <rect class="box-changed" x="565" y="340" width="510" height="50" rx="6"/><text x="575" y="360">SourceEditorThemeConversion</text><text class="caption" x="575" y="378">themeDictionary(from:basedOn: + baseThemeDimming:)</text>
+    <rect class="box-changed" x="565" y="340" width="510" height="62" rx="6"/><text x="575" y="360">SourceEditorThemeConversion</text><text class="caption" x="575" y="377">themeDictionary(from:basedOn: + baseThemeDimming:)</text><text class="caption" x="575" y="392">  -&gt; UnfocusedEditorPaneDimming.dimmedColorTheme</text>
     <path class="arrow" d="M 770 176 L 770 250"/>
     <path class="arrow" d="M 940 176 L 940 250"/>
     <path class="arrow" d="M 1040 312 L 1040 340"/>
     <path class="arrow" d="M 565 270 L 515 270"/>
     <path class="arrow" d="M 880 312 L 880 326 L 540 326 L 540 288 L 515 288"/>
-    <path class="arrow" d="M 565 365 L 540 365 L 540 491 L 515 491"/>
+    <path class="arrow" d="M 565 365 L 540 365 L 540 517 L 515 517"/>
   </svg>
   </div>
   <p class="figure-caption">判断「哪一栏该暗」在 AppCore 的 ViewModel；变换本身与主题的变暗变体在 AppUI；App 的两种内容视图只把 <code>isEditorPaneDimmed</code> 交给渲染器，SourceEditor 那一路另把基础主题里 RuntimeViewer 没覆盖的颜色按同样的规则变暗。虚线表示读设置。</p>
@@ -309,8 +309,9 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
       <tr><td><code>RuntimeViewerPackages/Tests/RuntimeViewerAppCoreTests/ContentTextViewModelEditorPaneDimmingTests.swift</code></td><td><span class="tag tag-added">新增</span></td><td>第 3 步 ViewModel 的行为测试</td><td></td><td class="numeric">3</td></tr>
       <tr><td><code>RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Content/ContentSourceEditorViewController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>建渲染器时传 <code>isDimmed: output.isEditorPaneDimmed</code>；<code>currentTheme</code> 改存 <code>ResolvedTheme?</code>；<code>applyCurrentTheme()</code> 在主题变暗时让转换一并变暗基础主题</td><td>SourceEditor 那一路接入</td><td class="numeric">4</td></tr>
       <tr><td><code>RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Content/ContentTextViewController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>建渲染器时传 <code>isDimmed: output.isEditorPaneDimmed</code></td><td>NSTextView 那一路接入</td><td class="numeric">4</td></tr>
-      <tr><td><code>RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Content/SourceEditorThemeConversion.swift</code> · <code>themeDictionary(from:basedOn:baseThemeDimming:)</code></td><td><span class="tag tag-changed">修改</span></td><td>新参数 <code>baseThemeDimming: UnfocusedEditorPaneDimming.ColorScheme?</code>：非 <code>nil</code> 时先把基础主题里每个颜色值按键的级别变暗，再照旧写入主题的颜色</td><td>光标、不可见字符、markup、滚动条标记这些键 RuntimeViewer 不覆盖，不变暗就和 Xcode 不一致</td><td class="numeric">4</td></tr>
-      <tr><td><code>RuntimeViewerUsingAppKit/RuntimeViewerSourceEditorBridgeTests/SourceEditorThemeDimmingTests.swift</code></td><td><span class="tag tag-added">新增</span></td><td>第 4 步基础主题变暗的行为测试（这个测试 target 已经编进 <code>SourceEditorThemeConversion.swift</code>，见 <code>SemanticRetypingTests</code>）</td><td></td><td class="numeric">4</td></tr>
+      <tr><td><code>RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Content/SourceEditorThemeConversion.swift</code> · <code>themeDictionary(from:basedOn:baseThemeDimming:)</code></td><td><span class="tag tag-changed">修改</span></td><td>新参数 <code>baseThemeDimming: UnfocusedEditorPaneDimming.ColorScheme?</code>：非 <code>nil</code> 时先用下一行的函数把基础主题变暗，再照旧写入主题的颜色</td><td>光标、不可见字符、markup、滚动条标记这些键 RuntimeViewer 不覆盖，不变暗就和 Xcode 不一致</td><td class="numeric">4</td></tr>
+      <tr><td><code>RuntimeViewerPackages/Sources/RuntimeViewerAppUI/Theme/UnfocusedEditorPaneDimming+ColorTheme.swift</code> · <code>UnfocusedEditorPaneDimming.dimmedColorTheme(_:colorScheme:)</code></td><td><span class="tag tag-added">新增</span></td><td>把 <code>.xccolortheme</code> 字典里每个颜色值按键的级别变暗（generic RGB 读入、sRGB 里计算、generic RGB 写回）</td><td>App target 没有单元测试 target，放进 AppUI 才能在 AppUITests 里测；只在 macOS 编</td><td class="numeric">4</td></tr>
+      <tr><td><code>RuntimeViewerPackages/Tests/RuntimeViewerAppUITests/UnfocusedEditorPaneColorThemeDimmingTests.swift</code></td><td><span class="tag tag-added">新增</span></td><td>第 4 步基础主题变暗的行为测试</td><td></td><td class="numeric">4</td></tr>
       <tr><td><code>RuntimeViewerUsingAppKit/AGENTS.md</code>（编辑区一节）</td><td><span class="tag tag-changed">修改</span></td><td>一句话：非焦点栏的 interface 用变暗的主题，判断在 <code>ContentTextViewModel.Output.isEditorPaneDimmed</code>，新的主题化内容照此接入</td><td>以后加进编辑栏的主题化内容不会漏掉</td><td class="numeric">5</td></tr>
       <tr><td><code>Documentations/Evolutions/draft-dim-unfocused-editor-panes.md</code> 与 <code>.html</code>、<code>Documentations/Evolutions/README.md</code>、<code>Documentations/README.md</code></td><td><span class="tag tag-added">新增</span> <span class="tag tag-changed">修改</span></td><td>本提案、网页版与两份索引</td><td></td><td class="numeric">5</td></tr>
     </tbody>
@@ -364,23 +365,29 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <section id="steps">
   <h2>落地步骤</h2>
   <ol>
-    <li><strong>颜色变换与 <code>ResolvedTheme</code> 的变暗变体</strong> —— 改动地图第 1–4 行
+    <li><strong>颜色变换与 <code>ResolvedTheme</code> 的变暗变体</strong>（已完成） —— 改动地图第 1–4 行
       <ul>
+        <li>行为：<code>oklabMatchesTheReferenceValuesForSRGBRed</code></li>
+        <li>行为：<code>oklabRoundTripReturnsTheSameSRGBColor</code></li>
         <li>行为：<code>backgroundLightnessScalesByPointNineFourInDarkAndPointNineEightInLight</code></li>
-        <li>行为：<code>backgroundChromaScalesByPointEightFive</code></li>
-        <li>行为：<code>textLightnessAndChromaScaleByPointNine</code></li>
-        <li>行为：<code>opaqueSelectionAndCurrentLineTakeTheFillFactors</code></li>
-        <li>行为：<code>translucentSelectionAndCurrentLineStayUnchanged</code></li>
-        <li>行为：<code>translucentTextIsFlattenedOverTheUndimmedBackgroundFirst</code></li>
+        <li>行为：<code>fillLightnessScalesByPointNineFiveInDarkAndPointNineSevenFiveInLight</code></li>
+        <li>行为：<code>textLightnessScalesByPointNine</code></li>
+        <li>行为：<code>chromaScalesByTheLevelsFactor</code></li>
         <li>行为：<code>hueAndOpacityAreKept</code></li>
         <li>行为：<code>chromaIsClippedToTheSRGBGamutAtTheNewLightness</code></li>
-        <li>行为：<code>oklabRoundTripReturnsTheSameSRGBColor</code></li>
+        <li>行为：<code>flattenedComposesOverTheBackground</code></li>
+        <li>行为：<code>opaqueSelectionAndCurrentLineTakeTheFillFactors</code></li>
+        <li>行为：<code>translucentSelectionAndCurrentLineStayUnchanged</code></li>
+        <li>行为：<code>presetBackgroundTakesTheBackgroundFactors</code></li>
+        <li>行为：<code>translucentTextIsFlattenedOverTheUndimmedBackgroundFirst</code></li>
+        <li>行为：<code>everyTextSlotIsDimmed</code></li>
         <li>行为：<code>fontTraitsIdentifierAndNameAreKept</code></li>
-        <li>行为：<code>dimmingADimmedThemeReturnsItUnchanged</code></li>
         <li>行为：<code>dimmedThemeIsNotEqualToTheUndimmedOne</code></li>
+        <li>行为：<code>dimmingADimmedThemeReturnsItUnchanged</code></li>
+        <li>行为：<code>dimmedThemeDrawsTheDimmedPresetsColors</code></li>
       </ul>
     </li>
-    <li><strong>渲染器接受 <code>isDimmed</code></strong> —— 第 5–6 行
+    <li><strong>渲染器接受 <code>isDimmed</code></strong>（已完成） —— 第 5–6 行
       <ul>
         <li>行为：<code>themeIsDimmedWhileIsDimmedIsTrue</code></li>
         <li>行为：<code>themeReturnsToNormalWhenIsDimmedTurnsOff</code></li>
@@ -388,27 +395,28 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
         <li>行为：<code>renderedTextIsRebuiltInTheDimmedTheme</code></li>
       </ul>
     </li>
-    <li><strong>设置与 ViewModel 的判断</strong> —— 第 7–11 行
+    <li><strong>设置与 ViewModel 的判断</strong>（已完成） —— 第 7–11 行
       <ul>
         <li>行为：<code>dimsUnfocusedEditorPanesIsOnForSettingsWrittenBeforeIt</code></li>
         <li>行为：<code>dimsUnfocusedEditorPanesRoundTripsThroughTheSettingsFile</code></li>
         <li>行为：<code>aSinglePaneIsNeverDimmed</code></li>
         <li>行为：<code>aPaneIsDimmedWhileAnotherPaneHasTheFocus</code></li>
         <li>行为：<code>focusingThePaneUndimsIt</code></li>
+        <li>行为：<code>theFocusedPaneOfSeveralIsNotDimmed</code></li>
         <li>行为：<code>turningTheSettingOffUndimsEveryPane</code></li>
       </ul>
     </li>
-    <li><strong>App 接线与 SourceEditor 基础主题</strong> —— 第 12–15 行
+    <li><strong>App 接线与 SourceEditor 基础主题</strong> —— 第 12–16 行
       <ul>
-        <li>行为：<code>baseThemeColorsAreDimmedByTheirKeysLevel</code></li>
-        <li>行为：<code>translucentBaseThemeFillsStayUnchanged</code></li>
+        <li>行为：<code>colorThemeColorsAreDimmedByTheirKeysLevel</code></li>
+        <li>行为：<code>otherColorsAreDimmedAsText</code></li>
+        <li>行为：<code>translucentColorThemeTextIsFlattenedOverTheBackground</code></li>
+        <li>行为：<code>translucentColorThemeFillsStayUnchanged</code></li>
         <li>行为：<code>fontsLineSpacingAndVersionAreLeftAlone</code></li>
-        <li>行为：<code>profileColorsAreNotDimmedTwice</code></li>
-        <li>行为：<code>baseThemeIsUntouchedWithoutDimming</code></li>
         <li>手工验收（交给用户目视）：两栏左右分开、各开一个类型，点左栏右栏变暗、点右栏左栏变暗；只有一栏时不变；关掉开关两栏都正常；深浅外观各看一次。</li>
       </ul>
     </li>
-    <li><strong>文档</strong> —— 第 16–17 行：<code>RuntimeViewerUsingAppKit/AGENTS.md</code> 加一句；提案改为实现后的样子，两份索引更新。</li>
+    <li><strong>文档</strong> —— 第 17–18 行：<code>RuntimeViewerUsingAppKit/AGENTS.md</code> 加一句；提案改为实现后的样子，两份索引更新。</li>
   </ol>
   <p>构建与测试按远程编译走（包测试过 <code>queued-build</code>，App 与 bridge 测试用 Tuist 或 Debug workspace，见项目 <code>AGENTS.md</code>）。</p>
   <div class="callout callout-warning">
@@ -562,7 +570,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <span class="token-keyword">static func</span> themeDictionary(from themeProfile: <span class="token-type">ThemeProfile</span>, basedOn baseTheme: <span class="token-type">NSDictionary</span>, baseThemeDimming: <span class="token-type">UnfocusedEditorPaneDimming.ColorScheme</span>?) -&gt; <span class="token-type">NSDictionary</span>?</code></pre>
       <ul>
         <li><code>ContentSourceEditorViewController.applyCurrentTheme()</code> 传 <code>currentTheme?.isDimmedForUnfocusedEditorPane == true ? (isDark ? .dark : .light) : nil</code>。</li>
-        <li>非 <code>nil</code> 时，先把副本里每个值是四个数字（<code>"r g b a"</code>）的键变暗，再照旧写入主题的颜色（主题的颜色已经变暗，不会变两次）：
+        <li>非 <code>nil</code> 时，先交给 AppUI 的 <code>UnfocusedEditorPaneDimming.dimmedColorTheme(_:colorScheme:)</code> 把副本里每个值是四个数字（<code>"r g b a"</code>，generic RGB，与 <code>themeString(for:)</code> 写入的空间相同）的键变暗，再照旧写入主题的颜色（主题的颜色已经变暗，不会变两次）：
           <ul>
             <li>背景级：<code>DVTSourceTextBackground</code>、<code>DVTConsoleTextBackgroundColor</code>。</li>
             <li>填充级，只在 alpha 为 1 时：<code>DVTSourceTextCurrentLineHighlightColor</code>、<code>DVTSourceTextSelectionColor</code>、<code>DVTConsoleTextSelectionColor</code>、<code>DVTSourceTextBlockDimBackgroundColor</code>、<code>DVTMarkupTextBackgroundColor</code>、<code>DVTMarkupTextBorderColor</code>、<code>DVTDebuggerInstructionPointerColor</code>。</li>
@@ -571,7 +579,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
           </ul>
           前两类里光标、不可见字符、语法色的归类出自 Xcode 对经典主题的转换 [D]；markup、滚动条标记、控制台与指令指针在 Xcode 的转换里另有出处没逆向，按「底色是填充、其余是前景」归类 [推测]。
         </li>
-        <li>注释标签（<code>applyCommentDecorations</code>）、bridge 的背景色、内容容器与加载遮罩的背景都取 <code>currentTheme</code>，已经是变暗的颜色，不需另做。宏展开的内嵌视图（<code>InlineExpansionView</code>）从哪取色，实现第 4 步时读源码确认，从主题取就不用改，用系统色就照非目标处理并记进决策日志。</li>
+        <li>注释标签（<code>applyCommentDecorations</code>）、bridge 的背景色、内容容器与加载遮罩的背景都取 <code>currentTheme</code>，已经是变暗的颜色，不需另做。宏展开的内嵌视图（<code>InlineExpansionView</code>）里的编辑器用同一份主题（<code>apply(_:lineNumberFont:)</code>），跟着变暗；它的标题与关闭按钮用系统的 <code>tertiaryLabelColor</code>，不变，与标签栏一样不属于主题。</li>
       </ul>
     </div>
   </details>
@@ -656,7 +664,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <section id="log">
   <h2>决策日志</h2>
   <details>
-    <summary>2 条，最近一条：2026-11-27 Accepted</summary>
+    <summary>5 条，最近一条：2026-11-27 验证改用本地依赖模式</summary>
     <div class="details-body">
       <div class="table-wrap">
       <table>
@@ -664,6 +672,9 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
         <tbody>
           <tr><td class="numeric">2026-11-27</td><td>Created as Draft</td><td>用户要求照 Xcode 27 让多栏时没有焦点的编辑栏变暗。先逆向 Xcode 27.2：变暗是 OKLCH 里按对比级别重算主题色，系数、经典主题的规则、范围（不含标签栏与路径栏）、焦点来源与无动画均已核实，方案照此设计</td></tr>
           <tr><td class="numeric">2026-11-27</td><td>Accepted</td><td>用户批准，开始实现；实现放在功能分支 <code>feature/dim-unfocused-editor-panes</code>（worktree <code>.worktrees/RuntimeViewer-DimUnfocusedEditorPanes</code>）</td></tr>
+          <tr><td class="numeric">2026-11-27</td><td>基础主题的变暗挪进 AppUI</td><td>提案原以为桥接测试 target 编进了 App 的 <code>SourceEditorThemeConversion.swift</code>，实际它只编 bridge 框架，App target 也没有单元测试 target。改为 AppUI 的 <code>UnfocusedEditorPaneDimming.dimmedColorTheme(_:colorScheme:)</code>（只在 macOS 编），在 AppUITests 里测，转换只调用它；行为清单换成实际的测试名，原来的「主题色不变暗两次」「不变暗时原样」两条由转换的写法保证（先变暗基础主题再写入已变暗的主题色；<code>nil</code> 时不调用），不另测</td></tr>
+          <tr><td class="numeric">2026-11-27</td><td>宏展开内嵌视图不另做</td><td><code>InlineExpansionView</code> 里的编辑器用同一份主题，跟着变暗；标题与关闭按钮用系统的 <code>tertiaryLabelColor</code>，与标签栏一样不属于主题，不变</td></tr>
+          <tr><td class="numeric">2026-11-27</td><td>验证改用本地依赖模式</td><td>next 的锁文件钉的 MachOSwiftSection（947d5321）用到 MachOKitExtensions 还没发版的 <code>recordsFunctionAddressReferences</code>（最新 tag 3.3.0 没有），按锁文件编包或 App 在 next 上同样失败，与本提案无关。本次在 Ultra 上用 <code>USING_LOCAL_DEPENDENCIES=1</code> 原地编包、用 <code>TuistScript.sh --local-dependencies</code> 编 App</td></tr>
         </tbody>
       </table>
       </div>
