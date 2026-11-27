@@ -85,6 +85,10 @@ public enum RuntimeObjectIcon {
         // C++ function: the C family.
         case .cPlusPlus(.class):
             return ("C", .green)
+        // A template's specializations gathered under its name; green like
+        // the classes it holds, so the blue T of a Swift typealias stays apart.
+        case .cPlusPlus(.classTemplate):
+            return ("T", .green)
         case .cPlusPlus(.namespace):
             return ("N", .green)
 

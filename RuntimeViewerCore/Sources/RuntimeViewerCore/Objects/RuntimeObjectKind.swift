@@ -51,6 +51,12 @@ public enum RuntimeObjectKind: Codable, Hashable, Identifiable, Comparable, Case
     /// type is a class.
     public enum CPlusPlus: Codable, Hashable, Identifiable, CaseIterable, Sendable {
         case `class`
+        /// The specializations of one class template in one scope, gathered
+        /// under the template's name: a node of the object tree rather than
+        /// an entity of the image. Only a requester that says it knows this
+        /// kind (`ObjectsInImageCommand.includesCPlusPlusClassTemplates`) is
+        /// sent one.
+        case classTemplate
         case namespace
 
         public var id: Self { self }
@@ -80,24 +86,26 @@ public enum RuntimeObjectKind: Codable, Hashable, Identifiable, Comparable, Case
             switch cPlusPlus {
             case .class:
                 2
-            case .namespace:
+            case .classTemplate:
                 3
+            case .namespace:
+                4
             }
         case .objc(let objectiveC):
             switch objectiveC {
             case .type(let kind):
                 switch kind {
                 case .class:
-                    4
-                case .protocol:
                     5
+                case .protocol:
+                    6
                 }
             case .category(let kind):
                 switch kind {
                 case .class:
-                    6
-                case .protocol:
                     7
+                case .protocol:
+                    8
                 }
             }
         case .swift(let swift):
@@ -105,41 +113,41 @@ public enum RuntimeObjectKind: Codable, Hashable, Identifiable, Comparable, Case
             case .type(let kind):
                 switch kind {
                 case .enum:
-                    8
-                case .struct:
                     9
-                case .class:
+                case .struct:
                     10
-                case .protocol:
+                case .class:
                     11
-                case .typeAlias:
+                case .protocol:
                     12
+                case .typeAlias:
+                    13
                 }
             case .extension(let kind):
                 switch kind {
                 case .enum:
-                    13
-                case .struct:
                     14
-                case .class:
+                case .struct:
                     15
-                case .protocol:
+                case .class:
                     16
-                case .typeAlias:
+                case .protocol:
                     17
+                case .typeAlias:
+                    18
                 }
             case .conformance(let kind):
                 switch kind {
                 case .enum:
-                    18
-                case .struct:
                     19
-                case .class:
+                case .struct:
                     20
-                case .protocol:
+                case .class:
                     21
-                case .typeAlias:
+                case .protocol:
                     22
+                case .typeAlias:
+                    23
                 }
             }
         }
@@ -231,6 +239,8 @@ public enum RuntimeObjectKind: Codable, Hashable, Identifiable, Comparable, Case
             switch cPlusPlus {
             case .class:
                 "C++ Class"
+            case .classTemplate:
+                "C++ Class Template"
             case .namespace:
                 "C++ Namespace"
             }

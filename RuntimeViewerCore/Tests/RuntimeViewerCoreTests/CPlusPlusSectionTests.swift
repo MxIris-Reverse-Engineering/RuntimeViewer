@@ -308,6 +308,16 @@ struct CPlusPlusSectionTests {
         #expect(try await engine.superclassChain(for: object).isEmpty)
     }
 
+    @Test("a class template node has no hierarchy and no relationships")
+    func classTemplateNodeHasNoHierarchy() async throws {
+        let engine = try await Self.makeEngine("class-template-hierarchy")
+        defer { Task { await engine.stop() } }
+        let object = RuntimeObject(name: "std::__1::basic_string", displayName: "basic_string", kind: .cPlusPlus(.classTemplate), imagePath: Self.libcxxPath, children: [])
+        #expect(try await engine.hierarchy(for: object).isEmpty)
+        #expect(try await engine.superclassChain(for: object).isEmpty)
+        #expect(try await engine.relationships(for: object).subclasses.isEmpty)
+    }
+
     @Test("the relationships list the classes of the image deriving from a class")
     func relationshipsListDerivedClassesInTheImage() async throws {
         let engine = try await Self.makeEngine("relationships")

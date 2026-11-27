@@ -1,6 +1,6 @@
 # Draft - C++ 类模板的特化收进一个节点
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-27
 - **最后更新**: 2026-11-27
@@ -402,7 +402,7 @@ section 里 `classTemplateDeclaration(of:)` 用 `object.children.map { .init(qua
 
 ## 落地步骤
 
-1. **新对象类型与各处穷举** —— 改动地图第 1–6 行、`CPlusPlusObjectKindTests`、`CPlusPlusPresentationTests`
+1. **新对象类型与各处穷举**（已完成） —— 改动地图第 1–6 行、`CPlusPlusObjectKindTests`、`CPlusPlusPresentationTests`
    - 行为：`cPlusPlusClassTemplateSortsBetweenClassesAndNamespaces`
    - 行为：`cPlusPlusClassTemplateRoundTripsThroughJSON`
    - 行为：`cPlusPlusClassTemplateDescriptionIsCPlusPlusClassTemplate`

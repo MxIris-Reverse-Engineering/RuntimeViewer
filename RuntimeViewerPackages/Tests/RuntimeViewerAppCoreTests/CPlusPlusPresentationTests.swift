@@ -30,6 +30,32 @@ struct CPlusPlusPresentationTests {
         #expect(remembered.includedKinds.contains(.cPlusPlus(.namespace)))
     }
 
+    @Test("the Filter Scope draws no checkbox for class template nodes")
+    func filterScopeOffersNoCheckboxForClassTemplates() throws {
+        #expect(!RuntimeObjectScope.allRepresentableKinds.contains(.cPlusPlus(.classTemplate)))
+        #expect(!RuntimeObjectScope.KindGroup.cPlusPlus.kinds.contains(.cPlusPlus(.classTemplate)))
+        // A scope that leaves out other kinds stores no class template among them.
+        var scope = RuntimeObjectScope()
+        scope.toggleKind(.swift(.extension(.struct)))
+        let encoded = String(decoding: try JSONEncoder().encode(scope), as: UTF8.self)
+        #expect(!encoded.contains("classTemplate"))
+    }
+
+    @Test("a class template node stays while one of its specializations passes the scope")
+    func classTemplateNodeStaysWhileOneOfItsSpecializationsPasses() {
+        let imagePath = "/usr/lib/libc++.1.dylib"
+        let specialization = RuntimeObject(name: "std::__1::vector<int>", displayName: "vector<int>", kind: .cPlusPlus(.class), imagePath: imagePath, children: [])
+        let template = RuntimeObject(name: "std::__1::vector", displayName: "vector", kind: .cPlusPlus(.classTemplate), imagePath: imagePath, children: [specialization])
+        var classesOnly = RuntimeObjectScope()
+        classesOnly.includedKinds = [.cPlusPlus(.class)]
+        #expect(!classesOnly.passes(template))
+        #expect(classesOnly.matchesRecursively(template))
+        var namespacesOnly = RuntimeObjectScope()
+        namespacesOnly.includedKinds = [.cPlusPlus(.namespace)]
+        #expect(!namespacesOnly.matchesRecursively(template))
+        #expect(RuntimeObjectScope().matchesRecursively(template))
+    }
+
     @Test("C++ classes and namespaces are a green C and N")
     func cPlusPlusIconsAreGreenCAndN() {
         let classGlyph = RuntimeObjectIcon.glyph(for: .cPlusPlus(.class))
@@ -38,6 +64,14 @@ struct CPlusPlusPresentationTests {
         #expect(classGlyph.color == .green)
         #expect(namespaceGlyph.text == "N")
         #expect(namespaceGlyph.color == .green)
+    }
+
+    @Test("a C++ class template node is a green T, apart from a Swift typealias's blue T")
+    func cPlusPlusClassTemplateGlyphIsAGreenT() {
+        let templateGlyph = RuntimeObjectIcon.glyph(for: .cPlusPlus(.classTemplate))
+        #expect(templateGlyph.text == "T")
+        #expect(templateGlyph.color == .green)
+        #expect(RuntimeObjectIcon.glyph(for: .swift(.type(.typeAlias))).color != templateGlyph.color)
     }
 
     @Test("a C++ interface links class tokens to classes and other type tokens to namespaces, by their full names")

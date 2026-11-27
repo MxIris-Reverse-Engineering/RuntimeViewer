@@ -140,9 +140,15 @@ public struct RuntimeObjectScope: Hashable, Sendable {
     /// Currently dropped:
     /// - `.objc(.category(.protocol))` — Objective-C does not let a
     ///   category attach to a protocol.
+    /// - `.cPlusPlus(.classTemplate)` — a node gathering a class template's
+    ///   specializations, not an entity a scope selects: it has no checkbox,
+    ///   and stays while one of its specializations passes
+    ///   (`matchesRecursively(_:)`). Leaving it out also keeps every scope
+    ///   remembered before it existed meaning what it meant.
     public static let allRepresentableKinds: Set<RuntimeObjectKind> = {
         var kinds = Set(RuntimeObjectKind.allCases)
         kinds.remove(.objc(.category(.protocol)))
+        kinds.remove(.cPlusPlus(.classTemplate))
         return kinds
     }()
 

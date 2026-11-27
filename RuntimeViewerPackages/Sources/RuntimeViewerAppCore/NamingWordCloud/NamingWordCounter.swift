@@ -145,13 +145,14 @@ public enum NamingWordCounter {
         return String(name)
     }
 
-    /// `class`, `protocol`, `enum`, `struct`, `typealias`, `union` or
-    /// `namespace`.
+    /// `class`, `protocol`, `enum`, `struct`, `typealias`, `union`,
+    /// `namespace` or `template`.
     public static func kindName(of kind: RuntimeObjectKind) -> String {
         switch kind {
         case .c(.struct): "struct"
         case .c(.union): "union"
         case .cPlusPlus(.class): "class"
+        case .cPlusPlus(.classTemplate): "template"
         case .cPlusPlus(.namespace): "namespace"
         case .objc(.type(.class)), .objc(.category(.class)): "class"
         case .objc(.type(.protocol)), .objc(.category(.protocol)): "protocol"

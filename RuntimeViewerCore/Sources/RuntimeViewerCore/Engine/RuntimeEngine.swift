@@ -1571,7 +1571,7 @@ extension RuntimeEngine {
 
     func _hierarchy(for object: RuntimeObject) async throws -> [String] {
         switch object.kind {
-        case .c, .cPlusPlus(.namespace):
+        case .c, .cPlusPlus(.namespace), .cPlusPlus(.classTemplate):
             return []
         case .cPlusPlus(.class):
             // Like the other two, the names start with the class itself.
