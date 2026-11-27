@@ -1,13 +1,13 @@
-# Draft - C++ 类模板的特化收进一个节点
+# 0112 - C++ 类模板的特化收进一个节点
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-11-27
 - **最后更新**: 2026-11-27
 - **所属愿景**: 无
 - **关联提案**: [0103 C++ 对象](0103-cplusplus-objects.md)（对象树的来历）、[0107 导出 C++ 对象](0107-cplusplus-export.md)（导出展开对象树的规则）
 - **实现分支 / PR**: `feature/cplusplus-class-template-groups`
-- **配套文档**: 待定 —— 落地时登记实现说明 / 使用指南的链接
+- **配套文档**: 无 —— 调用方契约只有线上字段一条，写在 [`CommunicationAndEngineArchitecture.md`](../CommunicationAndEngineArchitecture.md) §4.4 的第六例；归组规则在 `CPlusPlusObjectTreeBuilder` 的类型注释里
 - **网页版**: 同目录同名的 `.html`
 
 ## 摘要
@@ -481,3 +481,4 @@ extension Array where Element == RuntimeObject {
 | 2026-11-27 | 验证改用本地依赖 | 基线上用远端解析依赖的包构建就编不过：锁文件钉的 MachOSwiftSection 需要 MachOKitExtensions 3.3.0 之后还没发版的改动（`recordsFunctionAddressReferences`）。验证在 Ultra 上 `USING_LOCAL_DEPENDENCIES=1` 原地构建，与这次改动无关。 |
 | 2026-11-27 | 不改根 `AGENTS.md` | 根 `AGENTS.md` 已有 74 KB，超过 Codex 读取的 64 KiB；模板节点的约定写进通信架构文档的第六例与类型的文档注释。 |
 | 2026-11-27 | 实现完成，待用户看过后收尾 | 在 Ultra 上以本地依赖模式验证：Core 全量 940 个、`RuntimeViewerAppCoreTests` 全量 1121 个跑完，红的都是既有红灯——`FindCrossReferenceTests` 与 `BackgroundWorkProcessActivityTests` 基线同样红，其余（`CrossReferencePreparationTests` 两条、`RuntimeLocalSocketConnectionTests`、`RuntimeBackgroundIndexingManagerTests`、`OwnerReportingTaskTests`、`SidebarImageListLoadWaitTests`）单独重跑全过。App target 只多一个 switch 分支，没有整编 App；`RuntimeViewerAppUITests` 没跑（这次没改 AppUI）。配套专题文章不需要：调用方契约只有线上字段一条，已写进通信架构文档的第六例，归组规则在 builder 的类型注释里；「类模板节点」只在提案与代码注释里用，不进术语表。 |
+| 2026-11-27 | Implemented | 用户看过后收尾，落地为 0112。Ultra 上在最终代码上验证：全量里的红单独重跑全过（`FindCrossReferenceTests`、`BackgroundWorkProcessActivityTests` 低负载下单独跑 35 个全过）。没做的一项记为提案索引的后续项：只靠 RTTI 才知道的中间作用域（`Outer<int>::Inner` 里的 `Outer<int>`）没有 `baseName`，不归组。不需要配套专题文章，不引入新术语。 |

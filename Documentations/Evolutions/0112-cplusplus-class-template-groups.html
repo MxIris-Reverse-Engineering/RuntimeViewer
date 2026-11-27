@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>Draft - C++ 类模板的特化收进一个节点</title>
+<title>0112 - C++ 类模板的特化收进一个节点</title>
 <style>
 /* Evolution proposal page, shared style (style A, "Apple documentation").
    Copy this whole <style> block verbatim. Page-specific rules, if any, go only
@@ -160,13 +160,13 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <div class="page">
 
 <header class="doc-header">
-  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">Draft</span></p>
-  <h1><span class="proposal-number">Draft</span> C++ 类模板的特化收进一个节点</h1>
+  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">0112</span></p>
+  <h1><span class="proposal-number">0112</span> C++ 类模板的特化收进一个节点</h1>
   <dl class="meta">
-    <div><dt>状态</dt><dd><span class="status status-in-progress">In Progress</span></dd></div>
+    <div><dt>状态</dt><dd><span class="status status-implemented">Implemented</span></dd></div>
     <div><dt>最后更新</dt><dd>2026-11-27</dd></div>
     <div><dt>项目类型</dt><dd>App</dd></div>
-    <div><dt>原文</dt><dd><code>draft-cplusplus-class-template-groups.md</code></dd></div>
+    <div><dt>原文</dt><dd><code>0112-cplusplus-class-template-groups.md</code></dd></div>
   </dl>
 </header>
 
@@ -198,10 +198,8 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <section id="decide">
   <h2>要你定</h2>
   <div class="callout">
-    <p class="callout-title">轻量档提案，点头即开工</p>
-    <ol>
-      <li>批准这份方案吗？</li>
-    </ol>
+    <p class="callout-title">已落地，没有待定的事</p>
+    <p>用户批准并看过效果，2026-11-27 落地为 0112。</p>
   </div>
   <div class="callout callout-note">
     <p class="callout-title">我自己定的，可以推翻</p>
@@ -519,7 +517,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <section id="log">
   <h2>决策日志</h2>
   <details>
-    <summary>10 条，最近一条：实现完成，待用户看过后收尾</summary>
+    <summary>11 条，最近一条：Implemented</summary>
     <div class="details-body">
       <div class="table-wrap">
       <table>
@@ -535,6 +533,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
           <tr><td class="numeric">2026-11-27</td><td>验证改用本地依赖</td><td>基线上远端解析的包构建就编不过（锁文件钉的 MachOSwiftSection 需要未发版的 MachOKitExtensions），在 Ultra 上 <code>USING_LOCAL_DEPENDENCIES=1</code> 原地构建。</td></tr>
           <tr><td class="numeric">2026-11-27</td><td>不改根 AGENTS.md</td><td>根 <code>AGENTS.md</code> 已超过 64 KiB；约定写进通信架构文档第六例与类型注释。</td></tr>
           <tr><td class="numeric">2026-11-27</td><td>实现完成，待用户看过后收尾</td><td>Ultra 上 Core 全量 940 个、AppCore 全量 1121 个跑完，红的都是既有红灯（基线同样红，或单独重跑全过）；没有整编 App，AppUI 测试没跑。不需要配套专题文章，不进术语表。</td></tr>
+          <tr><td class="numeric">2026-11-27</td><td>Implemented</td><td>落地为 0112。后续项：只靠 RTTI 才知道的中间作用域没有 <code>baseName</code>，不归组，记在提案索引。</td></tr>
         </tbody>
       </table>
       </div>
