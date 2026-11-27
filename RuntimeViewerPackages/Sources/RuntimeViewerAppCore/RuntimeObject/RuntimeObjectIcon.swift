@@ -13,9 +13,9 @@ public enum RuntimeObjectIcon {
     /// What an object's icon shows: a short text on a coloured badge, the way Xcode marks a symbol's
     /// kind. This module only picks the glyph; RuntimeViewerAppUI draws it (`RuntimeObjectIconRendering`).
     public struct Glyph: Hashable, Sendable {
-        /// The colours of UIFoundation's `IDEIconColor`, under the same names.
+        /// The system colours the badge is drawn on, by their names: RuntimeViewerAppUI draws each on the
+        /// `NSIconColor` that is that system colour.
         public enum Color: Hashable, Sendable {
-            case monochrome
             case blue
             case brown
             case gray
@@ -31,10 +31,9 @@ public enum RuntimeObjectIcon {
             case cyan
         }
 
-        /// The styles of UIFoundation's `IDEIconStyle`, under the same names.
+        /// Which of the two images of an `NSIcon` RuntimeViewerAppUI draws: the badge itself, or the one a
+        /// selected row shows, a white plate with the text cut out of it.
         public enum Style: Hashable, Sendable {
-            case `default`
-            case outline
             case simple
             case simpleHighlighted
         }

@@ -42,7 +42,7 @@ public struct NavigationHistorySnapshot: Hashable, Sendable {
     /// Icon edge length for menu rows. Deliberately smaller than
     /// `RuntimeObjectIcon.defaultIconSize` (18, what the sidebar uses):
     /// an 18pt image forces AppKit to grow the menu row beyond the
-    /// standard height. 16 keeps the same IDEIcon look at the size
+    /// standard height. 16 keeps the same NSIcon look at the size
     /// menus are designed around.
     public static let iconSize: CGFloat = 16
 
