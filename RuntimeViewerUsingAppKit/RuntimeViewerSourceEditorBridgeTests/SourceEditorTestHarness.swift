@@ -101,6 +101,35 @@ final class SourceEditorTestHarness {
         )
     }
 
+    /// Turns the scope guides on, the way the content pane does when Settings › Editor › Scope
+    /// Guides is on. Every other option is passed as `init` leaves it.
+    func showScopeGuides() {
+        bridge.applyDisplayOptions(
+            showsLineNumbers: true,
+            showsFoldingRibbon: false,
+            showsStickyHeaders: false,
+            showsMinimap: false,
+            showsScopeGuides: true,
+            showsInvisibles: false,
+            showsMarkSeparators: false,
+            showsInsertionPoint: false
+        )
+    }
+
+    /// Applies one of the themes the framework ships, such as `Default (Dark)`, the way the content
+    /// pane applies the theme it converts from one of them.
+    func applyBuiltInTheme(named themeName: String) throws {
+        guard let themeDictionary = SourceEditorBridge.builtInThemeDictionary(named: themeName) else {
+            throw HarnessError.builtInThemeMissing(themeName)
+        }
+        bridge.applyTheme(
+            name: themeName,
+            dictionary: themeDictionary,
+            fontSizeModifier: 0,
+            lineNumberFont: .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        )
+    }
+
     /// Turns the caret on or off, the way the content pane does when Settings › Editor ›
     /// Insertion Point changes. Every other option is passed as `init` leaves it.
     func showInsertionPoint(_ showsInsertionPoint: Bool) {
@@ -285,11 +314,14 @@ final class SourceEditorTestHarness {
 
     enum HarnessError: Error, CustomStringConvertible {
         case editorViewUnexpectedType(Any.Type)
+        case builtInThemeMissing(String)
 
         var description: String {
             switch self {
             case .editorViewUnexpectedType(let type):
                 "the bridge handed back a \(type) rather than a SourceEditorView"
+            case .builtInThemeMissing(let themeName):
+                "the framework ships no theme called \(themeName)"
             }
         }
     }

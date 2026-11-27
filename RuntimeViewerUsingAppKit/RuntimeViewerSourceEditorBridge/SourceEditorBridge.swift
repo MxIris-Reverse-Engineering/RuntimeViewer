@@ -301,6 +301,28 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         if appliedDisplayOptions.showsInvisibles {
             sourceEditorView.showInvisibles()
         }
+
+        applyScopeGuideColors(from: theme)
+    }
+
+    /// **Without this the scope guides are drawn fully transparent**, which reads as "the Scope
+    /// Guides switch does nothing": the framework's drawing layer starts with four colours of
+    /// alpha 0 (`ScopeGuidesDrawingLayer`, reconstruction 27.2.0-alpha.2), and nothing in the
+    /// framework ever calls `updateColors(_:)`. In Xcode the host does, from
+    /// `ScopeGuidesThemeFeatureController.updateScopeGuidesColors()` in DVTSourceEditor (Xcode
+    /// 26.6, 0xF0F0): the theme's invisibles colour in the generic RGB space is the active
+    /// guide's colour, and the same colour at alpha 0.5 on a light background, 1/3 on a dark one,
+    /// is every other guide's. This repeats that, so a theme change recolours the guides too.
+    ///
+    /// Set whether or not the guides are shown: `updateColors(_:)` only stores the colours on the
+    /// drawing layer, and `showScopeGuides()` draws with whatever it holds.
+    private func applyScopeGuideColors(from theme: SourceEditorTheme) {
+        guard let activeColor = theme.invisiblesColor.usingColorSpace(.genericRGB) else { return }
+        let inactiveAlpha: CGFloat = theme.hasLightBackground ? 0.5 : 1.0 / 3.0
+        sourceEditorView.scopeGuidesVisualization.updateColors(
+            (inactiveColor: activeColor.withAlphaComponent(inactiveAlpha), activeColor: activeColor)
+        )
+        sourceEditorView.layoutManager.setNeedsLayout()
     }
 
     /// **Without this the gutter is empty and 6pt wide, which reads as "line numbers do not
