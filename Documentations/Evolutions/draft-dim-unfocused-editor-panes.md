@@ -156,8 +156,9 @@ Xcode 27 的回答是整栏变暗：没有焦点的编辑栏里，源码的文�
 | `RuntimeViewerPackages/Tests/RuntimeViewerAppCoreTests/ContentTextViewModelEditorPaneDimmingTests.swift` | 新增 | 第 3 步 ViewModel 的行为测试 | | 3 |
 | `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Content/ContentSourceEditorViewController.swift` | 修改 | 建渲染器时传 `isDimmed: output.isEditorPaneDimmed`；`currentTheme` 改存 `ResolvedTheme?`；`applyCurrentTheme()` 在主题变暗时让转换一并变暗基础主题 | SourceEditor 那一路接入 | 4 |
 | `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Content/ContentTextViewController.swift` | 修改 | 建渲染器时传 `isDimmed: output.isEditorPaneDimmed` | NSTextView 那一路接入 | 4 |
-| `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Content/SourceEditorThemeConversion.swift` · `themeDictionary(from:basedOn:baseThemeDimming:)` | 修改 | 新参数 `baseThemeDimming: UnfocusedEditorPaneDimming.ColorScheme?`：非 `nil` 时先把基础主题里每个颜色值按键的级别变暗，再照旧写入主题的颜色 | 光标、不可见字符、markup、滚动条标记这些键 RuntimeViewer 不覆盖，不变暗就和 Xcode 不一致 | 4 |
-| `RuntimeViewerUsingAppKit/RuntimeViewerSourceEditorBridgeTests/SourceEditorThemeDimmingTests.swift` | 新增 | 第 4 步基础主题变暗的行为测试（这个测试 target 已经编进 `SourceEditorThemeConversion.swift`，见 `SemanticRetypingTests`） | | 4 |
+| `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Content/SourceEditorThemeConversion.swift` · `themeDictionary(from:basedOn:baseThemeDimming:)` | 修改 | 新参数 `baseThemeDimming: UnfocusedEditorPaneDimming.ColorScheme?`：非 `nil` 时先用下一行的函数把基础主题变暗，再照旧写入主题的颜色 | 光标、不可见字符、markup、滚动条标记这些键 RuntimeViewer 不覆盖，不变暗就和 Xcode 不一致 | 4 |
+| `RuntimeViewerPackages/Sources/RuntimeViewerAppUI/Theme/UnfocusedEditorPaneDimming+ColorTheme.swift` · `UnfocusedEditorPaneDimming.dimmedColorTheme(_:colorScheme:)` | 新增 | 把 `.xccolortheme` 字典里每个颜色值按键的级别变暗（generic RGB 读入、sRGB 里计算、generic RGB 写回） | App target 没有单元测试 target，放进 AppUI 才能在 AppUITests 里测；只在 macOS 编 | 4 |
+| `RuntimeViewerPackages/Tests/RuntimeViewerAppUITests/UnfocusedEditorPaneColorThemeDimmingTests.swift` | 新增 | 第 4 步基础主题变暗的行为测试 | | 4 |
 | `RuntimeViewerUsingAppKit/AGENTS.md`（编辑区一节） | 修改 | 一句话：非焦点栏的 interface 用变暗的主题，判断在 `ContentTextViewModel.Output.isEditorPaneDimmed`，新的主题化内容照此接入 | 以后加进编辑栏的主题化内容不会漏掉 | 5 |
 | `Documentations/Evolutions/draft-dim-unfocused-editor-panes.md` 与 `.html`、`Documentations/Evolutions/README.md`、`Documentations/README.md` | 新增 / 修改 | 本提案、网页版与两份索引 | | 5 |
 
@@ -362,8 +363,9 @@ static func themeDictionary(from themeProfile: ThemeProfile, basedOn baseTheme: 
 ```
 
 - `ContentSourceEditorViewController.applyCurrentTheme()` 传 `currentTheme?.isDimmedForUnfocusedEditorPane == true ? (isDark ? .dark : .light) : nil`。
-- 非 `nil` 时，先把副本里每个值是四个数字（`"r g b a"`）的键变暗，再照旧写入主题的颜色（主题的颜色已经变暗，不会
-  变两次）：
+- 非 `nil` 时，先交给 AppUI 的 `UnfocusedEditorPaneDimming.dimmedColorTheme(_:colorScheme:)` 把副本里每个值是四个数字
+  （`"r g b a"`，generic RGB，与 `themeString(for:)` 写入的空间相同）的键变暗，再照旧写入主题的颜色（主题的颜色已经
+  变暗，不会变两次）：
   - 背景级：`DVTSourceTextBackground`、`DVTConsoleTextBackgroundColor`。
   - 填充级，只在 alpha 为 1 时：`DVTSourceTextCurrentLineHighlightColor`、`DVTSourceTextSelectionColor`、
     `DVTConsoleTextSelectionColor`、`DVTSourceTextBlockDimBackgroundColor`、`DVTMarkupTextBackgroundColor`、
@@ -373,8 +375,8 @@ static func themeDictionary(from themeProfile: ThemeProfile, basedOn baseTheme: 
   前两类里光标、不可见字符、语法色的归类出自 Xcode 对经典主题的转换 [D]；markup、滚动条标记、控制台与指令指针在
   Xcode 的转换里另有出处没逆向，按「底色是填充、其余是前景」归类 [推测]。
 - 注释标签（`applyCommentDecorations`）、bridge 的背景色、内容容器与加载遮罩的背景都取 `currentTheme`，已经是
-  变暗的颜色，不需另做。宏展开的内嵌视图（`InlineExpansionView`）从哪取色，实现第 4 步时读源码确认，从主题取就
-  不用改，用系统色就照非目标处理并记进决策日志。
+  变暗的颜色，不需另做。宏展开的内嵌视图（`InlineExpansionView`）里的编辑器用同一份主题（`apply(_:lineNumberFont:)`），
+  跟着变暗；它的标题与关闭按钮用系统的 `tertiaryLabelColor`，不变，与标签栏一样不属于主题。
 
 ### 时机
 
@@ -427,40 +429,47 @@ Theme 关掉，位置与 Xcode（主题设置里）对应。
 
 ## 落地步骤
 
-1. **颜色变换与 `ResolvedTheme` 的变暗变体** —— 改动地图第 1–4 行
+1. **颜色变换与 `ResolvedTheme` 的变暗变体**（已完成） —— 改动地图第 1–4 行
+   - 行为：`oklabMatchesTheReferenceValuesForSRGBRed`
+   - 行为：`oklabRoundTripReturnsTheSameSRGBColor`
    - 行为：`backgroundLightnessScalesByPointNineFourInDarkAndPointNineEightInLight`
-   - 行为：`backgroundChromaScalesByPointEightFive`
-   - 行为：`textLightnessAndChromaScaleByPointNine`
-   - 行为：`opaqueSelectionAndCurrentLineTakeTheFillFactors`
-   - 行为：`translucentSelectionAndCurrentLineStayUnchanged`
-   - 行为：`translucentTextIsFlattenedOverTheUndimmedBackgroundFirst`
+   - 行为：`fillLightnessScalesByPointNineFiveInDarkAndPointNineSevenFiveInLight`
+   - 行为：`textLightnessScalesByPointNine`
+   - 行为：`chromaScalesByTheLevelsFactor`
    - 行为：`hueAndOpacityAreKept`
    - 行为：`chromaIsClippedToTheSRGBGamutAtTheNewLightness`
-   - 行为：`oklabRoundTripReturnsTheSameSRGBColor`
+   - 行为：`flattenedComposesOverTheBackground`
+   - 行为：`opaqueSelectionAndCurrentLineTakeTheFillFactors`
+   - 行为：`translucentSelectionAndCurrentLineStayUnchanged`
+   - 行为：`presetBackgroundTakesTheBackgroundFactors`
+   - 行为：`translucentTextIsFlattenedOverTheUndimmedBackgroundFirst`
+   - 行为：`everyTextSlotIsDimmed`
    - 行为：`fontTraitsIdentifierAndNameAreKept`
-   - 行为：`dimmingADimmedThemeReturnsItUnchanged`
    - 行为：`dimmedThemeIsNotEqualToTheUndimmedOne`
-2. **渲染器接受 `isDimmed`** —— 第 5–6 行
+   - 行为：`dimmingADimmedThemeReturnsItUnchanged`
+   - 行为：`dimmedThemeDrawsTheDimmedPresetsColors`
+2. **渲染器接受 `isDimmed`**（已完成） —— 第 5–6 行
    - 行为：`themeIsDimmedWhileIsDimmedIsTrue`
    - 行为：`themeReturnsToNormalWhenIsDimmedTurnsOff`
    - 行为：`rendererWithoutIsDimmedIsNeverDimmed`
    - 行为：`renderedTextIsRebuiltInTheDimmedTheme`
-3. **设置与 ViewModel 的判断** —— 第 7–11 行
+3. **设置与 ViewModel 的判断**（已完成） —— 第 7–11 行
    - 行为：`dimsUnfocusedEditorPanesIsOnForSettingsWrittenBeforeIt`
    - 行为：`dimsUnfocusedEditorPanesRoundTripsThroughTheSettingsFile`
    - 行为：`aSinglePaneIsNeverDimmed`
    - 行为：`aPaneIsDimmedWhileAnotherPaneHasTheFocus`
    - 行为：`focusingThePaneUndimsIt`
+   - 行为：`theFocusedPaneOfSeveralIsNotDimmed`
    - 行为：`turningTheSettingOffUndimsEveryPane`
-4. **App 接线与 SourceEditor 基础主题** —— 第 12–15 行
-   - 行为：`baseThemeColorsAreDimmedByTheirKeysLevel`
-   - 行为：`translucentBaseThemeFillsStayUnchanged`
+4. **App 接线与 SourceEditor 基础主题** —— 第 12–16 行
+   - 行为：`colorThemeColorsAreDimmedByTheirKeysLevel`
+   - 行为：`otherColorsAreDimmedAsText`
+   - 行为：`translucentColorThemeTextIsFlattenedOverTheBackground`
+   - 行为：`translucentColorThemeFillsStayUnchanged`
    - 行为：`fontsLineSpacingAndVersionAreLeftAlone`
-   - 行为：`profileColorsAreNotDimmedTwice`
-   - 行为：`baseThemeIsUntouchedWithoutDimming`
    - 手工验收（交给用户目视）：两栏左右分开、各开一个类型，点左栏右栏变暗、点右栏左栏变暗；只有一栏时不变；
      关掉开关两栏都正常；深浅外观各看一次。
-5. **文档** —— 第 16–17 行：`RuntimeViewerUsingAppKit/AGENTS.md` 加一句；提案改为实现后的样子，两份索引更新。
+5. **文档** —— 第 17–18 行：`RuntimeViewerUsingAppKit/AGENTS.md` 加一句；提案改为实现后的样子，两份索引更新。
 
 构建与测试按远程编译走（包测试过 `queued-build`，App 与 bridge 测试用 Tuist 或 Debug workspace，见项目 `AGENTS.md`）。
 

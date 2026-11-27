@@ -163,7 +163,8 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
         // The view model hands over the interface; this pane themes it (proposal
         // `app-core-without-ui-models`) and reports it displayed once its text is in place, which
         // ends the view model's loading.
-        let renderer = ContentTextRenderer(interfaces: output.interface)
+        // Dimmed while another editor pane has the focus (proposal `dim-unfocused-editor-panes`).
+        let renderer = ContentTextRenderer(interfaces: output.interface, isDimmed: output.isEditorPaneDimmed)
 
         renderer.renderedText.drive(with: self) { target, renderedText in
             // Before the text: setting it moves the insertion point, whose member is looked up here.

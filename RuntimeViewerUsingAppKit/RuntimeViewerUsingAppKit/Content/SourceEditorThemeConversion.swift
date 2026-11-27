@@ -95,10 +95,17 @@ enum SourceEditorThemeConversion {
         }
     }
 
-    /// - Parameter baseTheme: one of the framework's own `.xccolortheme` dictionaries.
+    /// - Parameters:
+    ///   - baseTheme: one of the framework's own `.xccolortheme` dictionaries.
+    ///   - baseThemeDimming: the scheme of `baseTheme` to dim its own colours in — those the
+    ///     profile does not overwrite, such as the invisibles and markup — for an editor pane
+    ///     without the focus (`UnfocusedEditorPaneDimming.dimmedColorTheme(_:colorScheme:)`,
+    ///     proposal `dim-unfocused-editor-panes`); `nil` keeps them. The profile's own colours
+    ///     arrive dimmed already and overwrite theirs as usual, so nothing is dimmed twice.
     /// - Returns: `nil` if `baseTheme` is not shaped like a theme, in which case the caller
     ///   should keep using it unmodified rather than hand the editor something malformed.
-    static func themeDictionary(from themeProfile: ThemeProfile, basedOn baseTheme: NSDictionary) -> NSDictionary? {
+    static func themeDictionary(from themeProfile: ThemeProfile, basedOn baseTheme: NSDictionary, baseThemeDimming: UnfocusedEditorPaneDimming.ColorScheme?) -> NSDictionary? {
+        let baseTheme = baseThemeDimming.map { UnfocusedEditorPaneDimming.dimmedColorTheme(baseTheme, colorScheme: $0) } ?? baseTheme
         guard let converted = baseTheme.mutableCopy() as? NSMutableDictionary,
               let baseSyntaxColors = baseTheme["DVTSourceTextSyntaxColors"] as? NSDictionary,
               let syntaxColors = baseSyntaxColors.mutableCopy() as? NSMutableDictionary,

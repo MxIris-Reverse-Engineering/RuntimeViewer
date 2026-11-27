@@ -59,7 +59,7 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
 
     /// Held because the theme has to be re-applied on an appearance change too, and that
     /// notification carries no theme with it.
-    private var currentTheme: ThemeProfile?
+    private var currentTheme: ResolvedTheme?
 
     /// Keeps the editor's margins and overlays following Settings › Editor. The observation
     /// re-runs on any change to `settings.editor` without saying which value moved, which is
@@ -165,7 +165,8 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
 
         // The editor colours the semantic runs itself and takes only the theme from the renderer,
         // whose themed text it never asks for: none is built (proposal `app-core-without-ui-models`).
-        let renderer = ContentTextRenderer(interfaces: output.interface)
+        // Dimmed while another editor pane has the focus (proposal `dim-unfocused-editor-panes`).
+        let renderer = ContentTextRenderer(interfaces: output.interface, isDimmed: output.isEditorPaneDimmed)
         renderer.theme.driveOnNext { [weak self] theme in
             guard let self else { return }
             currentTheme = theme
@@ -395,8 +396,13 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
         let baseThemeName = isDark ? "Default (Dark)" : "Default (Light)"
         guard let baseTheme = sourceEditorBridgeProvider.builtInThemeDictionary(named: baseThemeName) else { return }
 
+        // In an editor pane without the focus the framework's own colours dim with the app's, as
+        // Xcode dims the whole theme (proposal `dim-unfocused-editor-panes`).
+        let baseThemeDimming: UnfocusedEditorPaneDimming.ColorScheme? = currentTheme?.isDimmedForUnfocusedEditorPane == true
+            ? (isDark ? .dark : .light)
+            : nil
         let dictionary = currentTheme.flatMap {
-            SourceEditorThemeConversion.themeDictionary(from: $0, basedOn: baseTheme)
+            SourceEditorThemeConversion.themeDictionary(from: $0, basedOn: baseTheme, baseThemeDimming: baseThemeDimming)
         } ?? baseTheme
 
         // The gutter has no theme key of its own, so its font is passed alongside. Same font
