@@ -839,7 +839,7 @@ public actor RuntimeEngine {
         }
     }
 
-    func _objects(in image: String, includesCPlusPlusObjects: Bool = false) async throws -> [RuntimeObject] {
+    func _objects(in image: String, includesCPlusPlusObjects: Bool = false, includesCPlusPlusClassTemplates: Bool = false) async throws -> [RuntimeObject] {
         #log(.debug, "Getting objects in image: \(image, privacy: .public)")
         let image = imageCatalog.canonicalImagePath(image)
         let (isObjCSectionExisted, objcSection) = try await objcSectionFactory.section(for: image)
@@ -852,7 +852,16 @@ public actor RuntimeEngine {
         #log(.debug, "Found \(objcObjects.count, privacy: .public) ObjC and \(swiftObjects.count, privacy: .public) Swift objects")
         guard includesCPlusPlusObjects else { return objcObjects + swiftObjects }
         let cPlusPlusObjects = try await cPlusPlusSectionFactory.section(for: image).section.allObjects()
-        return objcObjects + swiftObjects + cPlusPlusObjects
+        return objcObjects + swiftObjects + Self.listedCPlusPlusObjects(cPlusPlusObjects, includesClassTemplates: includesCPlusPlusClassTemplates)
+    }
+
+    /// A C++ section's objects as a request lists them: as they are for a
+    /// requester that knows class template nodes, and with each node replaced
+    /// by its specializations for one that does not
+    /// (`ObjectsInImageCommand.includesCPlusPlusClassTemplates`).
+    private static func listedCPlusPlusObjects(_ objects: [RuntimeObject], includesClassTemplates: Bool) -> [RuntimeObject] {
+        guard !includesClassTemplates else { return objects }
+        return objects.flatMap(\.replacingCPlusPlusClassTemplatesWithSpecializations).sorted()
     }
 
     /// `resolvesReferencesAcrossImages` off answers from the object's own
@@ -1443,8 +1452,11 @@ extension RuntimeEngine {
 
     /// The objects of the image at `image`, Objective-C then Swift — and its
     /// C++ classes and namespaces after them when `includesCPlusPlusObjects`
-    /// is true. A peer of a build before C++ objects answers that request with
-    /// Objective-C and Swift objects only.
+    /// is true, the specializations of each class template gathered under a
+    /// `.cPlusPlus(.classTemplate)` object. A peer of a build before C++
+    /// objects answers that request with Objective-C and Swift objects only,
+    /// and one of a build before class template nodes with the
+    /// specializations where the node would be.
     public func objects(in image: String, includesCPlusPlusObjects: Bool = false) async throws -> [RuntimeObject] {
         try await foregroundObjects(in: image, includesCPlusPlusObjects: includesCPlusPlusObjects, onProgress: nil)
     }
@@ -1508,9 +1520,19 @@ extension RuntimeEngine {
     }
 
     /// Local arm of `ObjectsInImageCommand`'s progress-bearing `perform`.
-    func _objects(in image: String, includesCPlusPlusObjects: Bool = false, reportProgress: @escaping @Sendable (RuntimeObjectsLoadingProgress) async -> Void) async throws -> [RuntimeObject] {
+    func _objects(
+        in image: String,
+        includesCPlusPlusObjects: Bool = false,
+        includesCPlusPlusClassTemplates: Bool = false,
+        reportProgress: @escaping @Sendable (RuntimeObjectsLoadingProgress) async -> Void
+    ) async throws -> [RuntimeObject] {
         try await pumpingIndexingProgress(to: reportProgress) { continuation in
-            try await _localObjectsWithProgress(in: image, includesCPlusPlusObjects: includesCPlusPlusObjects, continuation: continuation)
+            try await _localObjectsWithProgress(
+                in: image,
+                includesCPlusPlusObjects: includesCPlusPlusObjects,
+                includesCPlusPlusClassTemplates: includesCPlusPlusClassTemplates,
+                continuation: continuation
+            )
         }
     }
 
@@ -1546,6 +1568,7 @@ extension RuntimeEngine {
     private func _localObjectsWithProgress(
         in image: String,
         includesCPlusPlusObjects: Bool,
+        includesCPlusPlusClassTemplates: Bool,
         continuation: AsyncThrowingStream<RuntimeObjectsLoadingEvent, Swift.Error>.Continuation,
     ) async throws -> [RuntimeObject] {
         #log(.debug, "Getting objects with progress in image: \(image, privacy: .public)")
@@ -1562,7 +1585,7 @@ extension RuntimeEngine {
         // Its progress phases go only to a request that asked for C++
         // objects, which a peer of an earlier build never sends.
         let cPlusPlusObjects = try await cPlusPlusSectionFactory.section(for: image, progressContinuation: continuation).section.allObjects()
-        return objcObjects + swiftObjects + cPlusPlusObjects
+        return objcObjects + swiftObjects + Self.listedCPlusPlusObjects(cPlusPlusObjects, includesClassTemplates: includesCPlusPlusClassTemplates)
     }
 
     public func hierarchy(for object: RuntimeObject) async throws -> [String] {
@@ -1571,7 +1594,7 @@ extension RuntimeEngine {
 
     func _hierarchy(for object: RuntimeObject) async throws -> [String] {
         switch object.kind {
-        case .c, .cPlusPlus(.namespace):
+        case .c, .cPlusPlus(.namespace), .cPlusPlus(.classTemplate):
             return []
         case .cPlusPlus(.class):
             // Like the other two, the names start with the class itself.

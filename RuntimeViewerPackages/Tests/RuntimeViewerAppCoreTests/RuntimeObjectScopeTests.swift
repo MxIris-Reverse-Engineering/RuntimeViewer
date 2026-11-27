@@ -380,11 +380,11 @@ struct RuntimeObjectScopeTests {
         #expect(!RuntimeObjectScope.allRepresentableKinds.contains(.objc(.category(.protocol))))
     }
 
-    @Test("allRepresentableKinds keeps every other RuntimeObjectKind case")
+    @Test("allRepresentableKinds keeps every other RuntimeObjectKind case but the C++ class template node")
     func allRepresentableKindsKeepsOthers() {
         let everything = Set(RuntimeObjectKind.allCases)
         let dropped = everything.subtracting(RuntimeObjectScope.allRepresentableKinds)
-        #expect(dropped == [.objc(.category(.protocol))])
+        #expect(dropped == [.objc(.category(.protocol)), .cPlusPlus(.classTemplate)])
     }
 
     @Test("KindGroup.objectiveC.kinds omits the impossible protocol category")

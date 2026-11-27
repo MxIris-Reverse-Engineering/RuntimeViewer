@@ -212,6 +212,39 @@ extension CPlusPlusSectionTests {
             #expect(tree.exportedObjects.map(\.name) == ["a", "a::B", "a::B::C", "a::D"])
         }
 
+        @Test func exportWritesTheSpecializationsOfATemplateButNotTheNode() {
+            let tree = Self.object("a", .cPlusPlus(.namespace), children: [
+                Self.object("a::Zeta", .cPlusPlus(.class)),
+                Self.object("a::Box", .cPlusPlus(.classTemplate), children: [
+                    Self.object("a::Box<char>", .cPlusPlus(.class)),
+                    Self.object("a::Box<int>", .cPlusPlus(.class), children: [
+                        Self.object("a::Box<int>::Iterator", .cPlusPlus(.class)),
+                    ]),
+                ]),
+                Self.object("a::d", .cPlusPlus(.namespace)),
+            ])
+
+            // In the order of the tree before template nodes: the classes by name, then the namespaces.
+            #expect(tree.exportedObjects.map(\.name) == ["a", "a::Box<char>", "a::Box<int>", "a::Box<int>::Iterator", "a::Zeta", "a::d"])
+
+            let topLevel = [
+                Self.object("NSThing", .objc(.type(.class))),
+                Self.object("Widget", .cPlusPlus(.class)),
+                Self.object("Box", .cPlusPlus(.classTemplate), children: [Self.object("Box<int>", .cPlusPlus(.class))]),
+            ]
+            #expect(topLevel.exportedObjects.map(\.name) == ["NSThing", "Box<int>", "Widget"])
+        }
+
+        @Test func exportOfAnImageWithTemplatesWritesTheSameObjectsAsBefore() async throws {
+            let engine = try await Self.makeEngine("class-templates")
+            defer { Task { await engine.stop() } }
+            let grouped = try await engine.objects(in: CPlusPlusSectionTests.libcxxPath, includesCPlusPlusObjects: true).filter(\.kind.isCPlusPlus)
+            #expect(grouped.contains { object in CPlusPlusSectionTests.flattened([object]).values.contains { $0.kind == .cPlusPlus(.classTemplate) } })
+            // The tree a build before template nodes listed, exported the way it exported it.
+            let flat = grouped.flatMap(\.replacingCPlusPlusClassTemplatesWithSpecializations).sorted()
+            #expect(grouped.exportedObjects.map(\.key) == flat.flatMap(\.exportedObjects).map(\.key))
+        }
+
         @Test func objectiveCAndSwiftObjectsExportOnlyThemselves() {
             let swiftType = Self.object("Outer", .swift(.type(.struct)), children: [
                 Self.object("Inner", .swift(.type(.struct))),

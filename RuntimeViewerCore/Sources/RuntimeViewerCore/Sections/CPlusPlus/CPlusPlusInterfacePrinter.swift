@@ -6,7 +6,8 @@ import Semantic
 /// A class prints its bases, then each vtable's slots in order — the primary
 /// table first — then its constructors and destructors, its other member
 /// functions, its variables and the types declared in it. A namespace prints
-/// its functions, its variables and what is declared in it. Slot numbers,
+/// its functions, its variables and what is declared in it. A class template
+/// node prints the specializations it gathers, each as a declaration. Slot numbers,
 /// addresses and whether a slot overrides or inherits its base's function go
 /// in comments.
 ///
@@ -132,6 +133,14 @@ struct CPlusPlusInterfacePrinter {
         var declaredTypes: [Declared] = []
     }
 
+    /// A node gathering the specializations of one class template
+    /// (`RuntimeObjectKind.CPlusPlus.classTemplate`).
+    struct ClassTemplateDeclaration: Sendable {
+        var qualifiedName: String
+        var imageName: String
+        var specializations: [Declared] = []
+    }
+
     struct NamespaceDeclaration: Sendable {
         var qualifiedName: String
         var imageName: String
@@ -236,6 +245,17 @@ struct CPlusPlusInterfacePrinter {
         string.append(" {\n", type: .standard)
         append(sections, to: &string)
         string.append("}", type: .standard)
+        return string
+    }
+
+    // MARK: - Class template
+
+    /// The image, then every specialization the node gathers, declared as the
+    /// specializations a namespace declares are, so that each links to its own.
+    func interface(of declaration: ClassTemplateDeclaration) -> SemanticString {
+        var string = SemanticString()
+        appendCommentLine(declaration.imageName, to: &string)
+        string.append(declaredSection(title: "Specializations of \(declaration.qualifiedName)", declared: declaration.specializations, isIndented: false))
         return string
     }
 

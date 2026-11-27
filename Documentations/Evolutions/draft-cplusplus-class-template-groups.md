@@ -1,6 +1,6 @@
 # Draft - C++ 类模板的特化收进一个节点
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-27
 - **最后更新**: 2026-11-27
@@ -159,14 +159,19 @@ MachOKitExtensions 现成的 `baseName`，不解析文本。`objectsInImage` 请
 | `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/NamingWordCloud/NamingWordCounter.swift` · `kindName(of:)` | 修改 | 补 `"template"`，文档注释的列举同步 | 穷举 switch | 1 |
 | `RuntimeViewerCore/Sources/RuntimeViewerCore/Sections/CPlusPlus/CPlusPlusObjectTreeBuilder.swift` · `CPlusPlusObjectTreeBuilder` | 修改 | `Scope` 加 `baseName`；`objects(globalScope:classPaths:)` 改为 `objects(globalScope:classes:)`，`classes` 是新的 `ClassName`（`path`、`baseName`）；`Node` 加 `baseName: String?`；新增私有的 `childObjects(path:imagePath:)` 做归组，`object(parentPath:imagePath:)` 与顶层都用它；类型文档注释补归组规则 | 方案第 2 条 | 2 |
 | `RuntimeViewerCore/Sources/RuntimeViewerCore/Sections/CPlusPlus/RuntimeCPlusPlusSection.swift` · `init`、`treeScope(of:in:)` | 修改 | 把 `CPlusPlusScope.baseName` 与 `CPlusPlusClass.baseName` 交给 builder | 方案第 2 条 | 2 |
-| `RuntimeViewerCore/Sources/RuntimeViewerCore/Sections/CPlusPlus/RuntimeObject+CPlusPlusClassTemplates.swift` · `RuntimeObject` | 新增 | `var replacingCPlusPlusClassTemplatesWithSpecializations: [RuntimeObject]`：模板节点换成它的特化（递归、重新排序），其余对象返回自身（子树同样处理） | 方案第 4、5、6 条三处共用 | 2 |
+| `RuntimeViewerCore/Sources/RuntimeViewerCore/Sections/CPlusPlus/RuntimeObject+CPlusPlusClassTemplates.swift` · `RuntimeObject` | 新增 | `var replacingCPlusPlusClassTemplatesWithSpecializations: [RuntimeObject]`：模板节点换成它的特化（递归、重新排序），其余对象返回自身（子树同样处理） | 引擎给没声明的请求方换回平铺的树（方案第 5 条） | 2 |
 | `RuntimeViewerCore/Sources/RuntimeViewerCore/Engine/RuntimeEngine+Commands.swift` · `ObjectsInImageCommand` | 修改 | 加 `includesCPlusPlusClassTemplates: Bool?`（只在为真时编码，`includesCPlusPlusObjects` 为真时一并设），`perform` 传给 `_objects` | 方案第 5 条 | 2 |
 | `RuntimeViewerCore/Sources/RuntimeViewerCore/Engine/RuntimeEngine.swift` · `_objects(in:includesCPlusPlusObjects:)`、`_objects(in:includesCPlusPlusObjects:reportProgress:)`、`_localObjectsWithProgress` | 修改 | 加参数 `includesCPlusPlusClassTemplates`；为假时把 C++ 对象换成平铺的特化 | 方案第 5 条 | 2 |
 | `RuntimeViewerCore/Sources/RuntimeViewerCore/Sections/CPlusPlus/CPlusPlusInterfacePrinter.swift` · `CPlusPlusInterfacePrinter` | 修改 | 新增 `ClassTemplateDeclaration`（`qualifiedName`、`imageName`、`specializations: [Declared]`）与 `interface(of: ClassTemplateDeclaration)`，复用 `declaredSection` | 方案第 3 条 | 3 |
-| `RuntimeViewerCore/Sources/RuntimeViewerCore/Sections/CPlusPlus/RuntimeCPlusPlusSection.swift` · `interface(for:options:)`、`classDeclaration(of:)`、`namespaceDeclaration(of:)` | 修改 | `interface` 加 `.cPlusPlus(.classTemplate)` 分支与 `classTemplateDeclaration(of:)`；两处内部声明列表先把模板节点换成特化 | 方案第 3、4 条 | 3 |
-| `RuntimeViewerCore/Sources/RuntimeViewerCore/Export/RuntimeObject+Export.swift` · `exportedObjects` | 修改 | 模板节点只展开它的特化，不写节点本身；注释同步 | 方案第 6 条 | 4 |
+| `RuntimeViewerCore/Sources/RuntimeViewerCore/Sections/CPlusPlus/Array+CPlusPlusClassTemplates.swift` · `[RuntimeObject]` | 新增 | `var openingCPlusPlusClassTemplateNodes: [RuntimeObject]`：只展开这一层的模板节点，C++ 对象按有模板节点之前的顺序重排，其他语言的对象原位留在前面 | 声明表与导出要的是一层展开加原顺序，不必深拷贝整棵子树（方案第 4、6 条） | 3 |
+| `RuntimeViewerCore/Sources/RuntimeViewerCore/Sections/CPlusPlus/RuntimeCPlusPlusSection.swift` · `interface(for:options:)`、`classDeclaration(of:)`、`namespaceDeclaration(of:)` | 修改 | `interface` 加 `.cPlusPlus(.classTemplate)` 分支与 `classTemplateDeclaration(of:)`；两处内部声明表经 `declared(in:)` 用 `openingCPlusPlusClassTemplateNodes` 展开 | 方案第 3、4 条 | 3 |
+| `RuntimeViewerCore/Sources/RuntimeViewerCore/Export/RuntimeObject+Export.swift` · `exportedObjects` | 修改 | 模板节点只展开它的特化，不写节点本身；子节点经 `[RuntimeObject].exportedObjects` 保持原顺序；注释同步 | 方案第 6 条 | 4 |
+| `RuntimeViewerCore/Sources/RuntimeViewerCore/Export/Array+RuntimeObjectExport.swift` · `[RuntimeObject]` | 新增 | `public var exportedObjects: [RuntimeObject]`：先 `openingCPlusPlusClassTemplateNodes`，再逐个 `exportedObjects` | 顶层的模板节点也按原顺序写（单文件格式按顺序拼接） | 4 |
+| `RuntimeViewerCore/Sources/RuntimeViewerCore/Export/RuntimeEngine+Export.swift` · `exportInterfaces(with:reporter:)` | 修改 | 改用数组的 `exportedObjects` | 同上 | 4 |
+| `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/Exporting/ExportingConfigurationViewModel.swift` · C++ 计数 | 修改 | 改用数组的 `exportedObjects` | 计数与实际写出的一致 | 4 |
 | `RuntimeViewerCore/Tests/RuntimeViewerCoreTests/CPlusPlusObjectKindTests.swift` | 修改 | 顺序（类 < 模板 < 命名空间、`allCases` 里三个连续）、JSON 往返、说明文字 | 第 1 步的行为 | 1 |
 | `RuntimeViewerPackages/Tests/RuntimeViewerAppCoreTests/CPlusPlusPresentationTests.swift` | 修改 | 绿色 `T`；过滤范围的 C++ 组仍只有类与命名空间两个勾选框；模板节点在有特化通过时留下 | 第 1 步的行为 | 1 |
+| `RuntimeViewerCore/Tests/RuntimeViewerCoreTests/RuntimeObjectTests.swift`、`RuntimeViewerPackages/Tests/RuntimeViewerAppCoreTests/RuntimeObjectScopeTests.swift` | 修改 | `allCases` 由 23 种变 24 种；没有勾选框的类型多了模板节点 | 既有测试枚举了全部类型 | 1 |
 | `RuntimeViewerCore/Tests/RuntimeViewerCoreTests/CPlusPlusObjectTreeBuilderTests.swift` | 修改 | 归组规则的全部情形（见第 2 步行为清单） | 第 2 步的行为 | 2 |
 | `RuntimeViewerCore/Tests/RuntimeViewerCoreTests/ObjectsInImageCPlusPlusWireTests.swift` | 修改 | 新字段的编码、旧服务端读法、旧请求方拿到平铺的树、经中转 | 第 2 步的行为 | 2 |
 | `RuntimeViewerCore/Tests/RuntimeViewerCoreTests/CPlusPlusSectionTests.swift` | 修改 | libc++ 的 `basic_string` 成组；模板节点的界面；命名空间界面仍列出特化 | 第 2、3 步的行为 | 2、3 |
@@ -349,9 +354,29 @@ func interface(of declaration: ClassTemplateDeclaration) -> SemanticString {
 }
 ```
 
-section 里 `classTemplateDeclaration(of:)` 用 `object.children.map { .init(qualifiedName: $0.name, isClass: $0.kind == .cPlusPlus(.class)) }`；
-`classDeclaration(of:)` 与 `namespaceDeclaration(of:)` 的内部声明表改用
-`object.children.flatMap(\.replacingCPlusPlusClassTemplatesWithSpecializations)`，顺序与现在相同（类、命名空间各自按名字）。
+section 里 `classTemplateDeclaration(of:)` 把节点的每个特化做成 `Declared`（`declaration(of:)`）；
+`classDeclaration(of:)` 与 `namespaceDeclaration(of:)` 的内部声明表经 `declared(in:)` 改用
+`object.children.openingCPlusPlusClassTemplateNodes`，顺序与以前相同（类、命名空间各自按名字）：
+
+```swift
+extension Array where Element == RuntimeObject {
+    /// These objects with each C++ class template node among them replaced by
+    /// the specializations it gathers — this level only — and the C++ objects
+    /// in the order they took before there were template nodes; objects of
+    /// other languages keep their places ahead of them.
+    var openingCPlusPlusClassTemplateNodes: [RuntimeObject] { get }
+}
+```
+
+模板节点的子节点只会是特化，所以一层就够；深层的 `replacingCPlusPlusClassTemplatesWithSpecializations` 会重建整棵子树，
+只留给引擎换回平铺的树。
+
+### 导出
+
+`RuntimeObject.exportedObjects` 遇到模板节点返回它的特化各自的 `exportedObjects`，其他 C++ 对象返回自身加
+`children.exportedObjects`；新增的 `public var [RuntimeObject].exportedObjects` 先 `openingCPlusPlusClassTemplateNodes`
+再逐个展开，导出引擎和导出配置页的 C++ 计数都改用它。所以顶层与各层的特化都落在以前的位置，单文件格式拼出的
+`.hpp` 与以前逐字相同。
 
 ## 替代方案考量
 
@@ -402,7 +427,7 @@ section 里 `classTemplateDeclaration(of:)` 用 `object.children.map { .init(qua
 
 ## 落地步骤
 
-1. **新对象类型与各处穷举** —— 改动地图第 1–6 行、`CPlusPlusObjectKindTests`、`CPlusPlusPresentationTests`
+1. **新对象类型与各处穷举**（已完成） —— 改动地图第 1–6 行、`CPlusPlusObjectKindTests`、`CPlusPlusPresentationTests`
    - 行为：`cPlusPlusClassTemplateSortsBetweenClassesAndNamespaces`
    - 行为：`cPlusPlusClassTemplateRoundTripsThroughJSON`
    - 行为：`cPlusPlusClassTemplateDescriptionIsCPlusPlusClassTemplate`
@@ -410,7 +435,7 @@ section 里 `classTemplateDeclaration(of:)` 用 `object.children.map { .init(qua
    - 行为：`filterScopeOffersNoCheckboxForClassTemplates`
    - 行为：`classTemplateNodeStaysWhileOneOfItsSpecializationsPasses`
    - 行为：`classTemplateNodeHasNoHierarchy`
-2. **对象树归组与线上字段** —— 第 7–11 行、`CPlusPlusObjectTreeBuilderTests`、`ObjectsInImageCPlusPlusWireTests`、`CPlusPlusSectionTests`
+2. **对象树归组与线上字段**（已完成） —— 第 7–11 行、`CPlusPlusObjectTreeBuilderTests`、`ObjectsInImageCPlusPlusWireTests`、`CPlusPlusSectionTests`
    - 行为：`specializationsOfOneTemplateSitUnderOneNodeNamedAfterIt`
    - 行为：`aSingleSpecializationIsGroupedToo`
    - 行为：`templateNodeIsNamedByItsScopeAndShowsTheTemplateName`
@@ -427,12 +452,12 @@ section 里 `classTemplateDeclaration(of:)` 用 `object.children.map { .init(qua
    - 行为：`requesterWithoutTheClassTemplateFlagGetsSpecializationsWhereTheyWere`
    - 行为：`relayOfThisBuildForwardsTheClassTemplateFlag`
    - 行为：`libcxxListsBasicStringAsAClassTemplateOfItsSpecializations`
-3. **模板节点的界面** —— 第 12–13 行、`CPlusPlusInterfacePrinterTests`、`CPlusPlusSectionTests`
+3. **模板节点的界面**（已完成） —— 第 12–13 行、`CPlusPlusInterfacePrinterTests`、`CPlusPlusSectionTests`
    - 行为：`classTemplatePrintsItsSpecializationsSpelledInFull`
    - 行为：`classTemplateSpecializationTokensLinkToTheSpecializations`
    - 行为：`namespaceStillListsEverySpecializationDeclaredInIt`
    - 行为：`libcxxClassTemplateInterfaceListsItsSpecializations`
-4. **导出与文档** —— 第 14 行、`CPlusPlusExportTests`、文档两行
+4. **导出与文档**（已完成） —— 第 14 行、`CPlusPlusExportTests`、文档两行
    - 行为：`exportWritesTheSpecializationsOfATemplateButNotTheNode`
    - 行为：`exportOfAnImageWithTemplatesWritesTheSameFilesAsBefore`
 
@@ -451,3 +476,8 @@ section 里 `classTemplateDeclaration(of:)` 用 `object.children.map { .init(qua
 | 2026-11-27 | 排序改为单独成块 | 调研前对用户说过「与类按名字混排」，写提案时改为类之后、命名空间之前单独成块：混排要让两种类型比较相等，侧栏顶层分区的先后会不确定（替代方案第 4 条）。 |
 | 2026-11-27 | 加线上字段 | 0103 之后的 App 会要 C++ 对象，新类型直接进回复会让它们连新版对端时解码失败；照 `includesCPlusPlusObjects` 的先例加可选字段，旧请求方拿到平铺的树。 |
 | 2026-11-27 | Accepted | 用户批准，开始实现。 |
+| 2026-11-27 | 声明表与导出改用一层展开 | 详细设计原写用深层的 `replacingCPlusPlusClassTemplatesWithSpecializations`。实现时改为新增的 `[RuntimeObject].openingCPlusPlusClassTemplateNodes`：模板节点下只有特化，展开一层就够，不必每打印一次命名空间就重建整棵子树；导出另加 `[RuntimeObject].exportedObjects`，顶层的模板节点也按原顺序写，导出配置页的计数随之改用它。 |
+| 2026-11-27 | 第 2–4 步合成一个提交 | 三步的改动交织在 `RuntimeCPlusPlusSection.swift` 与 `CPlusPlusSectionTests.swift` 等几个文件里，按步拆提交要逐块拆分；测试按步写全，一次验证。 |
+| 2026-11-27 | 验证改用本地依赖 | 基线上用远端解析依赖的包构建就编不过：锁文件钉的 MachOSwiftSection 需要 MachOKitExtensions 3.3.0 之后还没发版的改动（`recordsFunctionAddressReferences`）。验证在 Ultra 上 `USING_LOCAL_DEPENDENCIES=1` 原地构建，与这次改动无关。 |
+| 2026-11-27 | 不改根 `AGENTS.md` | 根 `AGENTS.md` 已有 74 KB，超过 Codex 读取的 64 KiB；模板节点的约定写进通信架构文档的第六例与类型的文档注释。 |
+| 2026-11-27 | 实现完成，待用户看过后收尾 | 在 Ultra 上以本地依赖模式验证：Core 全量 940 个、`RuntimeViewerAppCoreTests` 全量 1121 个跑完，红的都是既有红灯——`FindCrossReferenceTests` 与 `BackgroundWorkProcessActivityTests` 基线同样红，其余（`CrossReferencePreparationTests` 两条、`RuntimeLocalSocketConnectionTests`、`RuntimeBackgroundIndexingManagerTests`、`OwnerReportingTaskTests`、`SidebarImageListLoadWaitTests`）单独重跑全过。App target 只多一个 switch 分支，没有整编 App；`RuntimeViewerAppUITests` 没跑（这次没改 AppUI）。配套专题文章不需要：调用方契约只有线上字段一条，已写进通信架构文档的第六例，归组规则在 builder 的类型注释里；「类模板节点」只在提案与代码注释里用，不进术语表。 |

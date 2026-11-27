@@ -626,6 +626,9 @@ extension RuntimeObjectKind {
         case .swift(.extension(let kind)): return "\(swiftKindBase(kind)) Extension"
         case .swift(.conformance(let kind)): return "\(swiftKindBase(kind)) Conformance"
         case .cPlusPlus(.class): return "Class"
+        // Never drawn: class template nodes have no checkbox
+        // (`RuntimeObjectScope.allRepresentableKinds`).
+        case .cPlusPlus(.classTemplate): return "Class Template"
         case .cPlusPlus(.namespace): return "Namespace"
         }
     }

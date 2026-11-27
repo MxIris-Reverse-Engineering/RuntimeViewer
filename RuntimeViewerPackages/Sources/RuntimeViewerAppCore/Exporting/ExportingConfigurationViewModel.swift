@@ -115,7 +115,7 @@ public final class ExportingConfigurationViewModel: ViewModel<ExportingRoute> {
         return Output(
             objcCount: exportingState.$allObjects.asDriver().map { $0.count { $0.kind.isObjC } },
             swiftCount: exportingState.$allObjects.asDriver().map { $0.count { $0.kind.isSwift } },
-            cPlusPlusCount: exportingState.$allObjects.asDriver().map { $0.flatMap(\.exportedObjects).count { $0.kind.isCPlusPlus } },
+            cPlusPlusCount: exportingState.$allObjects.asDriver().map { $0.exportedObjects.count { $0.kind.isCPlusPlus } },
             hasObjC: exportingState.$allObjects.asDriver().map { $0.contains { $0.kind.isObjC } },
             hasSwift: exportingState.$allObjects.asDriver().map { $0.contains { $0.kind.isSwift } },
             hasCPlusPlus: exportingState.$allObjects.asDriver().map { $0.contains { $0.kind.isCPlusPlus } },
