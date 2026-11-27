@@ -50,6 +50,15 @@ struct CPlusPlusSectionTests {
         return object
     }
 
+    /// libc++'s `basic_string` node in the `std` namespace it is declared in.
+    private static func basicStringTemplate(on engine: RuntimeEngine) async throws -> RuntimeObject {
+        let objects = flattened(try await engine.objects(in: libcxxPath, includesCPlusPlusObjects: true))
+        guard let template = objects.values.first(where: { $0.kind == .cPlusPlus(.classTemplate) && $0.name.hasPrefix("std::") && $0.displayName == "basic_string" }) else {
+            throw Missing(description: "\(libcxxPath) lists no basic_string class template")
+        }
+        return template
+    }
+
     private static func options(showingAddresses: Bool = true) throws -> RuntimeObjectInterface.GenerationOptions {
         var options = try JSONDecoder().decode(RuntimeObjectInterface.GenerationOptions.self, from: Data("{}".utf8))
         options.objcHeaderOptions.addMethodIMPAddressComments = showingAddresses
@@ -73,6 +82,24 @@ struct CPlusPlusSectionTests {
         let firstCPlusPlusIndex = try #require(objects.firstIndex { $0.kind.isCPlusPlus })
         let trailingObjects = objects[firstCPlusPlusIndex...]
         #expect(trailingObjects.allSatisfy { $0.kind.isCPlusPlus })
+    }
+
+    @Test("libc++ lists basic_string as a class template whose children are its specializations")
+    func libcxxListsBasicStringAsAClassTemplateOfItsSpecializations() async throws {
+        let engine = try await Self.makeEngine("class-template")
+        defer { Task { await engine.stop() } }
+        let objects = Self.flattened(try await engine.objects(in: Self.libcxxPath, includesCPlusPlusObjects: true))
+        let template = try await Self.basicStringTemplate(on: engine)
+        #expect(template.name.hasSuffix("::basic_string"))
+        #expect(!template.children.isEmpty)
+        for specialization in template.children {
+            #expect(specialization.name.hasPrefix(template.name + "<"))
+            #expect(specialization.displayName.hasPrefix("basic_string<"))
+        }
+        // None of its specializations is left beside the node.
+        let scopeName = String(template.name.dropLast("::basic_string".count))
+        let scope = try #require(objects[scopeName])
+        #expect(!scope.children.contains { $0.displayName.hasPrefix("basic_string<") })
     }
 
     @Test("every namespace listed has something to show: a symbol it prints or an object inside it")
@@ -177,6 +204,34 @@ struct CPlusPlusSectionTests {
         let text = try #require(try await engine.interface(for: object, options: Self.options())).interfaceString.string
         #expect(text.contains("namespace std {"))
         #expect(text.contains("class std::bad_alloc;"))
+    }
+
+    @Test("a namespace still lists every specialization declared in it, not the template node")
+    func namespaceStillListsEverySpecializationDeclaredInIt() async throws {
+        let engine = try await Self.makeEngine("namespace-specializations")
+        defer { Task { await engine.stop() } }
+        let template = try await Self.basicStringTemplate(on: engine)
+        let scopeName = String(template.name.dropLast("::basic_string".count))
+        let scope = try await Self.cPlusPlusObject(named: scopeName, in: Self.libcxxPath, on: engine)
+        let text = try #require(try await engine.interface(for: scope, options: Self.options())).interfaceString.string
+        for specialization in template.children where specialization.kind == .cPlusPlus(.class) {
+            #expect(text.contains("class \(specialization.name);"))
+        }
+        #expect(!text.contains("\(template.name);"))
+    }
+
+    @Test("libc++'s basic_string node prints its specializations")
+    func libcxxClassTemplateInterfaceListsItsSpecializations() async throws {
+        let engine = try await Self.makeEngine("class-template-interface")
+        defer { Task { await engine.stop() } }
+        let template = try await Self.basicStringTemplate(on: engine)
+        let interface = try #require(try await engine.interface(for: template, options: Self.options()))
+        #expect(interface.object.kind == .cPlusPlus(.classTemplate))
+        let text = interface.interfaceString.string
+        #expect(text.hasPrefix("// libc++.1\n// Specializations of \(template.name)\n"))
+        for specialization in template.children {
+            #expect(text.contains(specialization.name))
+        }
     }
 
     @Test("a base in another image resolves through the image that exports its typeinfo")

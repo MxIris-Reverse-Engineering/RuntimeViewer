@@ -14,9 +14,17 @@ extension RuntimeObject {
     /// what is declared in it without printing it, so each of them is written
     /// on its own; an Objective-C or Swift object is written alone, as it
     /// always was (proposal `cplusplus-export`).
+    ///
+    /// A class template node is no declaration and is not written: its
+    /// specializations are, in the order they took before there were template
+    /// nodes, so an export writes what it always wrote (proposal
+    /// `cplusplus-class-template-groups`). Call it on the objects a list
+    /// gives through `[RuntimeObject].exportedObjects`, which keeps that order
+    /// at the top level too.
     public var exportedObjects: [RuntimeObject] {
         guard kind.isCPlusPlus else { return [self] }
-        return [self] + children.flatMap(\.exportedObjects)
+        guard kind != .cPlusPlus(.classTemplate) else { return children.flatMap(\.exportedObjects) }
+        return [self] + children.exportedObjects
     }
 
     public var exportFileName: String {

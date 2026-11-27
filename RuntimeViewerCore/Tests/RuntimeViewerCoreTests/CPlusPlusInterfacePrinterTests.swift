@@ -199,6 +199,37 @@ struct CPlusPlusInterfacePrinterTests {
         #expect(text.contains("// No symbol name shows whether this is a namespace or a type.\nnamespace helpers {\n"))
     }
 
+    @Test("a class template node prints its specializations, spelled in full")
+    func classTemplatePrintsItsSpecializationsSpelledInFull() {
+        var declaration = Printer.ClassTemplateDeclaration(qualifiedName: "std::__1::basic_string", imageName: "libc++.1")
+        declaration.specializations = [
+            .init(qualifiedName: "std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>>", isClass: true),
+            .init(qualifiedName: "std::__1::basic_string<wchar_t, std::__1::char_traits<wchar_t>, std::__1::allocator<wchar_t>>", isClass: true),
+        ]
+        let text = Printer(showsAddresses: true).interface(of: declaration).string
+        #expect(text == """
+        // libc++.1
+        // Specializations of std::__1::basic_string
+        class std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>>;
+        class std::__1::basic_string<wchar_t, std::__1::char_traits<wchar_t>, std::__1::allocator<wchar_t>>;
+
+        """)
+    }
+
+    @Test("a class template node's specializations are class name tokens, which link to them")
+    func classTemplateSpecializationTokensLinkToTheSpecializations() {
+        var declaration = Printer.ClassTemplateDeclaration(qualifiedName: "Box", imageName: "libfoo")
+        declaration.specializations = [
+            .init(qualifiedName: "Box<int>", isClass: true),
+            // A specialization the symbols leave undetermined is listed as what it is.
+            .init(qualifiedName: "Box<char>", isClass: false),
+        ]
+        let string = Printer(showsAddresses: true).interface(of: declaration)
+        #expect(Self.spans(of: .type(.class, .name), in: string) == ["Box<int>"])
+        #expect(Self.spans(of: .type(.other, .name), in: string) == ["Box<char>"])
+        #expect(string.string.contains("namespace Box<char> {}"))
+    }
+
     @Test("type tokens carry the names in full, as the content pane looks them up")
     func typeTokensCarryQualifiedNames() {
         let string = Printer(showsAddresses: true).interface(of: Self.widget(declared: [

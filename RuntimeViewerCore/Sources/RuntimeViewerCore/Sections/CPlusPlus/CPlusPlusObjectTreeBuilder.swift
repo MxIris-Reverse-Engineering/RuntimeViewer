@@ -13,6 +13,19 @@ import Foundation
 /// namespace with no symbol of its own and nothing below it is left out, and
 /// symbols at global scope get an object of their own, ``globalNamespaceName``.
 ///
+/// The specializations of one class template in one scope are gathered under
+/// a `.cPlusPlus(.classTemplate)` object named after the template, even when
+/// there is only one: `std::__1::vector` holds `vector<int, …>` and
+/// `vector<char, …>`, which keep their names and what is below them. A
+/// specialization is a scope whose base name — its component without template
+/// arguments, which MachOKitExtensions reads off the demangled name — differs
+/// from its component, whatever its kind: a namespace takes no template
+/// arguments, but the symbols may leave a specialization `undetermined`. A
+/// scope made up for a class only run-time type information shows has no base
+/// name and is never one, and no node is made for a template whose name a
+/// sibling already has, so that no two objects share a name. Template nodes
+/// sort after the classes and before the namespaces, as their kind does.
+///
 /// Works on plain values rather than MachOKitExtensions' stores, so that its
 /// rules are tested on made-up trees; `RuntimeCPlusPlusSection` reads the
 /// stores into these values.
@@ -35,6 +48,10 @@ struct CPlusPlusObjectTreeBuilder {
 
         /// The components, outermost first, each as C++ prints it.
         var path: [String]
+        /// The last component without template arguments, as
+        /// `CPlusPlusScope.baseName` gives it: the same for every
+        /// specialization of one class template.
+        var baseName: String
         var kind: Kind
         /// Whether a symbol sits directly in the scope. Asked only of a
         /// namespace that keeps nothing below it, because answering means
@@ -43,22 +60,30 @@ struct CPlusPlusObjectTreeBuilder {
         var children: [Scope]
     }
 
+    /// A class with run-time type information.
+    struct ClassName: Sendable {
+        /// The components of its qualified name, outermost first.
+        var path: [String]
+        /// The last component without template arguments, as
+        /// `CPlusPlusClass.baseName` gives it.
+        var baseName: String
+    }
+
     let imagePath: String
 
     /// The top-level objects: `globalScope`'s children made into objects,
-    /// `classPaths` put among them, and the global namespace's object when
+    /// `classes` put among them, and the global namespace's object when
     /// `globalScope` has members. `globalScope` is the tree's root; its own
-    /// path is empty. `classPaths` are the scope paths of the classes with
-    /// run-time type information.
-    func objects(globalScope: Scope, classPaths: [[String]]) -> [RuntimeObject] {
-        let root = Node(component: "", kind: .namespace, hasMembers: globalScope.hasMembers)
+    /// path is empty.
+    func objects(globalScope: Scope, classes: [ClassName]) -> [RuntimeObject] {
+        let root = Node(component: "", baseName: nil, kind: .namespace, hasMembers: globalScope.hasMembers)
         for child in globalScope.children {
             root.insert(child)
         }
-        for classPath in classPaths where !classPath.isEmpty {
-            root.insertClass(at: classPath[...])
+        for className in classes where !className.path.isEmpty {
+            root.insertClass(at: className.path[...], baseName: className.baseName)
         }
-        var objects = root.children.values.compactMap { $0.object(parentPath: [], imagePath: imagePath) }
+        var objects = root.childObjects(path: [], imagePath: imagePath)
         if root.hasMembers() {
             objects.append(RuntimeObject(
                 name: Self.globalNamespaceName,
@@ -105,14 +130,27 @@ extension CPlusPlusObjectTreeBuilder {
         }
 
         let component: String
+        /// The component without template arguments; `nil` for a scope made
+        /// up on the way to a class only run-time type information shows,
+        /// which nothing names.
+        var baseName: String?
         var kind: Kind
         var hasMembers: @Sendable () -> Bool
         var children: [String: Node] = [:]
 
-        init(component: String, kind: Kind, hasMembers: @escaping @Sendable () -> Bool) {
+        init(component: String, baseName: String?, kind: Kind, hasMembers: @escaping @Sendable () -> Bool) {
             self.component = component
+            self.baseName = baseName
             self.kind = kind
             self.hasMembers = hasMembers
+        }
+
+        /// The class template this scope is a specialization of: its base
+        /// name, when that differs from the component, which then carries
+        /// template arguments. `nil` for any other scope.
+        var specializedTemplateName: String? {
+            guard let baseName, !baseName.isEmpty, baseName != component else { return nil }
+            return baseName
         }
 
         func insert(_ scope: Scope) {
@@ -122,7 +160,7 @@ extension CPlusPlusObjectTreeBuilder {
             case .namespace, .undetermined: .namespace
             case .function: .function
             }
-            let node = Node(component: component, kind: kind, hasMembers: scope.hasMembers)
+            let node = Node(component: component, baseName: scope.baseName, kind: kind, hasMembers: scope.hasMembers)
             children[component] = node
             guard kind != .function else { return }
             for child in scope.children {
@@ -131,26 +169,30 @@ extension CPlusPlusObjectTreeBuilder {
         }
 
         /// Puts a class with run-time type information at `path`, below this
-        /// node. Run-time type information is stronger evidence than the
-        /// scope tree's, so an existing namespace becomes a class.
-        func insertClass(at path: ArraySlice<String>) {
+        /// node; `baseName` is its last component's. Run-time type information
+        /// is stronger evidence than the scope tree's, so an existing
+        /// namespace becomes a class.
+        func insertClass(at path: ArraySlice<String>, baseName: String) {
             guard let component = path.first else { return }
             let isLast = path.count == 1
             if let node = children[component] {
                 if node.kind == .function { return }
                 if isLast {
                     node.kind = .class
+                    if node.baseName == nil {
+                        node.baseName = baseName
+                    }
                 } else {
-                    node.insertClass(at: path.dropFirst())
+                    node.insertClass(at: path.dropFirst(), baseName: baseName)
                 }
                 return
             }
             if !isLast && CPlusPlusObjectTreeBuilder.isFunctionComponent(component) { return }
             let kind: Kind = isLast || self.kind == .class ? .class : .namespace
-            let node = Node(component: component, kind: kind, hasMembers: { false })
+            let node = Node(component: component, baseName: isLast ? baseName : nil, kind: kind, hasMembers: { false })
             children[component] = node
             if !isLast {
-                node.insertClass(at: path.dropFirst())
+                node.insertClass(at: path.dropFirst(), baseName: baseName)
             }
         }
 
@@ -159,8 +201,8 @@ extension CPlusPlusObjectTreeBuilder {
         func object(parentPath: [String], imagePath: String) -> RuntimeObject? {
             guard kind != .function else { return nil }
             let path = parentPath + [component]
-            let childObjects = children.values.compactMap { $0.object(parentPath: path, imagePath: imagePath) }.sorted()
-            if kind == .namespace, childObjects.isEmpty, !hasMembers() {
+            let objects = childObjects(path: path, imagePath: imagePath)
+            if kind == .namespace, objects.isEmpty, !hasMembers() {
                 return nil
             }
             return RuntimeObject(
@@ -168,8 +210,40 @@ extension CPlusPlusObjectTreeBuilder {
                 displayName: component,
                 kind: kind == .class ? .cPlusPlus(.class) : .cPlusPlus(.namespace),
                 imagePath: imagePath,
-                children: childObjects
+                children: objects
             )
+        }
+
+        /// The objects of this node's children, `path` being this node's own,
+        /// with the specializations of each class template gathered under one
+        /// `.cPlusPlus(.classTemplate)` object named after the template.
+        func childObjects(path: [String], imagePath: String) -> [RuntimeObject] {
+            var objects: [RuntimeObject] = []
+            var specializationsByTemplateName: [String: [RuntimeObject]] = [:]
+            for child in children.values {
+                guard let object = child.object(parentPath: path, imagePath: imagePath) else { continue }
+                if let templateName = child.specializedTemplateName {
+                    specializationsByTemplateName[templateName, default: []].append(object)
+                } else {
+                    objects.append(object)
+                }
+            }
+            for (templateName, specializations) in specializationsByTemplateName {
+                // A sibling already has the template's name: no node, so that
+                // no two objects share one.
+                guard children[templateName] == nil else {
+                    objects.append(contentsOf: specializations)
+                    continue
+                }
+                objects.append(RuntimeObject(
+                    name: (path + [templateName]).joined(separator: "::"),
+                    displayName: templateName,
+                    kind: .cPlusPlus(.classTemplate),
+                    imagePath: imagePath,
+                    children: specializations.sorted()
+                ))
+            }
+            return objects.sorted()
         }
     }
 }

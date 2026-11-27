@@ -84,7 +84,7 @@ actor RuntimeCPlusPlusSection<Reading: RuntimeImageReading>: RuntimeCPlusPlusSec
 
         let objects = CPlusPlusObjectTreeBuilder(imagePath: imagePath).objects(
             globalScope: Self.treeScope(of: .global, in: machO),
-            classPaths: classes.map(\.scopePath)
+            classes: classes.map { CPlusPlusObjectTreeBuilder.ClassName(path: $0.scopePath, baseName: $0.baseName) }
         )
         self.objects = objects
         var objectsByName: [String: RuntimeObject] = [:]
@@ -114,6 +114,7 @@ actor RuntimeCPlusPlusSection<Reading: RuntimeImageReading>: RuntimeCPlusPlusSec
         let children = kind == .function ? [] : store.childScopes(of: scope, in: machO).map { treeScope(of: $0, in: machO) }
         return CPlusPlusObjectTreeBuilder.Scope(
             path: scope.path,
+            baseName: scope.baseName,
             kind: kind,
             hasMembers: { store.members(of: scope, in: machO).contains(where: isPrinted) },
             children: children
@@ -172,6 +173,8 @@ actor RuntimeCPlusPlusSection<Reading: RuntimeImageReading>: RuntimeCPlusPlusSec
         let interfaceString: SemanticString = switch listedObject.kind {
         case .cPlusPlus(.class):
             printer.interface(of: classDeclaration(of: listedObject))
+        case .cPlusPlus(.classTemplate):
+            printer.interface(of: classTemplateDeclaration(of: listedObject))
         default:
             printer.interface(of: namespaceDeclaration(of: listedObject))
         }
@@ -234,8 +237,28 @@ actor RuntimeCPlusPlusSection<Reading: RuntimeImageReading>: RuntimeCPlusPlusSec
             declaration.memberFunctions = memberFunctions.members
             declaration.variables = variables.members.map { .init(name: $0.function.name, addresses: $0.addresses) }
         }
-        declaration.declaredTypes = object.children.map { .init(qualifiedName: $0.name, isClass: $0.kind == .cPlusPlus(.class)) }
+        declaration.declaredTypes = Self.declared(in: object)
         return declaration
+    }
+
+    private func classTemplateDeclaration(of object: RuntimeObject) -> CPlusPlusInterfacePrinter.ClassTemplateDeclaration {
+        CPlusPlusInterfacePrinter.ClassTemplateDeclaration(
+            qualifiedName: object.name,
+            imageName: imageName,
+            specializations: object.children.map(Self.declaration(of:))
+        )
+    }
+
+    /// What an interface lists as declared in `object`: its children, each
+    /// class template node replaced by the specializations it gathers and in
+    /// the order they took before there were template nodes, so that the text
+    /// names every specialization in full, as it always did.
+    private static func declared(in object: RuntimeObject) -> [CPlusPlusInterfacePrinter.Declared] {
+        object.children.openingCPlusPlusClassTemplateNodes.map(declaration(of:))
+    }
+
+    private static func declaration(of object: RuntimeObject) -> CPlusPlusInterfacePrinter.Declared {
+        .init(qualifiedName: object.name, isClass: object.kind == .cPlusPlus(.class))
     }
 
     private func namespaceDeclaration(of object: RuntimeObject) -> CPlusPlusInterfacePrinter.NamespaceDeclaration {
@@ -259,7 +282,7 @@ actor RuntimeCPlusPlusSection<Reading: RuntimeImageReading>: RuntimeCPlusPlusSec
             declaration.functions = functions.members
             declaration.variables = variables.members.map { .init(name: $0.function.name, addresses: $0.addresses) }
         }
-        declaration.declared = object.children.map { .init(qualifiedName: $0.name, isClass: $0.kind == .cPlusPlus(.class)) }
+        declaration.declared = Self.declared(in: object)
         return declaration
     }
 

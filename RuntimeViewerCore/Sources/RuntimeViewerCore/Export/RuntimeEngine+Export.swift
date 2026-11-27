@@ -25,7 +25,7 @@ extension RuntimeEngine {
         let allObjects = try await objects(
             in: configuration.imagePath,
             includesCPlusPlusObjects: configuration.includesCPlusPlusObjects
-        ).flatMap(\.exportedObjects)
+        ).exportedObjects
         reporter.send(.phaseCompleted(.preparing))
 
         reporter.send(.phaseStarted(.exporting))

@@ -169,6 +169,17 @@ extension RuntimeEngine {
         /// of its own: an injected payload of an earlier release drops the
         /// connection on a command it does not know (PR121.73).
         let includesCPlusPlusObjects: Bool?
+        /// Whether the requester knows `RuntimeObjectKind.CPlusPlus.classTemplate`,
+        /// the node that gathers a class template's specializations. Set with
+        /// `includesCPlusPlusObjects` and left out of the encoding otherwise,
+        /// so a request without C++ objects is byte for byte what it was.
+        /// Without it the reply carries each template's specializations where
+        /// the node would be, as builds before class template nodes listed
+        /// them — a requester of such a build asks for C++ objects and would
+        /// fail to decode the node; a peer of such a build skips the key and
+        /// answers that way anyway (`CommunicationAndEngineArchitecture.md`
+        /// §4.4, proposal `cplusplus-class-template-groups`).
+        let includesCPlusPlusClassTemplates: Bool?
         static var commandName: String { CommandName.runtimeObjectsInImage.commandName }
         var subjectImagePath: String? { image }
         static var isForegroundLoad: Bool { true }
@@ -177,14 +188,24 @@ extension RuntimeEngine {
         init(image: String, includesCPlusPlusObjects: Bool = false) {
             self.image = image
             self.includesCPlusPlusObjects = includesCPlusPlusObjects ? true : nil
+            self.includesCPlusPlusClassTemplates = includesCPlusPlusObjects ? true : nil
         }
 
         func perform(on engine: RuntimeEngine) async throws -> [RuntimeObject] {
-            try await engine._objects(in: image, includesCPlusPlusObjects: includesCPlusPlusObjects == true)
+            try await engine._objects(
+                in: image,
+                includesCPlusPlusObjects: includesCPlusPlusObjects == true,
+                includesCPlusPlusClassTemplates: includesCPlusPlusClassTemplates == true
+            )
         }
 
         func perform(on engine: RuntimeEngine, reportProgress: @escaping @Sendable (RuntimeObjectsLoadingProgress) async -> Void) async throws -> [RuntimeObject] {
-            try await engine._objects(in: image, includesCPlusPlusObjects: includesCPlusPlusObjects == true, reportProgress: reportProgress)
+            try await engine._objects(
+                in: image,
+                includesCPlusPlusObjects: includesCPlusPlusObjects == true,
+                includesCPlusPlusClassTemplates: includesCPlusPlusClassTemplates == true,
+                reportProgress: reportProgress
+            )
         }
     }
 
