@@ -83,14 +83,17 @@ supplies, because that package depends on RuntimeViewerAppCore and so this modul
 **An icon or a colour RuntimeViewerAppCore shows is a value it describes, and RuntimeViewerAppUI draws it**
 (`Presentation/IconDescriptor.swift`, `ColorDescriptor.swift`; drawn by `IconDescriptor.image` and
 `ColorDescriptor.color` in AppUI's `Presentation/`): a system symbol (`SystemSymbol`, names only), a kind of
-image, an object's glyph or a letter badge (`RuntimeObjectIcon.Glyph`, which AppCore picks and AppUI draws with
-UIFoundation's `IDEIcon` through `runtimeObjectIconRendering`), one of the Find navigator's row symbols, or an
+image, an object's glyph or a letter badge (`RuntimeObjectIcon.Glyph`, which AppCore picks and AppUI draws through
+`runtimeObjectIconRendering` as Xcode draws a code symbol's icon — the letters on a squircle filling the image, in
+the system colour the glyph's colour is named after — with AppKitPlus's `NSIcon`, UIKitPlus's on iOS and visionOS:
+`NSIconRuntimeObjectIconRenderer`, one file for every platform but its import), one of the Find navigator's row symbols, or an
 engine by its `engineID` (AppUI's `RuntimeEngineIconProvider.icon(forEngineID:)` and
 `sourcePickerIcon(forEngineID:)` find it among the manager's engines, and for an engine the manager no longer
 holds answer with the icon they last drew for it — what the runtime source picker shows for a window whose
 engine went away). A view that draws engines' icons draws them again on the provider's
 `recordedIconsChanged`: an injected device process's icon is recorded after its engine has been listed. A cell's `Appearance` carries the descriptors and the cell view draws them, on the main thread:
-`IDEIcon` keeps its images in a dictionary without a lock, so tests that draw icons run on the main actor.
+`IconDescriptor.image` is main-actor isolated, as the cache of symbol images behind it is, so tests that draw icons
+run on the main actor (`NSIcon` itself draws on any thread).
 AppUI also keeps the drawing under the names AppCore used to have — `RuntimeImageKind.icon`, `iconColor`,
 `coloredIcon`, `RuntimeObjectIcon.icon(for:)` — for the views that draw an image directly. `CustomSymbol`
 and its asset catalog, `Resources/Symbols.xcassets` of RuntimeViewerAppUI (the image kinds' symbols taken from

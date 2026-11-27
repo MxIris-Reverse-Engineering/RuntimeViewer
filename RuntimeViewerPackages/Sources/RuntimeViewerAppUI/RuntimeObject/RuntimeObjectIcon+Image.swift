@@ -44,9 +44,8 @@ extension RuntimeObjectIcon {
 
 // MARK: - Drawing
 
-/// Draws an object's icon. The live value draws it the way Xcode draws a symbol's kind, with
-/// UIFoundation's `IDEIcon` (`IDEIconRuntimeObjectIconRenderer`); RuntimeViewerAppCore only picks the
-/// glyph.
+/// Draws an object's icon. The live value draws it the way Xcode draws a code symbol's icon, with
+/// AppKitPlus's `NSIcon` (`NSIconRuntimeObjectIconRenderer`); RuntimeViewerAppCore only picks the glyph.
 ///
 /// A renderer gives back the same image for the same glyph, as the icons always have: a view that
 /// compares the images it was given redraws only when they differ.
@@ -54,10 +53,10 @@ public protocol RuntimeObjectIconRendering: AnyObject, Sendable {
     func image(for glyph: RuntimeObjectIcon.Glyph) -> NSUIImage
 }
 
-/// The live value draws with `IDEIcon`; a test gets blank images of the glyph's size, so that a test
+/// The live value draws with `NSIcon`; a test gets blank images of the glyph's size, so that a test
 /// that does not care what an icon shows does not draw it.
 enum RuntimeObjectIconRenderingKey: DependencyKey {
-    static let liveValue: any RuntimeObjectIconRendering = IDEIconRuntimeObjectIconRenderer()
+    static let liveValue: any RuntimeObjectIconRendering = NSIconRuntimeObjectIconRenderer()
     static let testValue: any RuntimeObjectIconRendering = BlankRuntimeObjectIconRenderer()
 }
 

@@ -1,9 +1,9 @@
 # Draft - 对象图标改用 AppKitPlus 的 NSIcon 绘制
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-27
-- **最后更新**: 2026-11-27
+- **最后更新**: 2026-11-28
 - **所属愿景**: 无
 - **关联提案**: [0091 - AppCore / AppUI 拆分](0091-app-core-ui-split.md)（定下「AppCore 选字形、AppUI 画字形」的分工与 `runtimeObjectIconRendering`）
 - **实现分支 / PR**: `feature/nsicon-object-icons`（worktree `.worktrees/RuntimeViewer-NSIconObjectIcons`）
@@ -109,18 +109,19 @@ macOS 与 iOS / visionOS 共用同一份代码——iOS 一侧经 AppKitPlus-Rel
 | 文件 / 类型 | 动作 | 改什么 | 为什么 | 步骤 |
 |---|---|---|---|---|
 | `RuntimeViewerPackages/Package.swift` · `RuntimeViewerAppUI` | 修改 | 依赖加 `.product(name: "UIKitPlus", package: "AppKitPlus-Release", condition: .when(platforms: [.iOS, .visionOS]))` | iOS / visionOS 上拿到 `NSIcon` | 1 |
-| `RuntimeViewerPackages/Package.swift` · `uiFoundationTraits` | 修改 | 去掉 `"IDEIcons"` | 不再有人用 `IDEIcon` | 2 |
+| `RuntimeViewerPackages/Package.swift` · `uiFoundationTraits` | 修改 | 去掉 `"IDEIcons"` | 不再有人用 `IDEIcon` | 1 |
+| `RuntimeViewerPackages/Package.resolved` | 修改 | 只把 `originHash` 换成新 `Package.swift` 的 sha256，pin 一个不动 | 清单变了，原 hash 对不上会让 SwiftPM 整体重新解析、抬高别的依赖 | 1 |
 | `RuntimeViewerAppUI/RuntimeObject/NSIconRuntimeObjectIconRenderer.swift` · `NSIconRuntimeObjectIconRenderer` | 新增 | 用 `NSIcon` 画字形；`NSIconColor.init(_: RuntimeObjectIcon.Glyph.Color)` 映射颜色 | 本提案的主体 | 1 |
-| `RuntimeViewerAppUI/RuntimeObject/IDEIconRuntimeObjectIconRenderer.swift` · `IDEIconRuntimeObjectIconRenderer`、`IDEIconColor.init(_:)`、`IDEIconStyle.init(_:)` | 删除 | 整个文件 | 被新渲染器取代 | 2 |
+| `RuntimeViewerAppUI/RuntimeObject/IDEIconRuntimeObjectIconRenderer.swift` · `IDEIconRuntimeObjectIconRenderer`、`IDEIconColor.init(_:)`、`IDEIconStyle.init(_:)` | 删除 | 整个文件 | 被新渲染器取代 | 1 |
 | `RuntimeViewerAppUI/RuntimeObject/RuntimeObjectIcon+Image.swift` · `RuntimeObjectIconRenderingKey` | 修改 | `liveValue` 换成 `NSIconRuntimeObjectIconRenderer()`；协议与 key 的文档注释改指 `NSIcon` | 切换 live 值 | 1 |
-| `RuntimeViewerAppCore/RuntimeObject/RuntimeObjectIcon.swift` · `Glyph.Color`、`Glyph.Style` | 修改 | 删 `.monochrome`、`.default`、`.outline`；文档注释改指 `NSIconColor` 与 `NSIcon` 的两张图 | 没有用处，也没有对应画法 | 2 |
-| `RuntimeViewerAppCore/Main/NavigationHistorySnapshot.swift` · `iconSize` | 修改 | 注释里的 `IDEIcon` 改成 `NSIcon` | 注释过时 | 2 |
+| `RuntimeViewerAppCore/RuntimeObject/RuntimeObjectIcon.swift` · `Glyph.Color`、`Glyph.Style` | 修改 | 删 `.monochrome`、`.default`、`.outline`；文档注释改指 `NSIconColor` 与 `NSIcon` 的两张图 | 没有用处，也没有对应画法 | 1 |
+| `RuntimeViewerAppCore/Main/NavigationHistorySnapshot.swift` · `iconSize` | 修改 | 注释里的 `IDEIcon` 改成 `NSIcon` | 注释过时 | 1 |
 | `RuntimeViewerPackages/Tests/RuntimeViewerAppUITests/NSIconRuntimeObjectIconRendererTests.swift` | 新增 | 颜色映射、铺满尺寸、两种样式与 `NSIcon` 的输出一致 | 守住渲染器的契约 | 1 |
-| `RuntimeViewerPackages/Tests/RuntimeViewerAppUITests/IDEIconRuntimeObjectIconRendererTests.swift` | 删除 | 整个文件 | 对照的对象没了 | 2 |
-| `RuntimeViewerPackages/Tests/RuntimeViewerAppUITests/RuntimeObjectIconGlyphTests.swift` | 修改 | 注释指向新测试 | 注释过时 | 2 |
-| `RuntimeViewerPackages/Sources/AGENTS.md` | 修改 | 图标一段的 `IDEIcon` 改成 `NSIcon`；「`IDEIcon` 没加锁所以测试在主线程」改成按现状描述 | 文档与代码同批 | 3 |
-| `RuntimeViewerPackages/Tests/AGENTS.md` | 修改 | 对照 UI 库的测试清单里换成新测试名 | 同上 | 3 |
-| `AGENTS.md`（根）· *Dependency floors* | 修改 | AppKitPlus `0.24.0` 一句补上「也是第一个带 UIKitPlus 的版本，iOS 与 visionOS 的对象图标用它的 `NSIcon` 画」 | 记下下限的又一个理由 | 3 |
+| `RuntimeViewerPackages/Tests/RuntimeViewerAppUITests/IDEIconRuntimeObjectIconRendererTests.swift` | 删除 | 整个文件 | 对照的对象没了 | 1 |
+| `RuntimeViewerPackages/Tests/RuntimeViewerAppUITests/RuntimeObjectIconGlyphTests.swift` | 修改 | 注释指向新测试 | 注释过时 | 1 |
+| `RuntimeViewerPackages/Sources/AGENTS.md` | 修改 | 图标一段的 `IDEIcon` 改成 `NSIcon`；「`IDEIcon` 没加锁所以测试在主线程」改成按现状描述 | 文档与代码同批 | 2 |
+| `RuntimeViewerPackages/Tests/AGENTS.md` | 修改 | 对照 UI 库的测试清单里换成新测试名 | 同上 | 2 |
+| `AGENTS.md`（根）· *Dependency floors* | 修改 | AppKitPlus `0.24.0` 一句补上「也是第一个带 UIKitPlus 的版本，iOS 与 visionOS 的对象图标用它的 `NSIcon` 画」 | 记下下限的又一个理由 | 2 |
 | `Documentations/Evolutions/README.md`、`Documentations/README.md` | 修改 | 登记本提案 | 索引 | 0 |
 
 ## 架构图
@@ -161,7 +162,6 @@ cell view: appearance.primaryIcon?.image            (IconDescriptor.glyph)
 
 ```swift
 import Foundation
-import Dependencies
 import RuntimeViewerAppCore
 #if os(macOS)
 import AppKitPlus
@@ -272,20 +272,20 @@ extension NSIconColor {
 
 0. **登记提案** —— 改动地图最后一行
    - 行为：提案以 `draft-nsicon-object-icons` 出现在两份索引里。
-1. **新渲染器接上 live 值** —— `Package.swift` 的 UIKitPlus 依赖、`NSIconRuntimeObjectIconRenderer.swift`、
-   `RuntimeObjectIcon+Image.swift`、新测试
-   - 行为：`eachGlyphColourIsDrawnOnTheSystemColourOfTheSameName`——13 种字形颜色各自画在同名系统色上（浅色与深色外观下
-     解析出的颜色与系统色一致）。
-   - 行为：`theImageIsTheGlyphsSizeWithThePlateFillingIt`——图片尺寸等于 `glyph.size`。
-   - 行为：`aSimpleGlyphIsDrawnAsNSIconDrawsItsLettersOnASquircle`——与同规格 `NSIcon.image(of:)` 的输出逐字节相同。
-   - 行为：`aHighlightedGlyphIsNSIconsHighlightedImage`——与 `highlightedImage(of:)` 的输出逐字节相同。
-   - 行为：`theLiveRendererIsTheNSIconOne`——`RuntimeObjectIconRenderingKey.liveValue` 是 `NSIconRuntimeObjectIconRenderer`。
-   - 行为：`RuntimeObjectIconGlyphTests` 原有用例照旧通过（同一字形同一图片）。
-   - 构建：macOS 包测试通过；`RuntimeViewerAppUI` 为 iOS 与 visionOS 编译通过。
-2. **删掉 IDEIcon** —— 旧渲染器与旧测试、`IDEIcons` trait、`Glyph` 的三个无用值、两处注释
-   - 行为：全仓库源码与清单里不再出现 `IDEIcon`（历史提案除外）。
-   - 构建：macOS 包测试、iOS / visionOS 编译、macOS App 构建都通过。
-3. **文档** —— 两份子目录 `AGENTS.md`、根 `AGENTS.md` 的依赖下限
+1. **换上新渲染器，删掉 IDEIcon**（已完成）—— 改动地图里步骤为 1 与 2 的各行：`Package.swift` 的 UIKitPlus 依赖与
+   `IDEIcons` trait、`Package.resolved` 的 `originHash`、新渲染器与新测试、`RuntimeObjectIcon+Image.swift` 的 live 值、
+   旧渲染器与旧测试、`Glyph` 的三个无用值、两处注释（原计划分两步：新渲染器的 `switch` 要穷尽 `Glyph`，
+   三个无用值不删就编不过，而删了它们旧渲染器又编不过，所以合成一步）
+   - 行为：`glyphColourIsTheSystemColourOfTheSameName`——13 种字形颜色各自画在同名系统色上（浅色与深色外观下
+     解析出的 sRGB 分量与系统色一致）。
+   - 行为：`simpleGlyphMatchesNSIcon`——与同规格 `NSIcon.image(of:)` 的输出逐字节相同。
+   - 行为：`highlightedGlyphMatchesNSIconsHighlightedImage`——与 `highlightedImage(of:)` 的输出逐字节相同。
+   - 行为：`plateFillsTheGlyphsSize`——14、16、18、24pt 的图片尺寸都等于 `glyph.size`，四条边的中点都是底板
+     （不透明度大于 0.9；`IDEIcon` 留的 1pt 边在那里是透明的）。
+   - 行为：`liveRendererIsTheNSIconOne`——`RuntimeObjectIconRenderingKey.liveValue` 是 `NSIconRuntimeObjectIconRenderer`。
+   - 行为：`RuntimeObjectIconGlyphTests` 原有用例照旧通过（同一字形同一图片）；源码与清单里不再出现 `IDEIcon`。
+   - 构建：macOS 包测试通过；iOS 与 visionOS 的 App 编译通过。
+2. **文档**（已完成）—— 两份子目录 `AGENTS.md`、根 `AGENTS.md` 的依赖下限
    - 行为：文档里描述的渲染器、测试名、线程说明与代码一致。
 
 **收尾时必须判断两件事**（判断结果写进决策日志，不允许沉默跳过）：
@@ -302,3 +302,8 @@ extension NSIconColor {
 | 2026-11-27 | 底板铺满图标框 | 用户选定：与 Xcode 同尺寸的地方完全一致、两个平台一份代码；18pt 框里底板大 2pt 是接受的代价。否掉了「保留 1pt 边」与「默认尺寸改 16」。 |
 | 2026-11-27 | 只换绘制，不做选中反白 | 用户选定：各处仍显示一张图片；`NSIconView` 的选中反白改动面大，留作以后。 |
 | 2026-11-27 | Accepted | 用户批准，开始实现。 |
+| 2026-11-27 | 第 1、2 步合并 | 新渲染器的 `switch` 要穷尽 `Glyph.Color` 与 `Glyph.Style`，三个无用值不删新渲染器编不过，删了旧渲染器编不过，两步分不开。 |
+| 2026-11-27 | `Package.resolved` 只改 `originHash` | `RuntimeViewerPackages/Package.resolved` 的 `originHash` 就是 `Package.swift` 内容的 sha256（SwiftPM `computeResolvedFileOriginHash`），清单一改就对不上，SwiftPM 会整体重新解析、把 swift-type-indexing 顺手抬到 0.2.0。改为保留原有 pin、只把 `originHash` 换成新清单的 sha256；三个 workspace 的锁文件不受清单影响，不动。 |
+| 2026-11-27 | 包测试走本地依赖模式 | 按锁文件远端解析编不过（基线如此：next 钉的 MachOSwiftSection 要 MachOKitExtensions 未发版的接口，`extra argument 'recordsFunctionAddressReferences'`），包级构建与测试用 `USING_LOCAL_DEPENDENCIES=1` 原地跑，iOS 与 visionOS 的 App 用 `RuntimeViewer-Local.xcworkspace` 编。 |
+| 2026-11-28 | 实现完成，待用户看过后收尾 | macOS 包测试中本提案的两个套件通过，AppCore 与 AppUI 整包跑出的 7 条失败都是记录在案的既有红灯（其中两条单独重跑通过）；iOS 与 visionOS 的 App 用本地依赖 workspace 编过，两个 App 包都嵌入了 `UIKitPlus.framework`。iOS 3x 屏是否发糊没有在设备或模拟器上看过。macOS App 没有单独编：App 代码只用到保留下来的颜色与样式。 |
+| 2026-11-28 | 配套文档与术语 | 不配使用指南或实现说明：调用方契约（字形 → 图片、同一字形同一图片）没变，渲染器的取舍写在本提案与 `RuntimeViewerPackages/Sources/AGENTS.md`；没有新术语。 |

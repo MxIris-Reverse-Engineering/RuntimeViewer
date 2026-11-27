@@ -91,9 +91,12 @@ let appkitPlatforms: [Platform] = [.macOS]
 
 let uikitPlatforms: [Platform] = [.iOS, .tvOS, .visionOS]
 
+// The platforms AppKitPlus-Release ships UIKitPlus for: it has no tvOS slice.
+let uikitPlusPlatforms: [Platform] = [.iOS, .visionOS]
+
 var sharedSwiftSettings: [SwiftSetting] = []
 
-let uiFoundationTraits: Set<PackageDescription.Package.Dependency.Trait> = ["AppleInternal", "IDEIcons", "QuickActionBar", "NSAttributedStringBuilder", "Settings", "TabBar", "SystemHUD", "AppKitPlus", "WelcomePanel"]
+let uiFoundationTraits: Set<PackageDescription.Package.Dependency.Trait> = ["AppleInternal", "QuickActionBar", "NSAttributedStringBuilder", "Settings", "TabBar", "SystemHUD", "AppKitPlus", "WelcomePanel"]
 
 let package = Package(
     name: "RuntimeViewerPackages",
@@ -508,6 +511,9 @@ let package = Package(
                 .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
                 .product(name: "UIFoundation", package: "UIFoundation"),
                 .product(name: "AppKitPlus", package: "AppKitPlus-Release", condition: .when(platforms: appkitPlatforms)),
+                // UIKitPlus is AppKitPlus built for UIKit, with the same type names: the object icons'
+                // NSIcon on iOS and visionOS.
+                .product(name: "UIKitPlus", package: "AppKitPlus-Release", condition: .when(platforms: uikitPlusPlatforms)),
                 .product(name: "OnBoardingKit", package: "swift-onboardingkit", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "DependenciesMacros", package: "swift-dependencies"),
             ],

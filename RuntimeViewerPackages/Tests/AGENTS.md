@@ -12,9 +12,9 @@ The application layer has two test targets and a library they share
   (`Support/PackageSourceScan.swift`). A test that needs a view, a control or a UI library — even one
   case of a suite — goes in the other target.
 - **`RuntimeViewerAppUITests`** tests the UI layer: `RuntimeViewerAppUI`'s adapters and live
-  implementations, `RuntimeViewerUI`'s views, and what `RuntimeViewerAppCore` rewrote from a UI library
-  checked against that library (`FindPatternParityTests`, `IDEIconRuntimeObjectIconRendererTests`,
-  `RowTextAttributedStringTests`).
+  implementations (the object icons' renderer checked against `NSIcon` in
+  `NSIconRuntimeObjectIconRendererTests`), `RuntimeViewerUI`'s views, and what `RuntimeViewerAppCore` rewrote
+  from a UI library checked against that library (`FindPatternParityTests`, `RowTextAttributedStringTests`).
 - **`RuntimeViewerAppTestingSupport`** (`Tests/RuntimeViewerAppTestingSupport`) holds what both use:
   `ViewModelTestEnvironment`, `TestRuntimeEngine`, the fixtures, waiting on Rx, `pollUntil`,
   `MockRouter`, and Xcode's find patterns as `FindPattern`s. Its declarations are `package`, and it

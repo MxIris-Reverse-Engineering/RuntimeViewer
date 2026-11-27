@@ -261,7 +261,9 @@ The floor is `from: "0.21.0"`, which `RuntimeViewerCommandLine` repeats: `0.21.0
 one `SwiftDeclaration.Definition`'s generated `box` setter assigns `self`, which crashes the compiler in SILGen.
 SFSymbols is declared `from: "0.4.0"`, the first release with `nsuiImage` (it deprecated the misspelled
 `nsuiImgae`). AppKitPlus-Release is declared `from: "0.24.0"`, the first release with `NSResponderDebugPanel`,
-which a Debug build's Debug ▸ Responder Debugger shows; it needs Xcode 27.2, the version the release workflow
+which a Debug build's Debug ▸ Responder Debugger shows, and the first with UIKitPlus — AppKitPlus built for UIKit
+under the same type names — whose `NSIcon` draws the object icons on iOS and visionOS (`RuntimeViewerAppUI` links it
+there; it has no tvOS slice); it needs Xcode 27.2, the version the release workflow
 selects, and UIFoundation `0.51.0` (above). `0.22.0` was the first whose `NSPopUpPathControl` draws a symbol icon whole, sized to the control's font as Xcode's jump bar does: before it,
 the jump bar cut the right side off the image kinds' symbols wider than 16 points, such as the framework one.
 `0.18.0` brought what the
