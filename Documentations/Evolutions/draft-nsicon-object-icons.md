@@ -3,7 +3,7 @@
 - **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-27
-- **最后更新**: 2026-11-27
+- **最后更新**: 2026-11-28
 - **所属愿景**: 无
 - **关联提案**: [0091 - AppCore / AppUI 拆分](0091-app-core-ui-split.md)（定下「AppCore 选字形、AppUI 画字形」的分工与 `runtimeObjectIconRendering`）
 - **实现分支 / PR**: `feature/nsicon-object-icons`（worktree `.worktrees/RuntimeViewer-NSIconObjectIcons`）
@@ -285,7 +285,7 @@ extension NSIconColor {
    - 行为：`liveRendererIsTheNSIconOne`——`RuntimeObjectIconRenderingKey.liveValue` 是 `NSIconRuntimeObjectIconRenderer`。
    - 行为：`RuntimeObjectIconGlyphTests` 原有用例照旧通过（同一字形同一图片）；源码与清单里不再出现 `IDEIcon`。
    - 构建：macOS 包测试通过；iOS 与 visionOS 的 App 编译通过。
-2. **文档** —— 两份子目录 `AGENTS.md`、根 `AGENTS.md` 的依赖下限
+2. **文档**（已完成）—— 两份子目录 `AGENTS.md`、根 `AGENTS.md` 的依赖下限
    - 行为：文档里描述的渲染器、测试名、线程说明与代码一致。
 
 **收尾时必须判断两件事**（判断结果写进决策日志，不允许沉默跳过）：
@@ -305,3 +305,5 @@ extension NSIconColor {
 | 2026-11-27 | 第 1、2 步合并 | 新渲染器的 `switch` 要穷尽 `Glyph.Color` 与 `Glyph.Style`，三个无用值不删新渲染器编不过，删了旧渲染器编不过，两步分不开。 |
 | 2026-11-27 | `Package.resolved` 只改 `originHash` | `RuntimeViewerPackages/Package.resolved` 的 `originHash` 就是 `Package.swift` 内容的 sha256（SwiftPM `computeResolvedFileOriginHash`），清单一改就对不上，SwiftPM 会整体重新解析、把 swift-type-indexing 顺手抬到 0.2.0。改为保留原有 pin、只把 `originHash` 换成新清单的 sha256；三个 workspace 的锁文件不受清单影响，不动。 |
 | 2026-11-27 | 包测试走本地依赖模式 | 按锁文件远端解析编不过（基线如此：next 钉的 MachOSwiftSection 要 MachOKitExtensions 未发版的接口，`extra argument 'recordsFunctionAddressReferences'`），包级构建与测试用 `USING_LOCAL_DEPENDENCIES=1` 原地跑，iOS 与 visionOS 的 App 用 `RuntimeViewer-Local.xcworkspace` 编。 |
+| 2026-11-28 | 实现完成，待用户看过后收尾 | macOS 包测试中本提案的两个套件通过，AppCore 与 AppUI 整包跑出的 7 条失败都是记录在案的既有红灯（其中两条单独重跑通过）；iOS 与 visionOS 的 App 用本地依赖 workspace 编过，两个 App 包都嵌入了 `UIKitPlus.framework`。iOS 3x 屏是否发糊没有在设备或模拟器上看过。macOS App 没有单独编：App 代码只用到保留下来的颜色与样式。 |
+| 2026-11-28 | 配套文档与术语 | 不配使用指南或实现说明：调用方契约（字形 → 图片、同一字形同一图片）没变，渲染器的取舍写在本提案与 `RuntimeViewerPackages/Sources/AGENTS.md`；没有新术语。 |
