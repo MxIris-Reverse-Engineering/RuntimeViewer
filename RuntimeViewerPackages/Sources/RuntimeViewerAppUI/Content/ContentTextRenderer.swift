@@ -38,9 +38,13 @@ public final class ContentTextRenderer {
     /// test watches.
     package let isRendering: Driver<Bool>
 
-    /// - Parameter themes: the themes to draw in; by default the settings' theme
-    ///   (`resolvedThemeStream`), on every platform since the settings persist there too.
-    public init(interfaces: Driver<ContentInterface>, themes: Observable<ResolvedTheme>? = nil) {
+    /// - Parameters:
+    ///   - themes: the themes to draw in; by default the settings' theme
+    ///     (`resolvedThemeStream`), on every platform since the settings persist there too.
+    ///   - isDimmed: whether the pane draws in the theme of an editor pane without the focus
+    ///     (`ResolvedTheme.dimmedForUnfocusedEditorPane()`, proposal `dim-unfocused-editor-panes`);
+    ///     never by default. A change re-themes the pane as a theme change does.
+    public init(interfaces: Driver<ContentInterface>, themes: Observable<ResolvedTheme>? = nil, isDimmed: Driver<Bool> = .just(false)) {
         let themeObservable: Observable<ResolvedTheme>
         if let themes {
             themeObservable = themes
@@ -50,7 +54,11 @@ public final class ContentTextRenderer {
             @Dependency(\.resolvedThemeStream) var resolvedThemeStream
             themeObservable = resolvedThemeStream.observable
         }
-        let sharedThemes = themeObservable.share(replay: 1, scope: .whileConnected)
+        let sharedThemes = Observable
+            .combineLatest(themeObservable, isDimmed.asObservable().distinctUntilChanged()) { theme, isDimmed in
+                isDimmed ? theme.dimmedForUnfocusedEditorPane() : theme
+            }
+            .share(replay: 1, scope: .whileConnected)
         theme = sharedThemes.asDriver(onErrorDriveWith: .empty())
 
         let rendering = ActivityIndicator()

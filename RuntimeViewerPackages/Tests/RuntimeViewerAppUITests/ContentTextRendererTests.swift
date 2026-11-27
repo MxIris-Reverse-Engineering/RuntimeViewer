@@ -111,6 +111,68 @@ struct ContentTextRendererTests {
         withExtendedLifetime(disposeBag) {}
     }
 
+    // MARK: - Dimming (proposal `dim-unfocused-editor-panes`)
+
+    @Test("the pane draws in the dimmed theme while it is dimmed")
+    func themeIsDimmedWhileIsDimmedIsTrue() async throws {
+        let renderer = ContentTextRenderer(interfaces: .just(Self.interface()), themes: .just(.fallback), isDimmed: .just(true))
+
+        let theme = try await nextValue(from: renderer.theme, timeout: 10)
+
+        #expect(theme == ResolvedTheme.fallback.dimmedForUnfocusedEditorPane())
+    }
+
+    @Test("the pane goes back to the theme itself once it is no longer dimmed")
+    func themeReturnsToNormalWhenIsDimmedTurnsOff() async throws {
+        let isDimmed = BehaviorSubject(value: true)
+        let renderer = ContentTextRenderer(interfaces: .just(Self.interface()), themes: .just(.fallback), isDimmed: isDimmed.asDriver(onErrorJustReturn: false))
+        _ = try await nextValue(from: renderer.theme, timeout: 10) { $0.isDimmedForUnfocusedEditorPane }
+
+        isDimmed.onNext(false)
+        let theme = try await nextValue(from: renderer.theme, timeout: 10) { !$0.isDimmedForUnfocusedEditorPane }
+
+        #expect(theme == .fallback)
+    }
+
+    @Test("a renderer told nothing about dimming is never dimmed")
+    func rendererWithoutIsDimmedIsNeverDimmed() async throws {
+        let renderer = ContentTextRenderer(interfaces: .just(Self.interface()), themes: .just(.fallback))
+
+        let theme = try await nextValue(from: renderer.theme, timeout: 10)
+
+        #expect(!theme.isDimmedForUnfocusedEditorPane)
+    }
+
+    /// The `NSTextView` pane draws `renderedText`, so dimming has to re-theme the text, not only the theme.
+    @Test("dimming the pane re-themes the text on screen in the dimmed colours")
+    func renderedTextIsRebuiltInTheDimmedTheme() async throws {
+        let isDimmed = BehaviorSubject(value: false)
+        let renderer = ContentTextRenderer(interfaces: .just(Self.interface()), themes: .just(.fallback), isDimmed: isDimmed.asDriver(onErrorJustReturn: false))
+        let typeNameLocation = ("class " as NSString).length
+        let undimmedText = try await nextValue(from: renderer.renderedText, timeout: 10)
+        let undimmedRed = try Self.darkRedComponent(of: undimmedText.attributedString, at: typeNameLocation)
+
+        isDimmed.onNext(true)
+        let expectedRed = Settings.Theme.Preset.xcode.dimmedForUnfocusedEditorPane().typeName.dark.red
+        let dimmedText = try await nextValue(from: renderer.renderedText, timeout: 10) {
+            ((try? Self.darkRedComponent(of: $0.attributedString, at: typeNameLocation)) ?? undimmedRed) != undimmedRed
+        }
+
+        let dimmedRed = try Self.darkRedComponent(of: dimmedText.attributedString, at: typeNameLocation)
+        #expect(abs(dimmedRed - expectedRed) < 1e-6)
+    }
+
+    /// The red component of the foreground colour at `location`, resolved under the dark appearance.
+    private static func darkRedComponent(of attributedString: NSAttributedString, at location: Int) throws -> Double {
+        let color = try #require(attributedString.attribute(.foregroundColor, at: location, effectiveRange: nil) as? NSColor)
+        let appearance = try #require(NSAppearance(named: .darkAqua))
+        var red: Double?
+        appearance.performAsCurrentDrawingAppearance {
+            red = color.usingColorSpace(.sRGB).map { Double($0.redComponent) }
+        }
+        return try #require(red)
+    }
+
     private static func fontSize(of attributedString: NSAttributedString) -> CGFloat? {
         guard attributedString.length > 0 else { return nil }
         return (attributedString.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)?.pointSize
