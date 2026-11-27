@@ -22,6 +22,10 @@ public struct ResolvedTheme: ThemeProfile, @unchecked Sendable {
     public let preset: Settings.Theme.Preset
     public let fontSize: CGFloat
 
+    /// Whether this is the theme of an editor pane without the focus (`dimmedForUnfocusedEditorPane()`);
+    /// `preset` is then the dimmed preset.
+    public let isDimmedForUnfocusedEditorPane: Bool
+
     public let backgroundColor: NSUIColor
     public let selectionBackgroundColor: NSUIColor
     public let currentLineHighlightColor: NSUIColor
@@ -30,8 +34,13 @@ public struct ResolvedTheme: ThemeProfile, @unchecked Sendable {
     private let fontByStyle: [Settings.Theme.Style: NSUIFont]
 
     public init(preset: Settings.Theme.Preset, fontSize: CGFloat) {
+        self.init(preset: preset, fontSize: fontSize, isDimmedForUnfocusedEditorPane: false)
+    }
+
+    private init(preset: Settings.Theme.Preset, fontSize: CGFloat, isDimmedForUnfocusedEditorPane: Bool) {
         self.preset = preset
         self.fontSize = fontSize
+        self.isDimmedForUnfocusedEditorPane = isDimmedForUnfocusedEditorPane
         self.backgroundColor = preset.background.nsuiColor
         self.selectionBackgroundColor = preset.selection.nsuiColor
         self.currentLineHighlightColor = preset.currentLineHighlight.nsuiColor
@@ -75,6 +84,13 @@ public struct ResolvedTheme: ThemeProfile, @unchecked Sendable {
     /// value and on platforms without a live `Settings` feed.
     public static var fallback: ResolvedTheme {
         .init(preset: .xcode, fontSize: 13)
+    }
+
+    /// This theme as an editor pane without the focus draws it, Xcode 27.2's "Dim unfocused editor panes"
+    /// (`UnfocusedEditorPaneDimming`); itself when it is that already.
+    public func dimmedForUnfocusedEditorPane() -> ResolvedTheme {
+        guard !isDimmedForUnfocusedEditorPane else { return self }
+        return ResolvedTheme(preset: preset.dimmedForUnfocusedEditorPane(), fontSize: fontSize, isDimmedForUnfocusedEditorPane: true)
     }
 
     public func color(for type: SemanticType) -> NSUIColor {
@@ -155,10 +171,12 @@ public struct ResolvedTheme: ThemeProfile, @unchecked Sendable {
 // MARK: - Equatable
 
 extension ResolvedTheme: Equatable {
-    /// Identity is fully determined by the source `preset` and `fontSize`;
+    /// Identity is fully determined by the source `preset`, `fontSize` and whether it is dimmed;
     /// the precomputed color/font caches are derived state.
     public static func == (leftTheme: ResolvedTheme, rightTheme: ResolvedTheme) -> Bool {
-        leftTheme.preset == rightTheme.preset && leftTheme.fontSize == rightTheme.fontSize
+        leftTheme.preset == rightTheme.preset
+            && leftTheme.fontSize == rightTheme.fontSize
+            && leftTheme.isDimmedForUnfocusedEditorPane == rightTheme.isDimmedForUnfocusedEditorPane
     }
 }
 
