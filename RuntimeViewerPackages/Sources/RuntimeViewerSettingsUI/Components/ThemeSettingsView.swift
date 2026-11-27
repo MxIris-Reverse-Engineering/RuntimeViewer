@@ -78,6 +78,11 @@ struct ThemeSettingsView: View {
                     }
                 }
                 #endif
+
+                #if os(macOS)
+                // Only the Mac splits the editor into panes; the iOS-family apps have one.
+                Toggle("Dim Unfocused Editor Panes", isOn: $theme.dimsUnfocusedEditorPanes)
+                #endif
             } header: {
                 Text("Editor")
             }

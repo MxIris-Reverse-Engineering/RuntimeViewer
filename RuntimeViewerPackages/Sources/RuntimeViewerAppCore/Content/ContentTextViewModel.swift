@@ -649,6 +649,11 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         /// `highlightRange`. A pane that puts the reader back where they left an
         /// interface skips that for the first render, so the hit is what shows.
         public let highlightsFirstRender: Bool
+        /// Whether the pane showing the content draws it dimmed (proposal
+        /// `dim-unfocused-editor-panes`): the editor area has more than one pane, another one has
+        /// the focus, and Settings › Theme's Dim Unfocused Editor Panes is on. Never with one pane,
+        /// as in Xcode, and whatever window is in front.
+        public let isEditorPaneDimmed: Driver<Bool>
     }
 
     public func transform(_ input: Input) -> Output {
@@ -750,7 +755,32 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
             runtimeObjectNotFound: runtimeObjectNotFoundRelay.asSignal(),
             highlightRange: highlightRangeRelay.asSignal(),
             findBarQuery: findBarQueryRelay.asSignal(),
-            highlightsFirstRender: highlightsFirstRender
+            highlightsFirstRender: highlightsFirstRender,
+            isEditorPaneDimmed: isEditorPaneDimmed()
         )
+    }
+
+    /// `Output.isEditorPaneDimmed`: the focus is in another of the editor area's panes, and the
+    /// setting is on.
+    private func isEditorPaneDimmed() -> Driver<Bool> {
+        let editorPaneID = editorPaneID
+        let isAnotherPaneFocused = documentState.$editorArea.asDriver()
+            .map { editorArea in
+                editorArea.panes.count > 1 && editorArea.focusedPaneID != editorPaneID
+            }
+        // `Observable.tracking` re-arms on a main-queue hop where the dependency context is no
+        // longer available, so it reads `ViewModel`'s own `settings`, resolved by `super.init`.
+        let trackedSettings = settings
+        let dimsUnfocusedEditorPanes = Observable<Bool>
+            .tracking {
+                MainActor.assumeIsolated {
+                    trackedSettings.theme.dimsUnfocusedEditorPanes
+                }
+            }
+            .asDriver(onErrorJustReturn: true)
+        return Driver.combineLatest(isAnotherPaneFocused, dimsUnfocusedEditorPanes) { isAnotherPaneFocused, dimsUnfocusedEditorPanes in
+            isAnotherPaneFocused && dimsUnfocusedEditorPanes
+        }
+        .distinctUntilChanged()
     }
 }

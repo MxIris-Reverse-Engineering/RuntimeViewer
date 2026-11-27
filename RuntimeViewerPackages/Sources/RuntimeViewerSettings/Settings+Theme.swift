@@ -27,6 +27,12 @@ extension Settings {
         @Default([])
         public var customPresets: [Settings.Theme.Preset]
 
+        /// Whether an editor pane without the focus draws its interface dimmed, as Xcode 27.2's
+        /// "Dim unfocused editor panes" does (proposal `dim-unfocused-editor-panes`). On by
+        /// default, as there.
+        @Default(true)
+        public var dimsUnfocusedEditorPanes: Bool
+
         public static let `default` = Self()
 
         /// Stable identifier of the built-in Xcode preset.
