@@ -119,27 +119,38 @@ final class NSIconRuntimeObjectIconRenderer: RuntimeObjectIconRendering {
 }
 
 extension NSIconColor {
-    /// The icon colour a glyph colour is drawn on: the system colour of the same name, which the glyph
-    /// colours have always been. Xcode names four of them otherwise.
+    /// The icon colour of the same name: a glyph colour is one of `NSIconColor`'s cases, spelt again in
+    /// RuntimeViewerAppCore, which links no UI library.
     init(_ color: RuntimeObjectIcon.Glyph.Color) {
         switch color {
+        case .background: self = .background
+        case .black: self = .black
+        case .base: self = .base
         case .blue: self = .blue
         case .brown: self = .brown
+        case .bugger: self = .bugger
+        case .coreML: self = .coreML
+        case .darkBlue: self = .darkBlue
+        case .darkPurple: self = .darkPurple
+        case .golden: self = .golden
         case .gray: self = .gray
         case .green: self = .green
+        case .lightBlue: self = .lightBlue
+        case .ocean: self = .ocean
         case .orange: self = .orange
         case .pink: self = .pink
-        // systemPurple
-        case .purple: self = .pinkishPurple
+        case .pinkishPurple: self = .pinkishPurple
+        case .purple: self = .purple
         case .red: self = .red
+        case .steel: self = .steel
+        case .swift: self = .swift
         case .teal: self = .teal
+        case .text: self = .text
         case .yellow: self = .yellow
-        // systemIndigo
-        case .indigo: self = .purple
-        // systemMint
-        case .mint: self = .ocean
-        // systemCyan
-        case .cyan: self = .coreML
+        case .clear: self = .clear
+        case .white: self = .white
+        case .lightPurple: self = .lightPurple
+        case .lightGreen: self = .lightGreen
         }
     }
 }

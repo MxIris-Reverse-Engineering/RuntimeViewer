@@ -13,22 +13,39 @@ public enum RuntimeObjectIcon {
     /// What an object's icon shows: a short text on a coloured badge, the way Xcode marks a symbol's
     /// kind. This module only picks the glyph; RuntimeViewerAppUI draws it (`RuntimeObjectIconRendering`).
     public struct Glyph: Hashable, Sendable {
-        /// The system colours the badge is drawn on, by their names: RuntimeViewerAppUI draws each on the
-        /// `NSIconColor` that is that system colour.
-        public enum Color: Hashable, Sendable {
+        /// The colours the badge is drawn on: Xcode's icon colours, `NSIconColor`'s cases under its names
+        /// and in its order, which RuntimeViewerAppUI draws each on the `NSIconColor` of the same name. Most
+        /// are system colours under Xcode's own names — `pinkishPurple` is the system's purple, `purple` its
+        /// indigo, `ocean` its mint, `coreML` its cyan; AppKitPlus's header says which are which.
+        public enum Color: Hashable, Sendable, CaseIterable {
+            case background
+            case black
+            case base
             case blue
             case brown
+            case bugger
+            case coreML
+            case darkBlue
+            case darkPurple
+            case golden
             case gray
             case green
+            case lightBlue
+            case ocean
             case orange
             case pink
+            case pinkishPurple
             case purple
             case red
+            case steel
+            case swift
             case teal
+            case text
             case yellow
-            case indigo
-            case mint
-            case cyan
+            case clear
+            case white
+            case lightPurple
+            case lightGreen
         }
 
         /// Which of the two images of an `NSIcon` RuntimeViewerAppUI draws: the badge itself, or the one a
@@ -62,7 +79,7 @@ public enum RuntimeObjectIcon {
         case .objc(.type(let kind)):
             switch kind {
             case .class: return ("C", .orange)
-            case .protocol: return ("Pr", .purple)
+            case .protocol: return ("Pr", .pinkishPurple)
             }
 
         case .objc(.category(.class)):
@@ -80,16 +97,16 @@ public enum RuntimeObjectIcon {
         case .swift(.extension(_)),
              .swift(.conformance(_)):
             return ("Ex", .blue)
-        // Green, as the C structs and unions are and as Find badges a C or
-        // C++ function: the C family.
+        // Purple, NSIcon's — the system's indigo: apart from the green of C's
+        // structs and unions and the pinkish purple of an Objective-C protocol.
         case .cPlusPlus(.class):
-            return ("C", .green)
-        // A template's specializations gathered under its name; green like
+            return ("C", .purple)
+        // A template's specializations gathered under its name; purple like
         // the classes it holds, so the blue T of a Swift typealias stays apart.
         case .cPlusPlus(.classTemplate):
-            return ("T", .green)
+            return ("T", .purple)
         case .cPlusPlus(.namespace):
-            return ("N", .green)
+            return ("N", .purple)
 
         default:
             return ("?", .gray)

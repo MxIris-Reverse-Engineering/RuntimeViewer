@@ -13,7 +13,7 @@ import RuntimeViewerCore
 struct RuntimeObjectIconGlyphTests {
     @Test("Each kind gets Xcode's letter and colour", arguments: [
         (kind: RuntimeObjectKind.objc(.type(.class)), text: "C", color: RuntimeObjectIcon.Glyph.Color.orange),
-        (kind: .objc(.type(.protocol)), text: "Pr", color: .purple),
+        (kind: .objc(.type(.protocol)), text: "Pr", color: .pinkishPurple),
         (kind: .objc(.category(.class)), text: "Ex", color: .orange),
         (kind: .swift(.type(.class)), text: "C", color: .blue),
         (kind: .swift(.type(.struct)), text: "S", color: .blue),
@@ -22,6 +22,9 @@ struct RuntimeObjectIconGlyphTests {
         (kind: .swift(.type(.typeAlias)), text: "T", color: .blue),
         (kind: .c(.struct), text: "S", color: .green),
         (kind: .c(.union), text: "U", color: .green),
+        (kind: .cPlusPlus(.class), text: "C", color: .purple),
+        (kind: .cPlusPlus(.classTemplate), text: "T", color: .purple),
+        (kind: .cPlusPlus(.namespace), text: "N", color: .purple),
     ])
     func kindGlyph(kind: RuntimeObjectKind, text: String, color: RuntimeObjectIcon.Glyph.Color) {
         #expect(

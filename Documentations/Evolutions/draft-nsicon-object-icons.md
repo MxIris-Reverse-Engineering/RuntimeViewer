@@ -17,8 +17,9 @@
 `IDEIconRuntimeObjectIconRenderer` 换成用 AppKitPlus 的 `NSIcon`（Xcode 27 `DVTGeneratedIconSpec` 的复刻）画，
 macOS 与 iOS / visionOS 共用同一份代码——iOS 一侧经 AppKitPlus-Release 同包发布的 UIKitPlus 拿到同名的
 `NSIcon`。Xcode 图标尺寸（16pt 及以下）的框里底板铺满，与 Xcode 同一位置一样大；更大的框（侧栏 18、检查器 20、
-起始页与 iOS 列表 24）画小 1pt 的图标、对齐到整像素，字母与以前一样大（18pt 框里 12pt），底板比以前大 1pt。图标照旧作为一张图片交给各个视图，选中行的样子不变；
-随后去掉 UIFoundation 的 `IDEIcons` trait。
+起始页与 iOS 列表 24）画小 1pt 的图标、对齐到整像素，字母与以前一样大（18pt 框里 12pt），底板比以前大 1pt。AppCore 的
+字形颜色改成 `NSIconColor` 的 28 种、名字照搬，C++ 对象的图标由绿色改为 `NSIcon` 的紫色（系统的 indigo），其余颜色不变。
+图标照旧作为一张图片交给各个视图，选中行的样子不变；随后去掉 UIFoundation 的 `IDEIcons` trait。
 
 ## 动机
 
@@ -96,8 +97,11 @@ macOS 与 iOS / visionOS 共用同一份代码——iOS 一侧经 AppKitPlus-Rel
    `NSImage` 的绘制回调，iOS 与 visionOS 把四种外观各画一张、收进 `UIImageAsset`。其余代码两个平台一字不差。
 3. `Package.swift`：`RuntimeViewerAppUI` 在 iOS、visionOS 上依赖 AppKitPlus-Release 的 `UIKitPlus` 产品；
    `uiFoundationTraits` 去掉 `"IDEIcons"`。
-4. AppCore 的 `Glyph.Color` 删掉 `.monochrome`，`Glyph.Style` 删掉 `.default`、`.outline`：生产代码没用过它们，
-   `NSIcon` 也没有对应的画法。其余颜色与样式名字不变，文档注释改为指向 `NSIconColor` 与 `NSIcon` 的两张图。
+4. AppCore 的 `Glyph.Style` 删掉 `.default`、`.outline`：生产代码没用过它们，`NSIcon` 也没有对应的画法；剩下的两个
+   名字不变，文档注释改为指向 `NSIcon` 的两张图。`Glyph.Color` 换成 `NSIconColor` 的 28 个值，名字与顺序照搬（AppCore
+   不链接 UI 库，所以照抄一份），AppUI 按同名一一对应。原先叫 `.purple` 的系统紫色在 `NSIconColor` 里叫
+   `.pinkishPurple`，Objective-C 协议改写成它，颜色不变；C++ 的类、类模板、命名空间改用 `.purple`（系统的 indigo），
+   与 C 的绿色结构体、Objective-C 协议的紫色分开。
 5. 测试与文档里写着 `IDEIcon` 的地方一并改掉。
 
 ### 非目标
@@ -108,6 +112,10 @@ macOS 与 iOS / visionOS 共用同一份代码——iOS 一侧经 AppKitPlus-Rel
 - **不用 `NSIcon` 现成的代码符号图标**（`NSIcon.codeSymbolIcon(named: .class)` 等）。RV 的配色与 Xcode 的不同
   （Objective-C 类是橙色、Swift 类型是蓝色，Xcode 的类一律紫色），字母与颜色仍由 AppCore 的 `glyphContent(for:)` 决定。
 - **不接入非焦点编辑栏的图标变灰**（`NSIcon.forInactivePane()`）。
+- **不改 SourceEditor 小地图悬停标签的取色。** `SourceEditorLandmarkIcon` 只按界面是不是 Swift 取色，C++ 界面里的类
+  照旧画成 Objective-C 的橙色 `C`，与侧栏的紫色不一致（以前是橙对绿，同样不一致）；这次只把 Objective-C 协议的
+  `.purple` 改写成 `.pinkishPurple`，颜色不变。
+- **Find 里 C/C++ 函数的绿色 `f` 不变。** 那是函数的颜色（Xcode 的函数也是绿色），不是 C++ 对象的。
 - **不支持 tvOS。** UIKitPlus 没有 tvOS 切片；RV 的 iOS 工程名义上列了 tvOS，但没有任何构建或发布走 tvOS，
   接入后 `RuntimeViewerAppUI` 在 tvOS 上编不过。
 
@@ -132,6 +140,11 @@ macOS 与 iOS / visionOS 共用同一份代码——iOS 一侧经 AppKitPlus-Rel
 | `RuntimeViewerAppUI/RuntimeObject/NSIconRuntimeObjectIconRenderer.swift` · `NSIconRuntimeObjectIconRenderer` | 修改 | 加 `largestFilledFrameSize`（16）与 `margin`（0.5）；大于 16pt 的框画小 1pt 的 `NSIcon`，放在整像素上（`origin(ofIconOf:centeredInFrameOf:pixelsPerPoint:)`），macOS 经 `NSImage` 绘制回调、iOS 与 visionOS 经四种外观的 `UIImageAsset` | 用户看过后觉得侧栏等处图标变大，改小后又觉得字母比以前小；17pt 图标的字母与以前一样大 | 3、4 |
 | `RuntimeViewerPackages/Tests/RuntimeViewerAppUITests/NSIconRuntimeObjectIconRendererTests.swift` | 修改 | 铺满只对 14、16pt 断言；新增 18、20、24pt 留 0.5pt 边、中间是小 1pt 的 `NSIcon`、1x 屏上落在整像素、留边的图跟随深浅色 | 守住新规则 | 3、4 |
 | `RuntimeViewerPackages/Sources/AGENTS.md` | 修改 | 图标一段写明铺满与留边的分界，以及文件里按平台分的两处 | 文档与代码同批 | 3 |
+| `RuntimeViewerAppCore/RuntimeObject/RuntimeObjectIcon.swift` · `Glyph.Color`、`glyphContent(for:)` | 修改 | `Glyph.Color` 换成 `NSIconColor` 的 28 个值（同名、同序，加 `CaseIterable`）；Objective-C 协议 `.purple` → `.pinkishPurple`；C++ 类、类模板、命名空间 `.green` → `.purple` | 两层颜色同名；用户要 C++ 用 `NSIcon` 的紫色 | 5 |
+| `RuntimeViewerAppUI/RuntimeObject/NSIconRuntimeObjectIconRenderer.swift` · `NSIconColor.init(_:)` | 修改 | 同名一一对应，不再改名映射 | 同上 | 5 |
+| `RuntimeViewerUsingAppKit/Content/SourceEditorLandmarkIcon.swift` · `glyph(for:isSwift:)` | 修改 | Objective-C 协议 `.purple` → `.pinkishPurple` | 保持原来的颜色 | 5 |
+| `RuntimeViewerPackages/Tests/RuntimeViewerAppUITests/NSIconRuntimeObjectIconRendererTests.swift`、`RuntimeObjectIconGlyphTests.swift`、`RuntimeViewerAppCoreTests/CPlusPlusPresentationTests.swift` | 修改 | 颜色映射改为同名对照；协议字形写 `.pinkishPurple`；C++ 三种字形是紫色 | 守住新规则 | 5 |
+| `RuntimeViewerPackages/Sources/AGENTS.md` | 修改 | 图标一段的「同名系统色」改为「同名 `NSIconColor`」 | 文档与代码同批 | 5 |
 | `Documentations/Evolutions/README.md`、`Documentations/README.md` | 修改 | 登记本提案 | 索引 | 0 |
 
 ## 架构图
@@ -140,7 +153,7 @@ macOS 与 iOS / visionOS 共用同一份代码——iOS 一侧经 AppKitPlus-Rel
 
 ```text
 RuntimeViewerAppCore
-└── RuntimeObjectIcon.Glyph            (text, color, style, size)  ~ Color -monochrome, Style -default -outline
+└── RuntimeObjectIcon.Glyph            (text, color, style, size)  ~ Color = NSIconColor's 28 cases, Style -default -outline
         │  RuntimeObjectIcon.image(for:) → @Dependency(\.runtimeObjectIconRendering)
         ▼
 RuntimeViewerAppUI
@@ -258,23 +271,17 @@ final class NSIconRuntimeObjectIconRenderer: RuntimeObjectIconRendering {
 }
 
 extension NSIconColor {
-    /// The icon colour drawn for a glyph colour: the system colour of the same name, which is what the
-    /// glyph colours have always been.
+    /// The icon colour of the same name: a glyph colour is one of `NSIconColor`'s cases, spelt again in
+    /// RuntimeViewerAppCore, which links no UI library.
     init(_ color: RuntimeObjectIcon.Glyph.Color) {
         switch color {
-        case .blue: self = .blue
-        case .brown: self = .brown
-        case .gray: self = .gray
-        case .green: self = .green
-        case .orange: self = .orange
-        case .pink: self = .pink
-        case .purple: self = .pinkishPurple   // systemPurple
-        case .red: self = .red
-        case .teal: self = .teal
-        case .yellow: self = .yellow
-        case .indigo: self = .purple          // systemIndigo
-        case .mint: self = .ocean             // systemMint
-        case .cyan: self = .coreML            // systemCyan
+        case .background: self = .background
+        case .black: self = .black
+        // … one line per case, in NSIconColor's order …
+        case .pinkishPurple: self = .pinkishPurple   // systemPurple: Objective-C protocols
+        case .purple: self = .purple                 // systemIndigo: C++ classes, class templates, namespaces
+        // …
+        case .lightGreen: self = .lightGreen
         }
     }
 }
@@ -286,7 +293,10 @@ extension NSIconColor {
   同一对象」，这一条仍由 RV 的缓存负责。
 - `Glyph.Style` 剩 `.simple` 与 `.simpleHighlighted` 两个值，名字不改，免得牵动 AppCore 与 AppUI 公开函数的
   默认参数；文档注释写明二者分别是 `NSIcon` 的主图与选中图。
-- `Glyph.Color` 剩 13 个值，`monochrome` 删去；文档注释改为「画在同名系统色上，即 `NSIconColor` 里的对应颜色」。
+- `Glyph.Color` 是 `NSIconColor` 的 28 个值，名字与顺序照搬，并且 `CaseIterable`：测试按位置核对每个值都映射到 raw
+  value 相同的 `NSIconColor`，也就是同名的那个。AppCore 用到的是 blue、gray、green、orange、pink、pinkishPurple、
+  purple、teal；其余照搬过来备用，不必再加映射。第 1 步时它还是 13 个系统色名（删掉了 `monochrome`），`.purple` 映射到
+  `.pinkishPurple`、`.indigo` 到 `.purple`、`.mint` 到 `.ocean`、`.cyan` 到 `.coreML`，第 5 步改成照搬。
 
 ## 替代方案考量
 
@@ -295,6 +305,9 @@ extension NSIconColor {
   是 16pt，表里对应 14pt；16pt 图标对应 11pt）。
 - **大于 16pt 的框留 1pt 边（画小 2pt 的图标）。** 实现后又改掉了：底板回到以前的 16pt，但 16pt 的 `NSIcon` 只配 11pt
   字母，用户看过后觉得字比以前（12pt）小。改为留 0.5pt、画 17pt 的图标，字母回到 12pt，底板比以前大 1pt。
+- **`Glyph.Color` 沿用系统色的名字，在 AppUI 里改名映射。** 第 1 步就是这样做的，第 5 步改掉了：同一种紫色在 AppCore
+  叫 `.purple`、在 `NSIcon` 叫 `.pinkishPurple`，而 `NSIcon` 的 `.purple` 在 AppCore 叫 `.indigo`，读代码要来回对照；
+  照搬后两层同名，要用 Xcode 别的颜色也不必再加映射。
 - **给 AppKitPlus 加指定字号的接口，16pt 底板配 12pt 字母。** 否：要改上游并发版，`NSIcon` 也就不再照 Xcode 的字号表画。
 - **所有尺寸都留 1pt 边（`IDEIcon` 的做法）。** 否：Find、跳转栏这些照 Xcode 取 16pt 框的地方，铺满才和 Xcode
   一样大。留边要在渲染器里按平台各写一段画图代码，iOS 上直接重画会丢掉 `imageAsset` 里的深浅色变体，所以 iOS
@@ -311,7 +324,9 @@ extension NSIconColor {
 
 ### 用户可见变化
 
-- 所有运行时对象的字母图标改成 Xcode 的样子：连续圆角的 squircle、SF Pro Rounded 字母，颜色不变。
+- 所有运行时对象的字母图标改成 Xcode 的样子：连续圆角的 squircle、SF Pro Rounded 字母，颜色除 C++ 外不变。
+- C++ 的类、类模板、命名空间图标由绿色改为紫色（`NSIcon` 的 purple，即系统的 indigo），侧栏、跳转栏、Open Quickly、
+  Find 与检查器里都一样；C 的结构体与联合体仍是绿色，Find 里 C/C++ 函数的 `f` 仍是绿色。
 - 侧栏与特化选择器（18pt）、检查器（20pt）、起始页与 iOS 列表（24pt）里画小 1pt 的图标：字母按 Xcode 的字号表取，
   18pt 框里是 12pt，与以前一样；底板比以前大 1pt。2x 屏上居中，1x 与 3x 屏上为了落在整像素上偏 1 像素。
 - Find、跳转栏、来源弹窗、历史菜单（16pt）与检查器 References 页（14pt）里底板铺满，比以前大 2pt，与 Xcode
@@ -350,7 +365,7 @@ extension NSIconColor {
    旧渲染器与旧测试、`Glyph` 的三个无用值、两处注释（原计划分两步：新渲染器的 `switch` 要穷尽 `Glyph`，
    三个无用值不删就编不过，而删了它们旧渲染器又编不过，所以合成一步）
    - 行为：`glyphColourIsTheSystemColourOfTheSameName`——13 种字形颜色各自画在同名系统色上（浅色与深色外观下
-     解析出的 sRGB 分量与系统色一致）。
+     解析出的 sRGB 分量与系统色一致）。第 5 步换成按 `NSIconColor` 同名核对，见下。
    - 行为：`simpleGlyphMatchesNSIcon`——与同规格 `NSIcon.image(of:)` 的输出逐字节相同（第 3 步起用 16pt 的字形）。
    - 行为：`highlightedGlyphMatchesNSIconsHighlightedImage`——与 `highlightedImage(of:)` 的输出逐字节相同。
    - 行为：`plateFillsTheGlyphsSize`——14、16、18、24pt 的图片尺寸都等于 `glyph.size`，四条边的中点都是底板
@@ -378,6 +393,15 @@ extension NSIconColor {
      `NSIcon` 逐像素一致；去掉整像素对齐时它失败（图标落在半个像素上，整张重画）。
    - 行为：`largerFrameFollowsTheAppearance`——改为对照 17pt 的 `NSIcon`。
    - 构建：macOS 包测试通过；iOS 与 visionOS 的 App 编译通过。
+5. **字形颜色照搬 `NSIconColor`，C++ 改用紫色**（已完成）—— 改动地图里步骤为 5 的各行
+   - 行为：`glyphColourIsTheIconColourOfTheSameName`——28 种字形颜色里第几个，就映射到 raw value 为几的 `NSIconColor`，
+     即同名的那个；把 `.purple` 映射成 `.pinkishPurple` 时它失败。
+   - 行为：`glyphColoursAreAllOfTheIconColours`——字形颜色的个数与 `NSIconColor` 相同。
+   - 行为：`cPlusPlusIconsArePurpleCAndN`、`cPlusPlusClassTemplateGlyphIsAPurpleT`——C++ 的类、命名空间、类模板是紫色的
+     `C`、`N`、`T`，类模板仍与 Swift typealias 的蓝色 `T` 不同；在旧实现上先失败过。
+   - 行为：`kindGlyph`——Objective-C 协议是 `.pinkishPurple` 的 `Pr`，C++ 三种是 `.purple`。
+   - 行为：`simpleGlyphMatchesNSIcon` 等渲染器用例改写 `.pinkishPurple` 后照旧逐像素一致。
+   - 构建：macOS 包测试通过；iOS 与 visionOS 的 App 编译通过。macOS App 里只改了 `SourceEditorLandmarkIcon` 一个值，没有单独编。
 
 **收尾时必须判断两件事**（判断结果写进决策日志，不允许沉默跳过）：
 
@@ -403,3 +427,5 @@ extension NSIconColor {
 | 2026-11-28 | 第 3 步实现完成，待用户看过后收尾 | 渲染器测试 8 个全部通过，新增的 3 个在旧实现上先失败过；把留边的图改成只画一次的位图时，深浅色那条测试失败，说明它能抓到不跟外观的实现。iOS 与 visionOS 的 App 用本地依赖 workspace 编过。iOS 上的留边图没在设备或模拟器上看过。 |
 | 2026-11-28 | 留边改为 0.5pt，图标放在整像素上 | 用户看过留 1pt 的版本后觉得字母比以前小：底板回到 16pt，但 `NSIcon` 的字号只由图标边长查表决定，16pt 图标配 11pt，以前 `IDEIcon` 是 12pt。用户选定画 17pt 的图标（表里配 12pt），底板比以前大 1pt；否掉了「保持 11pt」与「给 AppKitPlus 加字号接口」。0.5pt 在 1x 屏与 iOS 的 3x 屏上是半个像素，图标放在那里会整张重画、连字母都发虚，所以位置按绘制时的像素密度取整：2x 屏正好居中，1x 与 3x 屏偏 1 像素。 |
 | 2026-11-28 | 第 4 步实现完成，待用户看过后收尾 | 渲染器测试 9 个全部通过，改过的 4 个先在 1pt 的实现上失败过；去掉整像素对齐时 1x 那条失败。iOS 与 visionOS 的 App 用本地依赖 workspace 编过，iOS 上的显示没在设备或模拟器上看过。 |
+| 2026-11-28 | 字形颜色照搬 `NSIconColor`，C++ 改用紫色 | 用户要求 `Glyph.Color` 直接用 `NSIconColor` 的那一套、不再沿用系统色的名字，并把 C++ 改成 `NSIcon` 的 purple。`Glyph.Color` 换成 `NSIconColor` 的全部 28 个值，同名同序；Objective-C 协议改写 `.pinkishPurple`（即原来的系统紫色），颜色不变。改的是 C++ 的三种对象（类、类模板、命名空间）；Find 里 C/C++ 函数的绿色 `f` 是函数的颜色，不动；小地图悬停标签只分 Swift 与非 Swift，C++ 界面照旧，记入非目标。 |
+| 2026-11-28 | 第 5 步实现完成，待用户看过后收尾 | C++ 两个用例先在旧实现上失败；图标相关的 9 个套件全部通过，其中颜色映射 28 个用例；把 `.purple` 映射成 `.pinkishPurple` 时映射用例失败。iOS 与 visionOS 的 App 用本地依赖 workspace 编过。macOS App 没有单独编。 |
