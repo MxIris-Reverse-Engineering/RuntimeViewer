@@ -9,7 +9,7 @@ import Foundation
 public enum SourceEditorBridgeFactory {
     /// Whether this build of the framework was compiled with SourceEditor.
     public static var isAvailable: Bool {
-        #if os(macOS) && arch(arm64) && canImport(SourceEditor)
+        #if arch(arm64) && canImport(SourceEditor)
         true
         #else
         false
@@ -21,6 +21,8 @@ public enum SourceEditorBridgeFactory {
     public static func makeBridge() -> SourceEditorBridging? {
         #if os(macOS) && arch(arm64) && canImport(SourceEditor)
         SourceEditorBridge()
+        #elseif os(iOS) && arch(arm64) && canImport(SourceEditor)
+        UIKitSourceEditorBridge()
         #else
         nil
         #endif
@@ -31,6 +33,8 @@ public enum SourceEditorBridgeFactory {
     public static func builtInThemeDictionary(named themeName: String) -> NSDictionary? {
         #if os(macOS) && arch(arm64) && canImport(SourceEditor)
         SourceEditorBridge.builtInThemeDictionary(named: themeName)
+        #elseif os(iOS) && arch(arm64) && canImport(SourceEditor)
+        UIKitSourceEditorBridge.builtInThemeDictionary(named: themeName)
         #else
         nil
         #endif

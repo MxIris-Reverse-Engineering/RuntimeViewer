@@ -186,7 +186,7 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         commentDecorations: SourceEditorBridgingCommentDecorations?,
         restoresScrollPosition: Bool
     ) {
-        let language = Self.language(forIdentifier: languageIdentifier)
+        let language = SourceEditorBridgeLookup.language(forIdentifier: languageIdentifier)
 
         semanticNodeTypeAdjuster.load(
             semanticRanges: semanticRanges.map(\.rangeValue),
@@ -631,7 +631,7 @@ extension SourceEditorBridge {
         }
 
         let dataSource = sourceEditorView.dataSource
-        let language = Self.language(forIdentifier: languageIdentifier)
+        let language = SourceEditorBridgeLookup.language(forIdentifier: languageIdentifier)
         for (partIndex, part) in parts.enumerated() {
             // The same conversion `revealCharacterRange(_:)` makes.
             let lowerBound = dataSource.positionFromInternalCharOffset(max(0, part.anchorRange.location), lineHint: 0)
@@ -688,19 +688,6 @@ extension SourceEditorBridge {
 
     func isInlineExpansionShown(identifier: String) -> Bool {
         sourceEditorView.editorGapController.hasGapItemWithIdentifier(InlineExpansionGapIdentifier(identifier: identifier))
-    }
-
-    /// The SourceModel language a `languageIdentifier` of `setSource` names. Nil leaves the text
-    /// uncoloured altogether, semantic runs included: without a language the data source has no
-    /// `SourceModelLanguageService`, the only place the `SemanticNodeTypeAdjuster` goes.
-    static func language(forIdentifier languageIdentifier: String) -> (any SourceEditorLanguage)? {
-        switch languageIdentifier {
-        case "swift": SourceModelEditorLanguage.swift
-        case "objc": SourceModelEditorLanguage.objc
-        // `xcode.lang.cpp`, whose specification (`C++.xclangspec`) SourceModel ships.
-        case "cpp": SourceModelEditorLanguage.cpp
-        default: nil
-        }
     }
 
     /// How far Xcode indents an expanded macro's editor, in columns
@@ -829,7 +816,7 @@ extension SourceEditorBridge: MinimapLandmarkIconProvider {
         guard let minimapLandmarkIconProvider,
               let image = minimapLandmarkIconProvider.sourceEditorBridge(
                   self,
-                  minimapIconForLandmarkOfKind: Self.landmarkKind(for: landmarkType),
+                  minimapIconForLandmarkOfKind: SourceEditorBridgeLookup.landmarkKind(for: landmarkType),
                   pointSize: Self.iconPointSize
               )
         else { return nil }
@@ -866,34 +853,6 @@ extension SourceEditorBridge: MinimapLandmarkIconProvider {
             image.draw(in: NSRect(origin: .zero, size: bitmap.size), from: .zero, operation: .sourceOver, fraction: 1)
         }
         return bitmap.cgImage
-    }
-
-    /// Declaration and definition fold together — Xcode draws them alike, and this pane shows
-    /// interfaces, where everything is a declaration anyway. `@unknown default` is required:
-    /// the enum is resilient, and a case Xcode adds later must not stop the label.
-    private static func landmarkKind(for landmarkType: LandmarkType) -> SourceEditorBridgingLandmarkKind {
-        switch landmarkType {
-        case .mark: .mark
-        case .file: .file
-        case .actorDef: .actor
-        case .classDecl, .classDef: .class
-        case .extensionDecl, .extensionDef: .extension
-        case .protocolDecl, .protocolDef: .protocol
-        case .methodDecl, .methodDef: .method
-        case .functionDecl, .functionDef: .function
-        case .propertyDecl, .propertyDef: .property
-        case .enumDef: .enum
-        case .structDef: .struct
-        case .unionDef: .union
-        case .typeDef: .typeAlias
-        case .include: .include
-        case .define: .define
-        case .macro: .macro
-        case .blockDirective, .rule, .entity, .attribute, .anchorTarget, .anchorLink,
-             .key, .style, .heading, .probe, .process, .thread:
-            .other
-        @unknown default: .other
-        }
     }
 }
 
