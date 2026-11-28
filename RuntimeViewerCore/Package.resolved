@@ -1,5 +1,5 @@
 {
-  "originHash" : "90e51125bfb3c0af52b3e51ccb401d1560da769fc8355f7b6e2d98410ce34ec7",
+  "originHash" : "cd1668cada5dc7da701eebcd194a3524c26c71792235ee729dc58bbf3aacb20a",
   "pins" : [
     {
       "identity" : "associatedobject",
@@ -44,15 +44,6 @@
       "state" : {
         "revision" : "ee6dbcf2f13176c005337b37ba88431d40458a2b",
         "version" : "0.1.0"
-      }
-    },
-    {
-      "identity" : "lookinside-release",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/LookInsideApp/LookInside-Release",
-      "state" : {
-        "revision" : "11167f6117ef01ea4a3d03e27d55f514403071e6",
-        "version" : "1.2.0"
       }
     },
     {
@@ -143,15 +134,6 @@
       "state" : {
         "revision" : "47ddc958a3962f9bb0fe08de1c8f39723e472228",
         "version" : "0.1.0"
-      }
-    },
-    {
-      "identity" : "sparkle",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/sparkle-project/Sparkle",
-      "state" : {
-        "revision" : "ab7d71291238df6e0492143b120c9b696a35f603",
-        "version" : "2.10.1"
       }
     },
     {
@@ -375,8 +357,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/swift-type-indexing",
       "state" : {
-        "revision" : "15828d2bbb3c2b01c0f28c094dd9edfa3ed39e2f",
-        "version" : "0.2.0"
+        "revision" : "56e0d0866a19bff8b06df636acc58a41ebaf1dc7",
+        "version" : "0.1.1"
       }
     },
     {
