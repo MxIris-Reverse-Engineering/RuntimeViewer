@@ -56,21 +56,21 @@ struct CPlusPlusPresentationTests {
         #expect(RuntimeObjectScope().matchesRecursively(template))
     }
 
-    @Test("C++ classes and namespaces are a green C and N")
-    func cPlusPlusIconsAreGreenCAndN() {
+    @Test("C++ classes and namespaces are a purple C and N")
+    func cPlusPlusIconsArePurpleCAndN() {
         let classGlyph = RuntimeObjectIcon.glyph(for: .cPlusPlus(.class))
         let namespaceGlyph = RuntimeObjectIcon.glyph(for: .cPlusPlus(.namespace))
         #expect(classGlyph.text == "C")
-        #expect(classGlyph.color == .green)
+        #expect(classGlyph.color == .purple)
         #expect(namespaceGlyph.text == "N")
-        #expect(namespaceGlyph.color == .green)
+        #expect(namespaceGlyph.color == .purple)
     }
 
-    @Test("a C++ class template node is a green T, apart from a Swift typealias's blue T")
-    func cPlusPlusClassTemplateGlyphIsAGreenT() {
+    @Test("a C++ class template node is a purple T, apart from a Swift typealias's blue T")
+    func cPlusPlusClassTemplateGlyphIsAPurpleT() {
         let templateGlyph = RuntimeObjectIcon.glyph(for: .cPlusPlus(.classTemplate))
         #expect(templateGlyph.text == "T")
-        #expect(templateGlyph.color == .green)
+        #expect(templateGlyph.color == .purple)
         #expect(RuntimeObjectIcon.glyph(for: .swift(.type(.typeAlias))).color != templateGlyph.color)
     }
 

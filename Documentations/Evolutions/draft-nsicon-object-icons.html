@@ -189,7 +189,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 
 <section id="summary">
   <h2>摘要</h2>
-  <p>运行时对象前面的 Xcode 风格字母图标（橙色 <code>C</code>、紫色 <code>Pr</code>、蓝色 <code>Ex</code>……）目前由 UIFoundation 的 <code>IDEIcon</code> 画，它是开源项目 ide-icons 的移植，形状、字体和留边都不是 Xcode 的。本提案把唯一的渲染器 <code>IDEIconRuntimeObjectIconRenderer</code> 换成用 AppKitPlus 的 <code>NSIcon</code>（Xcode 27 <code>DVTGeneratedIconSpec</code> 的复刻）画，macOS 与 iOS / visionOS 共用同一份代码——iOS 一侧经 AppKitPlus-Release 同包发布的 UIKitPlus 拿到同名的 <code>NSIcon</code>。Xcode 图标尺寸（16pt 及以下）的框里底板铺满，与 Xcode 同一位置一样大；更大的框（侧栏 18、检查器 20、起始页与 iOS 列表 24）画小 1pt 的图标、对齐到整像素，字母与以前一样大（18pt 框里 12pt），底板比以前大 1pt。图标照旧作为一张图片交给各个视图，选中行的样子不变；随后去掉 UIFoundation 的 <code>IDEIcons</code> trait。</p>
+  <p>运行时对象前面的 Xcode 风格字母图标（橙色 <code>C</code>、紫色 <code>Pr</code>、蓝色 <code>Ex</code>……）目前由 UIFoundation 的 <code>IDEIcon</code> 画，它是开源项目 ide-icons 的移植，形状、字体和留边都不是 Xcode 的。本提案把唯一的渲染器 <code>IDEIconRuntimeObjectIconRenderer</code> 换成用 AppKitPlus 的 <code>NSIcon</code>（Xcode 27 <code>DVTGeneratedIconSpec</code> 的复刻）画，macOS 与 iOS / visionOS 共用同一份代码——iOS 一侧经 AppKitPlus-Release 同包发布的 UIKitPlus 拿到同名的 <code>NSIcon</code>。Xcode 图标尺寸（16pt 及以下）的框里底板铺满，与 Xcode 同一位置一样大；更大的框（侧栏 18、检查器 20、起始页与 iOS 列表 24）画小 1pt 的图标、对齐到整像素，字母与以前一样大（18pt 框里 12pt），底板比以前大 1pt。AppCore 的字形颜色改成 <code>NSIconColor</code> 的 28 种、名字照搬，C++ 对象的图标由绿色改为 <code>NSIcon</code> 的紫色（系统的 indigo），其余颜色不变。图标照旧作为一张图片交给各个视图，选中行的样子不变；随后去掉 UIFoundation 的 <code>IDEIcons</code> trait。</p>
 </section>
 
 <section id="decide">
@@ -197,7 +197,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
   <div class="callout">
     <p class="callout-title">实现已完成，等你看过效果后收尾。</p>
     <ol>
-      <li>大于 16pt 的框改画小 1pt 的图标，字母回到以前的 12pt，图标看着对吗？对就收尾（取号、改 Implemented、推送 next）。</li>
+      <li>字形颜色换成 <code>NSIconColor</code> 的那一套、C++ 的类与命名空间改成紫色，加上大框里字母回到 12pt，图标看着对吗？对就收尾（取号、改 Implemented、推送 next）。</li>
     </ol>
   </div>
 </section>
@@ -214,7 +214,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
   <svg viewBox="0 0 1000 330" role="img" aria-label="Object icon rendering before and after">
     <rect class="group" x="10" y="10" width="310" height="110" rx="10"/>
     <text class="group-label" x="22" y="30">RuntimeViewerAppCore</text>
-    <rect class="box-changed" x="25" y="45" width="280" height="50" rx="6"/><text x="35" y="65">RuntimeObjectIcon.Glyph</text><text class="caption" x="35" y="83">cases −monochrome −default −outline</text>
+    <rect class="box-changed" x="25" y="45" width="280" height="50" rx="6"/><text x="35" y="65">RuntimeObjectIcon.Glyph</text><text class="caption" x="35" y="83">Color → NSIconColor; −default −outline</text>
 
     <rect class="group" x="340" y="10" width="320" height="310" rx="10"/>
     <text class="group-label" x="352" y="30">RuntimeViewerAppUI</text>
@@ -282,6 +282,11 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
       <tr><td><code>RuntimeViewerAppUI/RuntimeObject/NSIconRuntimeObjectIconRenderer.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>加 <code>largestFilledFrameSize</code>（16）与 <code>margin</code>（0.5）；大于 16pt 的框画小 1pt 的 <code>NSIcon</code>，放在整像素上，macOS 经 <code>NSImage</code> 绘制回调、iOS 与 visionOS 经四种外观的 <code>UIImageAsset</code></td><td>用户看过后觉得图标变大，改小后又觉得字母比以前小；17pt 图标的字母与以前一样大</td><td class="numeric">3、4</td></tr>
       <tr><td><code>Tests/RuntimeViewerAppUITests/NSIconRuntimeObjectIconRendererTests.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>铺满只对 14、16pt 断言；新增 18、20、24pt 留 0.5pt 边、中间是小 1pt 的 <code>NSIcon</code>、1x 屏上落在整像素、留边的图跟随深浅色</td><td>守住新规则</td><td class="numeric">3、4</td></tr>
       <tr><td><code>RuntimeViewerPackages/Sources/AGENTS.md</code></td><td><span class="tag tag-changed">修改</span></td><td>图标一段写明铺满与留边的分界，以及文件里按平台分的两处</td><td>文档与代码同批</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerAppCore/RuntimeObject/RuntimeObjectIcon.swift</code> · <code>Glyph.Color</code>、<code>glyphContent(for:)</code></td><td><span class="tag tag-changed">修改</span></td><td><code>Glyph.Color</code> 换成 <code>NSIconColor</code> 的 28 个值（同名、同序，加 <code>CaseIterable</code>）；Objective-C 协议 <code>.purple</code> → <code>.pinkishPurple</code>；C++ 类、类模板、命名空间 <code>.green</code> → <code>.purple</code></td><td>两层颜色同名；用户要 C++ 用 <code>NSIcon</code> 的紫色</td><td class="numeric">5</td></tr>
+      <tr><td><code>RuntimeViewerAppUI/RuntimeObject/NSIconRuntimeObjectIconRenderer.swift</code> · <code>NSIconColor.init(_:)</code></td><td><span class="tag tag-changed">修改</span></td><td>同名一一对应，不再改名映射</td><td>同上</td><td class="numeric">5</td></tr>
+      <tr><td><code>RuntimeViewerUsingAppKit/Content/SourceEditorLandmarkIcon.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>Objective-C 协议 <code>.purple</code> → <code>.pinkishPurple</code></td><td>保持原来的颜色</td><td class="numeric">5</td></tr>
+      <tr><td>渲染器、字形与 C++ 的三个测试文件</td><td><span class="tag tag-changed">修改</span></td><td>颜色映射改为同名对照；协议字形写 <code>.pinkishPurple</code>；C++ 三种字形是紫色</td><td>守住新规则</td><td class="numeric">5</td></tr>
+      <tr><td><code>RuntimeViewerPackages/Sources/AGENTS.md</code></td><td><span class="tag tag-changed">修改</span></td><td>「同名系统色」改为「同名 <code>NSIconColor</code>」</td><td>文档与代码同批</td><td class="numeric">5</td></tr>
       <tr><td><code>Documentations/Evolutions/README.md</code>、<code>Documentations/README.md</code></td><td><span class="tag tag-changed">修改</span></td><td>登记本提案</td><td>索引</td><td class="numeric">0</td></tr>
     </tbody>
   </table>
@@ -362,26 +367,21 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <span class="token-keyword">extension</span> <span class="token-type">NSIconColor</span> {
     <span class="token-keyword">init</span>(<span class="token-keyword">_</span> color: <span class="token-type">RuntimeObjectIcon.Glyph.Color</span>) {
         <span class="token-keyword">switch</span> color {
-        <span class="token-keyword">case</span> .blue: <span class="token-keyword">self</span> = .blue
-        <span class="token-keyword">case</span> .brown: <span class="token-keyword">self</span> = .brown
-        <span class="token-keyword">case</span> .gray: <span class="token-keyword">self</span> = .gray
-        <span class="token-keyword">case</span> .green: <span class="token-keyword">self</span> = .green
-        <span class="token-keyword">case</span> .orange: <span class="token-keyword">self</span> = .orange
-        <span class="token-keyword">case</span> .pink: <span class="token-keyword">self</span> = .pink
-        <span class="token-keyword">case</span> .purple: <span class="token-keyword">self</span> = .pinkishPurple   <span class="token-comment">// systemPurple</span>
-        <span class="token-keyword">case</span> .red: <span class="token-keyword">self</span> = .red
-        <span class="token-keyword">case</span> .teal: <span class="token-keyword">self</span> = .teal
-        <span class="token-keyword">case</span> .yellow: <span class="token-keyword">self</span> = .yellow
-        <span class="token-keyword">case</span> .indigo: <span class="token-keyword">self</span> = .purple          <span class="token-comment">// systemIndigo</span>
-        <span class="token-keyword">case</span> .mint: <span class="token-keyword">self</span> = .ocean             <span class="token-comment">// systemMint</span>
-        <span class="token-keyword">case</span> .cyan: <span class="token-keyword">self</span> = .coreML            <span class="token-comment">// systemCyan</span>
+        <span class="token-keyword">case</span> .background: <span class="token-keyword">self</span> = .background
+        <span class="token-keyword">case</span> .black: <span class="token-keyword">self</span> = .black
+        <span class="token-comment">// … one line per case, in NSIconColor's order …</span>
+        <span class="token-keyword">case</span> .pinkishPurple: <span class="token-keyword">self</span> = .pinkishPurple   <span class="token-comment">// systemPurple: Objective-C protocols</span>
+        <span class="token-keyword">case</span> .purple: <span class="token-keyword">self</span> = .purple                 <span class="token-comment">// systemIndigo: C++ classes, templates, namespaces</span>
+        <span class="token-comment">// …</span>
+        <span class="token-keyword">case</span> .lightGreen: <span class="token-keyword">self</span> = .lightGreen
         }
     }
 }</code></pre>
       <ul>
         <li><code>RuntimeObjectIconImageCache</code> 不动：<code>NSIcon</code> 自己的图片缓存只在图片还被用着时有效，「同一字形永远同一对象」仍由 RV 的缓存负责。</li>
         <li><code>Glyph.Style</code> 剩 <code>.simple</code> 与 <code>.simpleHighlighted</code>，名字不改，免得牵动公开函数的默认参数。</li>
-        <li><code>Glyph.Color</code> 剩 13 个值，<code>monochrome</code> 删去。</li>
+        <li><code>Glyph.Color</code> 是 <code>NSIconColor</code> 的 28 个值，名字与顺序照搬，并且 <code>CaseIterable</code>：测试按位置核对每个值都映射到 raw value 相同、也就是同名的 <code>NSIconColor</code>。第 1 步时它还是 13 个系统色名，<code>.purple</code> 映射到 <code>.pinkishPurple</code>、<code>.indigo</code> 到 <code>.purple</code> 等，第 5 步改成照搬。</li>
+        <li>不改：Find 里 C/C++ 函数的绿色 <code>f</code>（函数的颜色，Xcode 的函数也是绿色）；小地图悬停标签只分 Swift 与非 Swift，C++ 界面里的类照旧是橙色 <code>C</code>。</li>
       </ul>
     </div>
   </details>
@@ -423,11 +423,12 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <section id="alternatives">
   <h2>替代方案</h2>
   <details>
-    <summary>8 条，均已否</summary>
+    <summary>9 条，均已否</summary>
     <div class="details-body">
       <ul>
         <li><strong>所有尺寸都铺满</strong>：最初选的就是它，实现后又改掉了。用户看过后觉得侧栏等处的图标变大了：18pt 框里底板从 16pt 变成 18pt，字母还按 Xcode 的字号表从 12pt 跳到 14pt（16pt 图标对应 11pt）。</li>
         <li><strong>大于 16pt 的框留 1pt 边（画小 2pt 的图标）</strong>：实现后又改掉了。底板回到以前的 16pt，但 16pt 的 <code>NSIcon</code> 只配 11pt 字母，用户看过后觉得字比以前（12pt）小；改为留 0.5pt、画 17pt 的图标，字母回到 12pt。</li>
+        <li><strong><code>Glyph.Color</code> 沿用系统色的名字，在 AppUI 里改名映射</strong>：第 1 步就是这样，第 5 步改掉了。同一种紫色在 AppCore 叫 <code>.purple</code>、在 <code>NSIcon</code> 叫 <code>.pinkishPurple</code>，读代码要来回对照；照搬后两层同名。</li>
         <li><strong>给 AppKitPlus 加指定字号的接口，16pt 底板配 12pt 字母</strong>：要改上游并发版，<code>NSIcon</code> 也就不再照 Xcode 的字号表画。</li>
         <li><strong>所有尺寸都留 1pt 边（<code>IDEIcon</code> 的做法）</strong>：Find、跳转栏这些照 Xcode 取 16pt 框的地方，铺满才和 Xcode 一样大。留边要按平台各写一段画图代码，iOS 一侧照 <code>NSIcon</code> 的做法把四种外观各画一张、重新收进 <code>UIImageAsset</code>，才不丢深浅色。</li>
         <li><strong>铺满并把默认尺寸 18 改 16</strong>：侧栏图标框变窄、标题左移，牵动所有用默认尺寸的布局。</li>
@@ -443,7 +444,8 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
   <h2>影响</h2>
   <h3>用户可见变化</h3>
   <ul>
-    <li>所有运行时对象的字母图标改成 Xcode 的样子：连续圆角的 squircle、SF Pro Rounded 字母，颜色不变。</li>
+    <li>所有运行时对象的字母图标改成 Xcode 的样子：连续圆角的 squircle、SF Pro Rounded 字母，颜色除 C++ 外不变。</li>
+    <li>C++ 的类、类模板、命名空间图标由绿色改为紫色（<code>NSIcon</code> 的 purple，即系统的 indigo），各处一样；C 的结构体与联合体、Find 里 C/C++ 函数的 <code>f</code> 仍是绿色。</li>
     <li>侧栏与特化选择器（18pt）、检查器（20pt）、起始页与 iOS 列表（24pt）里画小 1pt 的图标：18pt 框里字母按 Xcode 的字号表取 12pt，与以前一样；底板比以前大 1pt。2x 屏上居中，1x 与 3x 屏上为落在整像素上偏 1 像素。</li>
     <li>Find、跳转栏、来源弹窗、历史菜单（16pt）与 References 页（14pt）里底板铺满，比以前大 2pt，与 Xcode 同一位置一样大。图标框本身与行布局不变。</li>
     <li>iOS / visionOS 上图标随系统深浅色切换。</li>
@@ -473,6 +475,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
     <li><strong>文档</strong>（已完成）——两份子目录 <code>AGENTS.md</code> 与根 <code>AGENTS.md</code> 的依赖下限。</li>
     <li><strong>大于 16pt 的框留 1pt 边</strong>（已完成，第 4 步改为 0.5pt）——渲染器、测试与 <code>Sources/AGENTS.md</code>。行为：14、16pt 的图四条边中点都是底板；18、20、24pt 的图尺寸等于框，2x 位图里四条边向内的头两个像素透明、第三个起是底板；18pt 的图中间与 16pt 的 <code>NSIcon</code> 主图、选中图逐像素一致；留边的图在浅色、深色外观下各自与 16pt <code>NSIcon</code> 一致（改成只画一次的位图时这条失败）。构建：macOS 包测试通过；iOS 与 visionOS 的 App 编译通过，iOS 一侧的绘制没在设备或模拟器上看过。</li>
     <li><strong>留边改为 0.5pt，图标放在整像素上</strong>（已完成）——渲染器与测试。行为：18、20、24pt 的图在 2x 位图里四条边最外一个像素透明、第二个起是底板；18pt 的图中间与 17pt 的 <code>NSIcon</code> 主图、选中图逐像素一致；1x 位图里图标离左边 1 像素、离上边 0 像素，与 17pt 的 <code>NSIcon</code> 逐像素一致（去掉整像素对齐时这条失败）；深浅色那条改为对照 17pt。构建：macOS 包测试通过，iOS 与 visionOS 的 App 编译通过。</li>
+    <li><strong>字形颜色照搬 <code>NSIconColor</code>，C++ 改用紫色</strong>（已完成）——AppCore 的颜色与字形、AppUI 的映射、小地图标签的协议颜色、三个测试文件与 <code>Sources/AGENTS.md</code>。行为：28 种字形颜色里第几个就映射到 raw value 为几、也就是同名的 <code>NSIconColor</code>（把 <code>.purple</code> 映射成 <code>.pinkishPurple</code> 时失败）；个数与 <code>NSIconColor</code> 相同；C++ 的类、命名空间、类模板是紫色的 <code>C</code>、<code>N</code>、<code>T</code>（先在旧实现上失败过）；Objective-C 协议是 <code>.pinkishPurple</code> 的 <code>Pr</code>。构建：macOS 包测试通过，iOS 与 visionOS 的 App 编译通过；macOS App 只改了一个值，没有单独编。</li>
   </ol>
   <p>收尾判断：不配使用指南或实现说明（调用方契约不变），没有新术语。</p>
 </section>
@@ -480,7 +483,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <section id="log">
   <h2>决策日志</h2>
   <details>
-    <summary>14 条，最近一条：第 4 步实现完成，待用户看过后收尾</summary>
+    <summary>16 条，最近一条：第 5 步实现完成，待用户看过后收尾</summary>
     <div class="details-body">
       <div class="table-wrap">
       <table>
@@ -500,6 +503,8 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
           <tr><td class="numeric">2026-11-28</td><td>第 3 步实现完成，待用户看过后收尾</td><td>渲染器测试 8 个全部通过，新增的 3 个先在旧实现上失败过；变异检查证明深浅色那条能抓到不跟外观的实现；iOS 与 visionOS 的 App 编过；iOS 上的留边图没在设备或模拟器上看过。</td></tr>
           <tr><td class="numeric">2026-11-28</td><td>留边改为 0.5pt，图标放在整像素上</td><td>用户看过后觉得字母比以前小：16pt 的 <code>NSIcon</code> 配 11pt，以前是 12pt，而 <code>NSIcon</code> 的字号只由边长查表决定。用户选定画 17pt 的图标（配 12pt），底板比以前大 1pt；否掉了「保持 11pt」与「给 AppKitPlus 加字号接口」。0.5pt 在 1x 与 3x 屏上是半个像素，图标放在那里会整张重画、发虚，所以位置按像素密度取整。</td></tr>
           <tr><td class="numeric">2026-11-28</td><td>第 4 步实现完成，待用户看过后收尾</td><td>渲染器测试 9 个全部通过，改过的 4 个先在 1pt 的实现上失败过；去掉整像素对齐时 1x 那条失败；iOS 与 visionOS 的 App 编过。</td></tr>
+          <tr><td class="numeric">2026-11-28</td><td>字形颜色照搬 <code>NSIconColor</code>，C++ 改用紫色</td><td>用户要求 <code>Glyph.Color</code> 直接用 <code>NSIconColor</code> 的那一套、不再沿用系统色的名字，并把 C++ 改成 <code>NSIcon</code> 的 purple。换成全部 28 个值，同名同序；Objective-C 协议改写 <code>.pinkishPurple</code>，颜色不变。改的是 C++ 的三种对象；Find 里 C/C++ 函数的绿色 <code>f</code> 不动，小地图悬停标签照旧。</td></tr>
+          <tr><td class="numeric">2026-11-28</td><td>第 5 步实现完成，待用户看过后收尾</td><td>C++ 两个用例先在旧实现上失败；图标相关的 9 个套件全部通过，其中颜色映射 28 个用例；变异检查证明映射用例能抓到改错的名字；iOS 与 visionOS 的 App 编过；macOS App 没有单独编。</td></tr>
         </tbody>
       </table>
       </div>

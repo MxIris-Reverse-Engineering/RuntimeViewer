@@ -6,7 +6,7 @@ import RuntimeViewerAppCore
 
 /// RuntimeViewerAppUI draws the glyphs RuntimeViewerAppCore picks as Xcode draws a code symbol's icon,
 /// with AppKitPlus's `NSIcon` (proposal `nsicon-object-icons`): the glyph's letters on a squircle, in the
-/// system colour the glyph's colour is named after. The squircle fills a frame of Xcode's icon sizes, 16
+/// icon colour the glyph's colour is named after. The squircle fills a frame of Xcode's icon sizes, 16
 /// points and smaller, and keeps half a point of room on each side of a larger one, on whole pixels. The
 /// glyphs themselves are RuntimeViewerAppCore's, tested in `RuntimeObjectIconGlyphTests`.
 ///
@@ -14,35 +14,21 @@ import RuntimeViewerAppCore
 @Suite("NSIcon object icon renderer")
 @MainActor
 struct NSIconRuntimeObjectIconRendererTests {
-    @Test("Each glyph colour is drawn on the system colour of the same name, in light and dark appearances", arguments: [
-        (color: RuntimeObjectIcon.Glyph.Color.blue, systemColor: NSColor.systemBlue),
-        (color: .brown, systemColor: .systemBrown),
-        (color: .gray, systemColor: .systemGray),
-        (color: .green, systemColor: .systemGreen),
-        (color: .orange, systemColor: .systemOrange),
-        (color: .pink, systemColor: .systemPink),
-        (color: .purple, systemColor: .systemPurple),
-        (color: .red, systemColor: .systemRed),
-        (color: .teal, systemColor: .systemTeal),
-        (color: .yellow, systemColor: .systemYellow),
-        (color: .indigo, systemColor: .systemIndigo),
-        (color: .mint, systemColor: .systemMint),
-        (color: .cyan, systemColor: .systemCyan),
-    ])
-    func glyphColourIsTheSystemColourOfTheSameName(color: RuntimeObjectIcon.Glyph.Color, systemColor: NSColor) {
-        let iconColor = NSIconColor(color).color
+    // The glyph colours are NSIconColor's cases in its order, so a colour's place among them is the raw
+    // value of the icon colour of its name.
+    @Test("Each glyph colour is drawn on the icon colour of the same name", arguments: zip(RuntimeObjectIcon.Glyph.Color.allCases.indices, RuntimeObjectIcon.Glyph.Color.allCases))
+    func glyphColourIsTheIconColourOfTheSameName(position: Int, color: RuntimeObjectIcon.Glyph.Color) {
+        #expect(NSIconColor(color).rawValue == position, "\(color)")
+    }
 
-        for appearanceName in [NSAppearance.Name.aqua, .darkAqua] {
-            #expect(
-                Self.sRGBComponents(of: iconColor, in: appearanceName) == Self.sRGBComponents(of: systemColor, in: appearanceName),
-                "\(color) in \(appearanceName.rawValue)"
-            )
-        }
+    @Test("The glyph colours are all of NSIconColor's cases")
+    func glyphColoursAreAllOfTheIconColours() {
+        #expect(RuntimeObjectIcon.Glyph.Color.allCases.count == NSIconColor.lightGreen.rawValue + 1)
     }
 
     @Test("A glyph is drawn as NSIcon draws its letters on a squircle of its colour")
     func simpleGlyphMatchesNSIcon() {
-        let glyph = RuntimeObjectIcon.Glyph(text: "Pr", color: .purple, style: .simple, size: 16)
+        let glyph = RuntimeObjectIcon.Glyph(text: "Pr", color: .pinkishPurple, style: .simple, size: 16)
 
         let drawnIcon = NSIconRuntimeObjectIconRenderer().image(for: glyph)
 
@@ -106,7 +92,7 @@ struct NSIconRuntimeObjectIconRendererTests {
 
     @Test("A larger frame holds, in its middle, the icon NSIcon draws a point smaller", arguments: [RuntimeObjectIcon.Glyph.Style.simple, .simpleHighlighted])
     func largerFrameHoldsTheIconAPointSmaller(style: RuntimeObjectIcon.Glyph.Style) {
-        let glyph = RuntimeObjectIcon.Glyph(text: "Pr", color: .purple, style: style, size: 18)
+        let glyph = RuntimeObjectIcon.Glyph(text: "Pr", color: .pinkishPurple, style: style, size: 18)
 
         let drawnIcon = NSIconRuntimeObjectIconRenderer().image(for: glyph)
 
@@ -166,15 +152,6 @@ struct NSIconRuntimeObjectIconRendererTests {
 
     private static func icon(letters: String, color: NSIconColor) -> NSIcon {
         NSIcon(generatedIconSpecification: NSGeneratedIconSpecification(letters: letters, shape: .squircle, backgroundColor: color.color, glyphColor: nil))
-    }
-
-    private static func sRGBComponents(of color: NSColor, in appearanceName: NSAppearance.Name) -> [CGFloat] {
-        var components: [CGFloat] = []
-        NSAppearance(named: appearanceName)?.performAsCurrentDrawingAppearance {
-            guard let resolvedColor = color.usingColorSpace(.sRGB) else { return }
-            components = [resolvedColor.redComponent, resolvedColor.greenComponent, resolvedColor.blueComponent, resolvedColor.alphaComponent]
-        }
-        return components
     }
 
     /// `image` drawn into a bitmap of `scale` pixels a point, in the appearance named `appearanceName` when

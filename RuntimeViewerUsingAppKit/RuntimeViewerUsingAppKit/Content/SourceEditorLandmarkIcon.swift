@@ -22,7 +22,7 @@ enum SourceEditorLandmarkIcon {
     private static func glyph(for kind: SourceEditorBridgingLandmarkKind, isSwift: Bool) -> (text: String, color: RuntimeObjectIcon.Glyph.Color)? {
         switch kind {
         case .class: return ("C", isSwift ? .blue : .orange)
-        case .protocol: return ("Pr", isSwift ? .blue : .purple)
+        case .protocol: return ("Pr", isSwift ? .blue : .pinkishPurple)
         case .extension: return ("Ex", isSwift ? .blue : .orange)
         case .struct: return ("S", isSwift ? .blue : .green)
         case .union: return ("U", .green)
