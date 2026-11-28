@@ -1,6 +1,7 @@
 // Compiled only where the reconstructed SourceEditor frameworks are on the framework search path:
 // official builds after FetchSourceEditorScript.sh, on Apple silicon. Anywhere else the app shows
-// interfaces in the built-in text view and links none of them.
+// interfaces in the built-in text view and links none of them. Shared by the macOS and the iOS
+// bridge: it uses only types both builds of the frameworks declare.
 #if arch(arm64) && canImport(SourceEditor)
 
 import Foundation

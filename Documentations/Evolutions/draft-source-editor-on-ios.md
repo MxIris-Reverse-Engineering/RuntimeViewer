@@ -143,7 +143,7 @@ UIKit 下不编的文件在 `Documentations/Reference/UIKit/UIKitExcludedFiles20
 | `ArchiveScript.sh` | 修改 | 带 `--include-ios-simulator` 时取 `--platform all`，取不到就停 | 发版的 iOS 模拟器版要带框架 | 1 |
 | `.github/workflows/release.yml` | 修改 | 取框架一步传 `--platform all` | 同上 | 1 |
 | `Configurations/RuntimeViewerSourceEditorBridge/Shared.xcconfig` | 修改 | `SDKROOT = auto`、`SUPPORTED_PLATFORMS`、`IPHONEOS_DEPLOYMENT_TARGET = 18.0`、按 SDK 分开的搜索路径与 iOS runpath | 桥接跟着宿主 App 的平台编 | 2 |
-| `RuntimeViewerUsingAppKit/Project.swift`、`Tuist/` | 修改（按需） | 让 Tuist 的桥接 target 与原生工程一致，`./TuistScript.sh check` 通过 | 根 `AGENTS.md` 要求同一 commit 更新 Tuist 描述 | 2 |
+| `RuntimeViewerUsingAppKit/Project.swift`、`Tuist/` | 不改 | 平台设置都在 xcconfig 里，Tuist 的桥接 target 照旧声明为 macOS；`./TuistScript.sh check` 的设置接线与 target 名单一致 | 根 `AGENTS.md` 要求同一 commit 更新 Tuist 描述，核对后不需要 | 2 |
 | `RuntimeViewerSourceEditorBridge/SourceEditorBridging.swift` · `SourceEditorBridging` 等 | 修改 | 平台类型成员按平台各写一份；macOS 独有成员与类型包进 `#if os(macOS)` | 让公开接口在 iOS 上编得过 | 2 |
 | `RuntimeViewerSourceEditorBridge/SourceEditorBridgeFactory.swift` | 修改 | 按平台 import；`makeBridge()`、`builtInThemeDictionary(named:)` 按平台选实现 | 同上 | 2、4 |
 | `RuntimeViewerSourceEditorBridge/SourceEditorBridge.swift`、`CommentDecorationController.swift`、`LineEndTagController.swift`、`InlineExpansionView.swift` | 修改 | 外层再包 `#if os(macOS)` | 它们只能在 AppKit 下编 | 2 |
@@ -446,7 +446,7 @@ public enum SourceEditorFrameworks {
    - 行为：`embedFailsWhenFrameworksIOSHoldsAnotherPin`
    - 行为：`updateWithPlatformIOSStaysOnThe26Line`
    - 验证：`RunScript.sh --no-launch` 照旧编过；手动跑 Fetch 的三种 `--platform` 与 `--dry-run` 的 Update。
-2. **桥接框架改成双平台（还没有 iOS 实现）** —— 桥接 xcconfig、Tuist 描述、`SourceEditorBridging.swift`、`SourceEditorBridgeFactory.swift`、四个只在 macOS 编的文件、三个共用的逻辑文件、`ReadingStateCache.swift`
+2. **桥接框架改成双平台（还没有 iOS 实现）**（已完成）—— 桥接 xcconfig、Tuist 描述、`SourceEditorBridging.swift`、`SourceEditorBridgeFactory.swift`、四个只在 macOS 编的文件、三个共用的逻辑文件、`ReadingStateCache.swift`
    - 行为：`macOSBridgeTestsPassUnchanged`
    - 行为：`bridgeBuildsForIPhoneOSAndSimulatorWithAndWithoutFrameworks`
    - 行为：`simulatorX86SliceCompilesOutAndReportsUnavailable`
@@ -502,3 +502,4 @@ public enum SourceEditorFrameworks {
 | 2026-11-28 | 不做不可见字符 | 框架画不可见字符要 App 自带 SF Mono 三个字重，缺了会崩，自带又涉及字体授权；另议。 |
 | 2026-11-29 | Accepted | 用户批准，开始实现；同时同意第 6 步在 iPhone 与 iPad 模拟器上启动 App 看效果。 |
 | 2026-11-29 | In Progress；第 1 步完成 | `FetchSourceEditorScript.sh` 每个平台在自己的子 shell 里取，子 shell 自己开 errexit：放在 `\|\|` 左边时 bash 会在里面关掉 errexit，`ditto`、`mv` 失败也不会停。`ArchiveScript.sh` 带 `--include-ios-simulator` 时在 macOS 归档之前就取 iOS，缺 iOS 的框架在长时间的归档之前就停。实测：两个平台各取一次、`--check` 前后退出码 2 与 0、嵌入脚本对模拟器与 macOS 拷贝成功、标记过期与不支持的平台都报错退出 1；iOS 两片分别是 `IOS` 与 `IOSSIMULATOR` 平台、arm64、minos 18.0。 |
+| 2026-11-29 | 第 2 步完成 | 桥接单独为 `iphonesimulator`、`iphoneos`、`macosx` 各编一次都过；产物目录已有框架后再编模拟器的 arm64 + x86_64，x86_64 照旧编空。iOS 上导入 SourceEditor 模块会带出框架头文件 `PlaygroundMenuController.h` 的两条 `UIMenuController` / `UIMenuItem` 废弃警告，来自重建版、不是桥接的代码，不处理。Tuist 描述不用改：平台设置都在 xcconfig 里，`./TuistScript.sh check` 的设置接线、target 名单与 trait 都一致；它报的锁文件不符（swift-type-indexing：Tuist 0.2.0、原生 0.1.1）与本次无关，这条分支没动任何锁文件与清单。macOS 桥接测试 37 条里 35 条过，红的两条是 `SourceEditorScroller` 的滚动条自动隐藏，基线上早就红（见 0064、0072）；新增 `ReadingStateCacheTests` 三条。`ReadingStateCache` 的 macOS 状态挪成 `SourceEditorBridge.ReadingState`。同一 DerivedData 连编两次 Release universal 放到第 5 步的完整验证一起跑。 |

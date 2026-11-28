@@ -1,7 +1,8 @@
 // Compiled only where the reconstructed SourceEditor frameworks are on the framework search path:
 // official builds after FetchSourceEditorScript.sh, on Apple silicon. Anywhere else the app shows
-// interfaces in the built-in text view and links none of them.
-#if arch(arm64) && canImport(SourceEditor)
+// interfaces in the built-in text view and links none of them. macOS only: it drives the AppKit
+// build of the frameworks; on iOS the bridge is UIKitSourceEditorBridge.
+#if os(macOS) && arch(arm64) && canImport(SourceEditor)
 
 import AppKit
 internal import SourceEditor
@@ -13,6 +14,17 @@ internal import SourceModelSupport
 /// condition at the top).
 @objc(RuntimeViewerSourceEditorBridge)
 final class SourceEditorBridge: NSObject, SourceEditorBridging {
+    /// What the bridge saves for one text in `readingStates`.
+    struct ReadingState {
+        /// `FoldingController.stateDictionaryForSaving`.
+        let foldState: NSDictionary
+
+        /// `SourceEditorView.scrollStateForStateRestoration()`: the line at the top of the visible
+        /// area and how far into it the view is scrolled. Taken while the text's own folds are
+        /// still in place, which is what the line is counted against when it comes back.
+        let scrollPosition: (line: Int, offset: CGFloat)
+    }
+
     private let sourceEditorView = SourceEditorView(frame: .zero)
 
     private let commandClickNavigator = CommandClickNavigator()
@@ -39,11 +51,11 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
     /// What was folded in each interface this view has shown, and how far down it was
     /// scrolled. See `setSource`, which has to unfold before every swap and would otherwise lose
     /// both for good.
-    private var readingStates = ReadingStateCache()
+    private var readingStates = ReadingStateCache<ReadingState>()
 
     /// Identifies the text currently in the view, so its reading state can be filed under the
     /// right key when the next one arrives. Nil until the first `setSource`.
-    private var displayedSourceKey: ReadingStateCache.Key?
+    private var displayedSourceKey: ReadingStateCache<ReadingState>.Key?
 
     /// The theme and line number font `applyTheme` last put into effect, which an inline expansion
     /// shown afterwards starts with. Nil until the first `applyTheme`.
@@ -219,7 +231,7 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         // in place; the new data source would otherwise start at the top.
         if let displayedSourceKey {
             readingStates.store(
-                ReadingStateCache.ReadingState(
+                ReadingState(
                     foldState: sourceEditorView.foldingController.stateDictionaryForSaving,
                     scrollPosition: sourceEditorView.scrollStateForStateRestoration()
                 ),
@@ -247,7 +259,7 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         // is what makes it *correct*, not just safe.
         //
         // A source shown for the first time starts with its decorated rows collapsed instead.
-        let sourceKey = ReadingStateCache.Key(source: source, isDecorated: commentDecorations != nil)
+        let sourceKey = ReadingStateCache<ReadingState>.Key(source: source, isDecorated: commentDecorations != nil)
         displayedSourceKey = sourceKey
         let savedState = readingStates.state(for: sourceKey)
         if let foldState = savedState?.foldState as? [AnyHashable: Any] {

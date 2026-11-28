@@ -5,6 +5,12 @@
 // else the bridge compiles out (#if arch(arm64) && canImport(SourceEditor)) and the framework carries
 // only the protocols and a factory that reports SourceEditor unavailable.
 //
+// Both the macOS app and the iOS app (RuntimeViewerUsingUIKit, its iOS target only) link it, so it
+// builds for the platform of the app it is built for (SDKROOT = auto). Each platform has its own
+// download: the macOS slices of PinnedRelease.txt in Frameworks/, the iOS and simulator slices of
+// PinnedRelease-iOS.txt in Frameworks-iOS/<platform>/ (that pin is on the 26.6 line, the only one
+// with the UIKit layer).
+//
 // Only this target has them on its search path, and it imports them with `internal import`, so the
 // app, which links this framework, never loads their modules: SourceEditor's headers and
 // UIFoundation's both declare AppKit's private NSScrollViewDelegate, differently, and a module that
@@ -17,8 +23,20 @@
 // in the products directory, which every target searches, so from the second build on an x86_64
 // compile can see them whatever this setting says. The path is still set for the arm64 slices only,
 // so that an x86_64 compile never looks into the download.
-FRAMEWORK_SEARCH_PATHS[arch=arm64*] = $(SRCROOT)/../RuntimeViewerPrecompiledLibraries/SourceEditor/Frameworks
-LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/../Frameworks @loader_path/Frameworks
+FRAMEWORK_SEARCH_PATHS[sdk=macosx*][arch=arm64*] = $(SRCROOT)/../RuntimeViewerPrecompiledLibraries/SourceEditor/Frameworks
+FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*][arch=arm64*] = $(SRCROOT)/../RuntimeViewerPrecompiledLibraries/SourceEditor/Frameworks-iOS/iphoneos
+FRAMEWORK_SEARCH_PATHS[sdk=iphonesimulator*][arch=arm64*] = $(SRCROOT)/../RuntimeViewerPrecompiledLibraries/SourceEditor/Frameworks-iOS/iphonesimulator
+LD_RUNPATH_SEARCH_PATHS[sdk=macosx*] = $(inherited) @executable_path/../Frameworks @loader_path/Frameworks
+LD_RUNPATH_SEARCH_PATHS[sdk=iphone*] = $(inherited) @executable_path/Frameworks @loader_path/Frameworks
+
+// Built for the app it is built for: the macOS app's macOS destination, the iOS app's iOS or simulator
+// one. Unlike the embedded non-macOS products in Configurations/AGENTS.md, which pin their platform,
+// this takes the host's. Not Mac Catalyst, and not visionOS: the frameworks have no slice for them.
+SDKROOT = auto
+SUPPORTED_PLATFORMS = macosx iphoneos iphonesimulator
+SUPPORTS_MACCATALYST = NO
+IPHONEOS_DEPLOYMENT_TARGET = 18.0
+TARGETED_DEVICE_FAMILY = 1,2
 // `internal import` keeps a module's dependencies from its clients only when it is built with library
 // evolution: without it, the app's dependency scan asks for the SourceEditor modules and fails
 // ("Unable to resolve module dependency: 'SourceEditor'").

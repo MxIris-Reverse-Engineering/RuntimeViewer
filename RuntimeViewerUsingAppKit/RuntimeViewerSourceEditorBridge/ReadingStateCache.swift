@@ -1,33 +1,25 @@
 // Compiled only where the reconstructed SourceEditor frameworks are on the framework search path:
 // official builds after FetchSourceEditorScript.sh, on Apple silicon. Anywhere else the app shows
-// interfaces in the built-in text view and links none of them.
+// interfaces in the built-in text view and links none of them. Shared by the macOS and the iOS
+// bridge: it uses only types both builds of the frameworks declare.
 #if arch(arm64) && canImport(SourceEditor)
 
 import Foundation
 
-/// Remembers where the reader was in each interface the editor has shown — what was folded and
-/// how far down it was scrolled — so that leaving a class and coming back finds it as it was left.
+/// Remembers where the reader was in each interface the editor has shown, so that leaving a class
+/// and coming back finds it as it was left.
 ///
-/// The bridge has to unfold before every source swap — a fold outstanding across the swap
-/// crashes the framework, see `SourceEditorBridge.setSource` — and every swap installs a new data
-/// source, which starts at the top. Saving both first and putting them back when the same text
-/// returns is what keeps that from losing the reader's place.
+/// What is remembered is the bridge's to say: on macOS what was folded and how far down it was
+/// scrolled (`SourceEditorBridge.ReadingState`) — the bridge has to unfold before every source swap,
+/// a fold outstanding across the swap crashes the framework, see `SourceEditorBridge.setSource` — and
+/// on iOS, whose build of the framework has no folding, only the content offset. Either way every
+/// swap installs a new data source, which starts at the top; saving first and putting it back when
+/// the same text returns is what keeps that from losing the reader's place.
 ///
 /// Session-scoped on purpose: the state describes one particular rendering of one particular
 /// interface, and both the runtime metadata and the generation options behind it can differ by
 /// the next launch. There is nothing here worth persisting.
-struct ReadingStateCache {
-    /// What the bridge saves for one text.
-    struct ReadingState {
-        /// `FoldingController.stateDictionaryForSaving`.
-        let foldState: NSDictionary
-
-        /// `SourceEditorView.scrollStateForStateRestoration()`: the line at the top of the visible
-        /// area and how far into it the view is scrolled. Taken while the text's own folds are
-        /// still in place, which is what the line is counted against when it comes back.
-        let scrollPosition: (line: Int, offset: CGFloat)
-    }
-
+struct ReadingStateCache<ReadingState> {
     /// Identifies the *text*, not the object it was rendered from.
     ///
     /// The bridge is handed a `String` and nothing else — no `RuntimeObject`, no generation

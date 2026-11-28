@@ -1,6 +1,7 @@
 // Compiled only where the reconstructed SourceEditor frameworks are on the framework search path,
-// like the rest of the bridge (see SourceEditorBridge.swift).
-#if arch(arm64) && canImport(SourceEditor)
+// like the rest of the bridge (see SourceEditorBridge.swift), and on macOS only: the UIKit build of
+// the frameworks has no gaps.
+#if os(macOS) && arch(arm64) && canImport(SourceEditor)
 
 import AppKit
 internal import SourceEditor

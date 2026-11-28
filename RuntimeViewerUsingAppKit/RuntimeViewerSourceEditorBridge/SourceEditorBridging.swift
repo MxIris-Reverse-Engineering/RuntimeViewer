@@ -1,22 +1,38 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 
 /// The surface the app drives SourceEditor through, the public API of this framework.
 ///
 /// The app links this framework and calls it directly; `SourceEditorBridgeFactory` hands out the
-/// bridge. `SourceEditorBridge`, the class behind it, is compiled only where the reconstructed
-/// SourceEditor frameworks are available — official builds on Apple silicon — and links them
-/// directly. This file compiles everywhere, so the app's content view and the code that prepares
+/// bridge. The class behind it — `SourceEditorBridge` on macOS, `UIKitSourceEditorBridge` on iOS — is
+/// compiled only where the reconstructed SourceEditor frameworks are available — official builds on
+/// Apple silicon — and links them directly.
+///
+/// The framework builds for macOS and iOS. A member whose type is a platform's view, colour or font
+/// is declared once per platform under the same name; a member only the AppKit build of SourceEditor
+/// can carry out — the navigation delegate, comment tags, inline expansions, line-end tags, revealing
+/// a range, the top inset — exists on macOS only, because the UIKit build has no folding, no gaps
+/// and no event consumers that receive a touch. This file compiles everywhere, so the app's content view and the code that prepares
 /// themes, comment decorations and landmark icons build in every checkout. The `@objc` shapes date
 /// from when the bridge was a bundle loaded at run time; nothing is loaded dynamically any more.
 @objc(RuntimeViewerSourceEditorBridging)
 public protocol SourceEditorBridging: NSObjectProtocol {
     init()
 
+    #if os(macOS)
     /// The editor view, ready to be installed in a view hierarchy.
     var editorView: NSView { get }
 
     /// Receives the ⌘-click notifications. Held weakly.
     var navigationDelegate: SourceEditorBridgingNavigationDelegate? { get set }
+    #else
+    /// The editor view, ready to be installed in a view hierarchy. It scrolls itself — the UIKit
+    /// build's editor view is a `UIScrollView` — and adjusts its content insets from the safe area.
+    var editorView: UIView { get }
+    #endif
 
     /// Supplies the icon that leads each of the minimap's hover labels. Held weakly.
     ///
@@ -52,6 +68,9 @@ public protocol SourceEditorBridging: NSObjectProtocol {
     ///     and any other to the top. Pass `false` when a ``revealCharacterRange(_:)`` is about to
     ///     follow, which then decides alone: the scroll waits for the next layout, which can come
     ///     after the reveal and undo it. Folds come back either way.
+    ///
+    /// On iOS `commentDecorations` is ignored: they need the framework's folding, which its UIKit
+    /// build does not have.
     func setSource(
         _ source: String,
         languageIdentifier: String,
@@ -61,6 +80,7 @@ public protocol SourceEditorBridging: NSObjectProtocol {
         restoresScrollPosition: Bool
     )
 
+    #if os(macOS)
     /// How comment tags are drawn. Called with the theme, and again whenever it or the
     /// appearance changes; until the first call tags are drawn in fallbacks derived from the
     /// label colours. A change of padding, line spacing or comment font lays the decorated text
@@ -70,6 +90,11 @@ public protocol SourceEditorBridging: NSObjectProtocol {
     /// The editor view's own background, which is what shows past the end of the document.
     /// Set alongside the theme, whose background key covers the text area.
     func applyBackgroundColor(_ backgroundColor: NSColor)
+    #else
+    /// The editor view's own background, which is what shows past the end of the document.
+    /// Set alongside the theme, whose background key covers the text area.
+    func applyBackgroundColor(_ backgroundColor: UIColor)
+    #endif
 
     /// Turns the editor's optional margins and overlays on or off.
     ///
@@ -93,6 +118,11 @@ public protocol SourceEditorBridging: NSObjectProtocol {
     ///   - showsInsertionPoint: draws the blinking caret at an empty selection. Off by default —
     ///     the text cannot be edited. The insertion point exists either way; this only decides
     ///     whether it is drawn. A selection is drawn regardless.
+    ///
+    /// On iOS `showsFoldingRibbon`, `showsStickyHeaders`, `showsScopeGuides` and `showsInvisibles`
+    /// are ignored: the framework's UIKit build has no folding ribbon, sticky headers or scope
+    /// guides, and it draws invisibles only with SF Mono bundled in the app, which RuntimeViewer
+    /// does not bundle.
     func applyDisplayOptions(
         showsLineNumbers: Bool,
         showsFoldingRibbon: Bool,
@@ -112,8 +142,13 @@ public protocol SourceEditorBridging: NSObjectProtocol {
     ///   for. It is passed separately rather than derived from the dictionary because the app
     ///   already holds the resolved `NSFont`, and re-parsing `"SFMono-Regular - 12.0"` on the
     ///   bridge side would be a second implementation of the framework's own parser.
+    #if os(macOS)
     func applyTheme(name: String, dictionary: NSDictionary, fontSizeModifier: Int, lineNumberFont: NSFont)
+    #else
+    func applyTheme(name: String, dictionary: NSDictionary, fontSizeModifier: Int, lineNumberFont: UIFont)
+    #endif
 
+    #if os(macOS)
     /// Insets the scrolled content by `topInset` without moving the editor view.
     ///
     /// The content pane deliberately extends under the window's toolbar so text scrolls beneath
@@ -136,6 +171,7 @@ public protocol SourceEditorBridging: NSObjectProtocol {
     /// the middle of the view and flashes the editor's callout over it: what the Find navigator
     /// does with a hit once the interface is on screen.
     func revealCharacterRange(_ characterRange: NSRange)
+    #endif
 
     /// Opens the editor's find bar on `query` and highlights every match, leaving keyboard
     /// focus where it was — what the Find navigator does with a text hit, so the reader sees
@@ -145,8 +181,13 @@ public protocol SourceEditorBridging: NSObjectProtocol {
     /// match nearest the insertion point, and the reveal then selects the hit itself.
     ///
     /// The query also goes to the system's find pasteboard, as any find bar's does.
+    ///
+    /// On iOS this presents the system find navigator (`UIFindInteraction`) with `query` as its
+    /// search text, and makes the editor view the first responder; `pattern` and `isCaseSensitive`
+    /// are not used, because the system navigator has its own options.
     func showFindInterface(query: String, pattern: SourceEditorBridgingFindPattern, isCaseSensitive: Bool)
 
+    #if os(macOS)
     /// Shows an expansion the way Xcode shows an expanded macro: each part in a gap the editor
     /// opens above or below the line of the part's anchor, with a read-only editor of its own, the
     /// theme's colours and a dismiss button beside its first line. An attached macro's expansion
@@ -193,8 +234,10 @@ public protocol SourceEditorBridging: NSObjectProtocol {
     ///
     /// Nothing is added to the text: a tag is drawn beside it, so copying and finding never see it.
     func showLineEndTags(_ tags: [SourceEditorBridgingLineEndTag])
+    #endif
 }
 
+#if os(macOS)
 /// A tag a space past the end of a line that the reader can click, drawn as a comment tag is: a
 /// capsule in a note's fill holding a label in a note's label colour and a value after it, in the
 /// comment font. Over it the pointer is a pointing hand, the capsule darkens and the tool tip says
@@ -283,6 +326,8 @@ public enum SourceEditorBridgingInlineExpansionPlacement: Int {
     case aboveLine
 }
 
+#endif
+
 /// How the find bar matches its query, the choices of its pattern menu.
 @objc(RuntimeViewerSourceEditorBridgingFindPattern)
 public enum SourceEditorBridgingFindPattern: Int {
@@ -297,6 +342,7 @@ public enum SourceEditorBridgingFindPattern: Int {
     case regularExpression
 }
 
+#if os(macOS)
 /// The code folding commands the editor view answers, Xcode's Editor ▸ Code Folding menu.
 ///
 /// They travel up the responder chain like any menu action, and the editor view enables them
@@ -354,15 +400,17 @@ public protocol SourceEditorBridgingNavigationDelegate: NSObjectProtocol {
     /// The line-end tag shown under `identifier` was clicked.
     func sourceEditorBridge(_ bridge: SourceEditorBridging, didClickLineEndTagWithIdentifier identifier: String)
 }
+#endif
 
 /// Asked for the icon that leads each of the minimap's hover labels — the `[M]` in
 /// `[M] -copyWithZone:`.
 ///
 /// The framework asks by its own `LandmarkType`, a resilient enum that cannot cross the bundle
 /// boundary, so the bridge folds it into `SourceEditorBridgingLandmarkKind` first. The answer is
-/// an `NSImage` rather than the `CGImage` the framework wants, because that is what the app's
-/// icon renderer produces and because an image drawn by a handler resolves light and dark at
-/// draw time; the bridge rasterises it against the editor's own appearance and screen scale.
+/// an `NSImage` (a `UIImage` on iOS) rather than the `CGImage` the framework wants, because that is
+/// what the app's icon renderer produces and because an image drawn by a handler resolves light and
+/// dark at draw time; the bridge rasterises it against the editor's own appearance and screen scale.
+#if os(macOS)
 @objc(RuntimeViewerSourceEditorBridgingMinimapLandmarkIconProvider)
 public protocol SourceEditorBridgingMinimapLandmarkIconProvider: NSObjectProtocol {
     /// - Parameter pointSize: the side of the square the icon is laid out in. Draw for that
@@ -374,6 +422,18 @@ public protocol SourceEditorBridgingMinimapLandmarkIconProvider: NSObjectProtoco
         pointSize: CGFloat
     ) -> NSImage?
 }
+#else
+@objc(RuntimeViewerSourceEditorBridgingMinimapLandmarkIconProvider)
+public protocol SourceEditorBridgingMinimapLandmarkIconProvider: NSObjectProtocol {
+    /// - Parameter pointSize: the side of the square the icon is laid out in.
+    /// - Returns: nil for a kind that gets no icon; the label then starts at its left edge.
+    func sourceEditorBridge(
+        _ bridge: SourceEditorBridging,
+        minimapIconForLandmarkOfKind kind: SourceEditorBridgingLandmarkKind,
+        pointSize: CGFloat
+    ) -> UIImage?
+}
+#endif
 
 /// How the generated comments of one source are drawn, as plain columns of that source.
 ///
@@ -416,6 +476,7 @@ public protocol SourceEditorBridgingCommentDecorations: NSObjectProtocol {
     var collapsibleStartsCollapsed: [NSNumber] { get }
 }
 
+#if os(macOS)
 /// How comment tags are drawn, worked out by the app from its theme. A protocol for the same
 /// reason as ``SourceEditorBridgingCommentDecorations``; the bridge reads it once per call to
 /// ``SourceEditorBridging/applyCommentTagAppearance(_:)`` and keeps what it read.
@@ -461,6 +522,7 @@ public protocol SourceEditorBridgingCommentTagAppearance: NSObjectProtocol {
     /// text, not as the line.
     var commentFont: NSFont { get }
 }
+#endif
 
 /// What a tag says, which picks its colours.
 @objc(RuntimeViewerSourceEditorBridgingCommentTagStyle)
