@@ -85,8 +85,9 @@ supplies, because that package depends on RuntimeViewerAppCore and so this modul
 `ColorDescriptor.color` in AppUI's `Presentation/`): a system symbol (`SystemSymbol`, names only), a kind of
 image, an object's glyph or a letter badge (`RuntimeObjectIcon.Glyph`, which AppCore picks and AppUI draws through
 `runtimeObjectIconRendering` as Xcode draws a code symbol's icon — the letters on a squircle in the system colour
-the glyph's colour is named after, filling a frame of Xcode's icon sizes (16 points and smaller) and keeping a point
-of room on each side of a larger one — with AppKitPlus's `NSIcon`, UIKitPlus's on iOS and visionOS:
+the glyph's colour is named after, filling a frame of Xcode's icon sizes (16 points and smaller) and keeping half a
+point of room on each side of a larger one, on whole pixels, which gives an 18-point frame the 12-point letters it has
+always had — with AppKitPlus's `NSIcon`, UIKitPlus's on iOS and visionOS:
 `NSIconRuntimeObjectIconRenderer`, one file for every platform, which differs only in its imports and in how it
 draws that room around an icon), one of the Find navigator's row symbols, or an
 engine by its `engineID` (AppUI's `RuntimeEngineIconProvider.icon(forEngineID:)` and
