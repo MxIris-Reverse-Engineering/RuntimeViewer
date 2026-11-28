@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>Draft - 没有焦点的编辑栏变暗</title>
+<title>0114 - 没有焦点的编辑栏变暗</title>
 <style>
 /* Evolution proposal page, shared style (style A, "Apple documentation").
    Copy this whole <style> block verbatim. Page-specific rules, if any, go only
@@ -160,14 +160,14 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <div class="page">
 
 <header class="doc-header">
-  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">Draft</span></p>
-  <h1>没有焦点的编辑栏变暗</h1>
+  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">0114</span></p>
+  <h1><span class="proposal-number">0114</span> 没有焦点的编辑栏变暗</h1>
   <dl class="meta">
-    <div><dt>状态</dt><dd><span class="status status-in-progress">In Progress</span></dd></div>
-    <div><dt>最后更新</dt><dd>2026-11-27</dd></div>
+    <div><dt>状态</dt><dd><span class="status status-implemented">Implemented</span></dd></div>
+    <div><dt>最后更新</dt><dd>2026-11-28</dd></div>
     <div><dt>项目类型</dt><dd>App</dd></div>
     <div><dt>关联提案</dt><dd>0076 编辑器分栏、0092 编辑栏的路径栏</dd></div>
-    <div><dt>原文</dt><dd><code>draft-dim-unfocused-editor-panes.md</code></dd></div>
+    <div><dt>原文</dt><dd><code>0114-dim-unfocused-editor-panes.md</code></dd></div>
   </dl>
 </header>
 
@@ -313,7 +313,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
       <tr><td><code>RuntimeViewerPackages/Sources/RuntimeViewerAppUI/Theme/UnfocusedEditorPaneDimming+ColorTheme.swift</code> · <code>UnfocusedEditorPaneDimming.dimmedColorTheme(_:colorScheme:)</code></td><td><span class="tag tag-added">新增</span></td><td>把 <code>.xccolortheme</code> 字典里每个颜色值按键的级别变暗（generic RGB 读入、sRGB 里计算、generic RGB 写回）</td><td>App target 没有单元测试 target，放进 AppUI 才能在 AppUITests 里测；只在 macOS 编</td><td class="numeric">4</td></tr>
       <tr><td><code>RuntimeViewerPackages/Tests/RuntimeViewerAppUITests/UnfocusedEditorPaneColorThemeDimmingTests.swift</code></td><td><span class="tag tag-added">新增</span></td><td>第 4 步基础主题变暗的行为测试</td><td></td><td class="numeric">4</td></tr>
       <tr><td><code>RuntimeViewerUsingAppKit/AGENTS.md</code>（编辑区一节）</td><td><span class="tag tag-changed">修改</span></td><td>一句话：非焦点栏的 interface 用变暗的主题，判断在 <code>ContentTextViewModel.Output.isEditorPaneDimmed</code>，新的主题化内容照此接入</td><td>以后加进编辑栏的主题化内容不会漏掉</td><td class="numeric">5</td></tr>
-      <tr><td><code>Documentations/Evolutions/draft-dim-unfocused-editor-panes.md</code> 与 <code>.html</code>、<code>Documentations/Evolutions/README.md</code>、<code>Documentations/README.md</code></td><td><span class="tag tag-added">新增</span> <span class="tag tag-changed">修改</span></td><td>本提案、网页版与两份索引</td><td></td><td class="numeric">5</td></tr>
+      <tr><td><code>Documentations/Evolutions/0114-dim-unfocused-editor-panes.md</code> 与 <code>.html</code>、<code>Documentations/Evolutions/README.md</code>、<code>Documentations/README.md</code></td><td><span class="tag tag-added">新增</span> <span class="tag tag-changed">修改</span></td><td>本提案、网页版与两份索引</td><td></td><td class="numeric">5</td></tr>
     </tbody>
   </table>
   </div>
@@ -413,17 +413,17 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
         <li>行为：<code>translucentColorThemeTextIsFlattenedOverTheBackground</code></li>
         <li>行为：<code>translucentColorThemeFillsStayUnchanged</code></li>
         <li>行为：<code>fontsLineSpacingAndVersionAreLeftAlone</code></li>
-        <li>手工验收（交给用户目视）：两栏左右分开、各开一个类型，点左栏右栏变暗、点右栏左栏变暗；只有一栏时不变；关掉开关两栏都正常；深浅外观各看一次。</li>
+        <li>手工验收（交给用户目视）：两栏左右分开、各开一个类型，点左栏右栏变暗、点右栏左栏变暗；只有一栏时不变；关掉开关两栏都正常；深浅外观各看一次。用户在常驻检出里看过，2026-11-28 确认收尾。</li>
       </ul>
     </li>
     <li><strong>文档</strong> —— 第 17–18 行：<code>RuntimeViewerUsingAppKit/AGENTS.md</code> 加一句；提案改为实现后的样子，两份索引更新。</li>
   </ol>
   <p>构建与测试按远程编译走（包测试过 <code>queued-build</code>，App 与 bridge 测试用 Tuist 或 Debug workspace，见项目 <code>AGENTS.md</code>）。</p>
-  <div class="callout callout-warning">
-    <p class="callout-title">收尾时必须判断两件事（判断结果写进决策日志，不允许沉默跳过）</p>
+  <div class="callout callout-note">
+    <p class="callout-title">收尾时判断的两件事（结论见决策日志的最后两行）</p>
     <ul>
-      <li><strong>要不要配套专题文章</strong> —— 预计不需要：调用方契约只有 <code>isEditorPaneDimmed</code> 与渲染器的 <code>isDimmed</code>，写在类型注释里；系数与出处在 <code>UnfocusedEditorPaneDimming</code> 的注释和 RE 笔记里。</li>
-      <li><strong>有没有引入新术语</strong> —— 预计没有：「编辑栏」「焦点栏」已在用。</li>
+      <li><strong>要不要配套专题文章</strong> —— 不需要：调用方契约只有 <code>isEditorPaneDimmed</code> 与渲染器的 <code>isDimmed</code>，写在类型注释里；系数与出处在 <code>UnfocusedEditorPaneDimming</code> 的注释和 RE 笔记里。</li>
+      <li><strong>有没有引入新术语</strong> —— 没有：「编辑栏」「焦点栏」已在用。</li>
     </ul>
   </div>
 </section>
@@ -664,7 +664,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <section id="log">
   <h2>决策日志</h2>
   <details>
-    <summary>5 条，最近一条：2026-11-27 验证改用本地依赖模式</summary>
+    <summary>7 条，最近一条：2026-11-28 Implemented</summary>
     <div class="details-body">
       <div class="table-wrap">
       <table>
@@ -675,6 +675,8 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
           <tr><td class="numeric">2026-11-27</td><td>基础主题的变暗挪进 AppUI</td><td>提案原以为桥接测试 target 编进了 App 的 <code>SourceEditorThemeConversion.swift</code>，实际它只编 bridge 框架，App target 也没有单元测试 target。改为 AppUI 的 <code>UnfocusedEditorPaneDimming.dimmedColorTheme(_:colorScheme:)</code>（只在 macOS 编），在 AppUITests 里测，转换只调用它；行为清单换成实际的测试名，原来的「主题色不变暗两次」「不变暗时原样」两条由转换的写法保证（先变暗基础主题再写入已变暗的主题色；<code>nil</code> 时不调用），不另测</td></tr>
           <tr><td class="numeric">2026-11-27</td><td>宏展开内嵌视图不另做</td><td><code>InlineExpansionView</code> 里的编辑器用同一份主题，跟着变暗；标题与关闭按钮用系统的 <code>tertiaryLabelColor</code>，与标签栏一样不属于主题，不变</td></tr>
           <tr><td class="numeric">2026-11-27</td><td>验证改用本地依赖模式</td><td>next 的锁文件钉的 MachOSwiftSection（947d5321）用到 MachOKitExtensions 还没发版的 <code>recordsFunctionAddressReferences</code>（最新 tag 3.3.0 没有），按锁文件编包或 App 在 next 上同样失败，与本提案无关。本次在 Ultra 上用 <code>USING_LOCAL_DEPENDENCIES=1</code> 原地编包、用 <code>TuistScript.sh --local-dependencies</code> 编 App</td></tr>
+          <tr><td class="numeric">2026-11-27</td><td>实现完成，待用户看过后收尾</td><td>五步都已提交。Ultra 上（本地依赖模式）包的相关测试——四个测试 target 里的十个套件，含全部新增测试——通过，Tuist workspace 编 <code>RuntimeViewer macOS</code>（Debug，关签名）通过。<code>RuntimeViewerUsingAppKit/AGENTS.md</code> 的编辑栏一节加了一条；不另写使用指南或实现说明；没有新术语。界面目视交给用户</td></tr>
+          <tr><td class="numeric">2026-11-28</td><td>Implemented</td><td>用户在常驻检出里看过效果，确认收尾，落地为 0114。收尾验证沿用上一行的结果；之后合进 <code>next</code> 的对象图标提案（0113）没有改到变暗的代码。没有拆出来的后续项</td></tr>
         </tbody>
       </table>
       </div>
