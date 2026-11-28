@@ -1,5 +1,3 @@
-#if os(macOS)
-
 import SwiftUI
 import RuntimeViewerSettings
 import UIFoundationSettingsUI
@@ -42,6 +40,7 @@ struct EditorSettingsView: View {
             }
 
             Section {
+                #if os(macOS)
                 Toggle("Line Numbers", isOn: $settings.showsLineNumbers)
                 Toggle("Code Folding Ribbon", isOn: $settings.showsFoldingRibbon)
                 Toggle("Sticky Headers", isOn: $settings.showsStickyHeaders)
@@ -51,14 +50,25 @@ struct EditorSettingsView: View {
                 Toggle("Mark Separators", isOn: $settings.showsMarkSeparators)
                 Toggle("Comment Tags", isOn: $settings.showsCommentTags)
                 Toggle("Insertion Point", isOn: $settings.showsInsertionPoint)
+                #else
+                // The UIKit build of SourceEditor has no folding ribbon, sticky headers or scope
+                // guides, invisibles need SF Mono bundled in the app, and the iOS content pane does
+                // not fetch the comment structure yet: the four it can carry out.
+                Toggle("Line Numbers", isOn: $settings.showsLineNumbers)
+                Toggle("Minimap", isOn: $settings.showsMinimap)
+                Toggle("Mark Separators", isOn: $settings.showsMarkSeparators)
+                Toggle("Insertion Point", isOn: $settings.showsInsertionPoint)
+                #endif
             } header: {
                 Text("Display")
             } footer: {
+                #if os(macOS)
                 Text("Changes apply immediately. Sticky headers pin the enclosing declarations to the top of the view while scrolling; the folding ribbon draws the arrows that collapse a declaration. Mark separators draw a rule at every MARK comment, and have nothing to draw until generated interfaces contain them. Comment tags draw generated comments — addresses, offsets, layouts — as tags, and let field layouts and enum case layouts collapse; copying and finding still use the comments as printed. Insertion point draws the blinking caret where a click leaves it; interfaces cannot be edited, so it is off by default.")
+                #else
+                Text("Changes apply immediately. Mark separators draw a rule at every MARK comment, and have nothing to draw until generated interfaces contain them. Insertion point draws the blinking caret where a tap leaves it; interfaces cannot be edited, so it is off by default.")
+                #endif
             }
             .disabled(!isSourceEditorAvailable)
         }
     }
 }
-
-#endif

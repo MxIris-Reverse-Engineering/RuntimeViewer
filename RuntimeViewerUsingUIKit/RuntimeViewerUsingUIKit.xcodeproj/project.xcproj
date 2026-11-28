@@ -20,11 +20,22 @@
       "target-membership": [
         { "build-phase": "RuntimeViewerUsingUIKit-JB/copy/Embed RuntimeViewerMobileServer Framework", "code-sign-on-copy": true, "header-preservation": "remove-on-copy" },
       ],
+    }, {
+      "name": "RuntimeViewerSourceEditorBridge.framework",
+      "project": "RuntimeViewerUsingAppKit.xcodeproj",
+      "target": "RuntimeViewerSourceEditorBridge",
+      "product-id": "E95ED17E0000000000000002",
+      "type": "wrapper.framework",
+      "target-membership": [
+        "RuntimeViewerUsingUIKit/frameworks",
+        { "build-phase": "RuntimeViewerUsingUIKit/copy/Embed SourceEditor Bridge", "code-sign-on-copy": true, "header-preservation": "remove-on-copy" },
+      ],
     },
   ],
   "files": [
     { "path": "<PROJECT>/../Configurations/CodeSigning.xcconfig" },
     { "path": "../RuntimeViewerServer/RuntimeViewerServer.xcodeproj" },
+    { "path": "../RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.xcodeproj" },
     {
       "path": "<PROJECT>/../Resources/AppIcon.icon",
       "target-membership": [
@@ -95,10 +106,25 @@
       "id": "E9432FC12C0D612000362862",
       "product": "id:E9432FC22C0D612000362862",
       "product-type": "application",
+      "dependencies": [
+        { "kind": "remoteTarget", "project": "RuntimeViewerUsingAppKit.xcodeproj", "target": "RuntimeViewerSourceEditorBridge", "target-id": "E95ED17E0000000000000004" },
+      ],
       "build-phases": [
         "compile-sources",
         "frameworks",
         "resources",
+        {
+          "kind": "copy",
+          "name": "Embed SourceEditor Bridge",
+          "bundle-base-path": "frameworks-directory",
+        }, {
+          "kind": "script",
+          "name": "Embed SourceEditor Frameworks",
+          "log-environment-variables": true,
+          "run-on-every-build": true,
+          "shell": "/bin/sh",
+          "script": "\"${SRCROOT}/../RuntimeViewerUsingAppKit/BuildPhases/EmbedSourceEditorFrameworks.sh\"\n",
+        },
       ],
       "package-product-members": [
         {
@@ -129,6 +155,7 @@
         "ENABLE_APP_SANDBOX": "YES",
         "ENABLE_INCOMING_NETWORK_CONNECTIONS": "YES",
         "ENABLE_OUTGOING_NETWORK_CONNECTIONS": "YES",
+        "ENABLE_USER_SCRIPT_SANDBOXING": "NO",
         "GENERATE_INFOPLIST_FILE": "YES",
         "INFOPLIST_FILE": "RuntimeViewerUsingUIKit/Info.plist",
         "INFOPLIST_KEY_CFBundleDisplayName": "RuntimeViewer",
@@ -154,6 +181,7 @@
         "SUPPORTS_MACCATALYST": "NO",
         "SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD": "NO",
         "SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD": "NO",
+        "SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphone*]": "$(inherited) RUNTIME_VIEWER_SOURCE_EDITOR",
         "SWIFT_EMIT_LOC_STRINGS": "YES",
         "SWIFT_VERSION": "5.0",
         "TARGETED_DEVICE_FAMILY": "1,2,3",

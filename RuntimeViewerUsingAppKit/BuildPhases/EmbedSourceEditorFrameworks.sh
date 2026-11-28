@@ -33,8 +33,10 @@ case "${PLATFORM_NAME:-macosx}" in
         FETCH_COMMAND="./FetchSourceEditorScript.sh --platform ios"
         ;;
     *)
-        echo "error: the reconstructed SourceEditor frameworks have no build for ${PLATFORM_NAME}"
-        exit 1
+        # A platform the bridge builds for without SourceEditor (tvOS, which the iOS app's target
+        # also lists): it compiles the bridge out, so there is nothing to embed.
+        echo "note: the reconstructed SourceEditor frameworks have no build for ${PLATFORM_NAME}; nothing to embed."
+        exit 0
         ;;
 esac
 DESTINATION_DIRECTORY="${1:-${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}}"

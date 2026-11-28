@@ -4,13 +4,17 @@ Everything that drives the `SourceEditor` framework family, which official build
 the reconstruction released in the private `Mx-Iris/SourceEditor` repository:
 
 - the `RuntimeViewerSourceEditorBridge` framework (`RuntimeViewerUsingAppKit/RuntimeViewerSourceEditorBridge/`),
-  which the app links and calls directly, and the rest of the content pane's SourceEditor code in the
-  app target's `Content/` — `SourceEditorBridgeProvider`, `ContentSourceEditorViewController`,
-  `SourceEditorThemeConversion` and the other `SourceEditor*` files;
+  which the macOS app and the iOS app link and call directly, and the rest of the content pane's
+  SourceEditor code in each app target's `Content/` — `SourceEditorBridgeProvider`,
+  `ContentSourceEditorViewController` and the other `SourceEditor*` files, in
+  `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/` and `RuntimeViewerUsingUIKit/RuntimeViewerUsingUIKit/`;
+- what both panes share in `RuntimeViewerAppUI`: `SourceEditorThemeConversion` (`Theme/`) and
+  `SourceEditorSourceConversion` (`Content/`);
 - `RuntimeViewerSourceEditorBridgeTests`, which links the bridge framework;
 - `SourceEditorFrameworks` in `RuntimeViewerSettings`;
-- the build plumbing: `FetchSourceEditorScript.sh`, `UpdateSourceEditorScript.sh`, `PinnedRelease.txt`
-  beside this file, and the app's Embed SourceEditor Frameworks phase (`RuntimeViewerUsingAppKit/BuildPhases/`);
+- the build plumbing: `FetchSourceEditorScript.sh`, `UpdateSourceEditorScript.sh`, `PinnedRelease.txt` and
+  `PinnedRelease-iOS.txt` beside this file, and the apps' Embed SourceEditor Frameworks phases
+  (`RuntimeViewerUsingAppKit/BuildPhases/`, run by both projects);
 - `LaunchWithXcodeSourceEditorScript.sh`, which starts a Debug build on Xcode 26.6's originals (see
   *Running a Debug build on Xcode's original*).
 
@@ -20,14 +24,39 @@ root `AGENTS.md` repeats the precondition and points here.
 
 ## How the module is built
 
-- `FetchSourceEditorScript.sh` downloads the release `PinnedRelease.txt` names into `Frameworks/`
-  beside this file (ignored by git), after checking every zip against its pinned SHA-256.
-  `RunScript.sh` runs it before it builds and `TuistScript.sh` before it generates or builds, both
-  carrying on without the frameworks when it cannot download them; `ArchiveScript.sh` stops instead.
-- The bridge framework and its tests have `Frameworks/` on their framework search path. Where it
-  holds the frameworks, the bridge compiles and links them; where it does not, everything under
+- **Two pins, one per platform.** `PinnedRelease.txt` is the macOS app's release, on the reconstruction's
+  27 line; `PinnedRelease-iOS.txt` the iOS app's, on the 26.6 line, the only one whose xcframeworks
+  carry the UIKit build (26.6.7 and later; the 27 line has no UIKit layer yet). They become one pin once
+  the 27 line has it. Background: `Documentations/Evolutions/draft-source-editor-on-ios.md`.
+- `FetchSourceEditorScript.sh` downloads each platform's pinned release, after checking every zip against
+  its pinned SHA-256: `--platform macos` puts the macOS slices in `Frameworks/` beside this file,
+  `--platform ios` the `ios-arm64` and `ios-arm64-simulator` slices in `Frameworks-iOS/iphoneos/` and
+  `Frameworks-iOS/iphonesimulator/` (both ignored by git), and `all`, the default, does both. Each
+  directory carries a copy of its pin as the mark of what was downloaded. `RunScript.sh` runs it for macOS
+  before it builds and `TuistScript.sh` before it generates or builds, both carrying on without the
+  frameworks when it cannot download them; `ArchiveScript.sh` stops instead, and fetches iOS too when it
+  also builds the iOS Simulator app (`--include-ios-simulator`, which the release workflow always passes).
+- The bridge framework builds for the platform of the app it is built for (`SDKROOT = auto`: macOS, iOS,
+  the iOS simulator, and tvOS only because the iOS app's target lists it). It and its tests have the
+  platform's download on their framework search path (`FRAMEWORK_SEARCH_PATHS[sdk=…][arch=arm64*]`).
+  Where it holds the frameworks, the bridge compiles and links them; where it does not, everything under
   `#if arch(arm64) && canImport(SourceEditor)` compiles out, `SourceEditorBridgeFactory.isAvailable`
-  is `false`, and the app shows interfaces in the built-in `NSTextView`.
+  is `false`, and the app shows interfaces in its built-in text view.
+- **The bridge has a view layer per platform.** `SourceEditorBridge` and the three controllers built on
+  folding, gaps and AppKit event consumers (comment tags, line-end tags, inline expansions) are
+  `#if os(macOS) && …`; `UIKitSourceEditorBridge` and `ReadOnlySourceEditorView` are `#if os(iOS) && …`;
+  the semantic retyping, the declaration short circuit, the symbol occurrences, the reading-state cache
+  and `SourceEditorBridgeLookup` are shared. `SourceEditorBridging` declares a member whose type is a
+  platform's view, colour or font once per platform under one name, and the members and types only the
+  AppKit build can carry out on macOS only. The UIKit build has no folding, no gaps, no sticky headers
+  or scope guides, and its event manager takes no finger taps
+  (`Documentations/Reference/UIKit/UIKitExcludedFiles20261122.tsv` in the reconstruction).
+- **On iOS only the iOS app's target uses the bridge**, and its code says so with the compilation
+  condition `RUNTIME_VIEWER_SOURCE_EDITOR` (set for the `iphone*` SDKs on that target alone), never with
+  `canImport(RuntimeViewerSourceEditorBridge)`: the jailbroken variant builds into the same
+  `<configuration>-iphoneos` products directory, so once the iOS app is built it could import the module
+  and would then fail to link it. The jailbroken variant (arm64e — the releases are arm64 only) and the
+  visionOS app do not link the bridge and show interfaces in `UITextView`.
 - **Every guard is `#if arch(arm64) && canImport(SourceEditor)`, never `canImport` alone**, so the
   Intel half of a universal build compiles out the same way. The releases carry no x86_64 slice, but
   every framework has a Clang module map, so an x86_64 compile that can see them satisfies
@@ -39,14 +68,22 @@ root `AGENTS.md` repeats the precondition and points here.
   arm64 only; only a Release universal build, as `ArchiveScript.sh` makes, compiles that slice, and
   it fails only once the products directory holds the frameworks — so check a guard change with two
   Release builds in the same DerivedData.
-- **The app must never load the SourceEditor modules.** Their headers declare AppKit's private
-  `NSScrollViewDelegate`, and so do UIFoundation's (`UIFoundationAppleInternalObjC`), differently; a
-  module that sees both fails to compile. So the app target does not have `Frameworks/` on its search
-  path, the bridge imports the SourceEditor modules with `internal import`, and its public API — the
-  `SourceEditorBridging` protocols and `SourceEditorBridgeFactory` — mentions none of their types.
-- The Embed SourceEditor Frameworks phase copies the four frameworks into `Contents/Frameworks` and
-  signs them. It fails the build when `Frameworks/` holds a download for another pin: the app would
-  link one release and ship none.
+- **The apps must never load the SourceEditor modules.** On macOS their headers declare AppKit's
+  private `NSScrollViewDelegate`, and so do UIFoundation's (`UIFoundationAppleInternalObjC`), differently;
+  a module that sees both fails to compile. On iOS the umbrella header brings in `UIKitSPI.h`, private
+  declarations of `UIKeyboardImpl` and of categories on UIKit classes. So the app targets do not have the
+  downloads on their search path, the bridge imports the SourceEditor modules with `internal import`, and
+  its public API — the `SourceEditorBridging` protocols and `SourceEditorBridgeFactory` — mentions none of
+  their types.
+- The Embed SourceEditor Frameworks phase picks the pin and the download by `PLATFORM_NAME`, copies the
+  four frameworks into the app's frameworks directory (`Contents/Frameworks`, or `Frameworks` on iOS)
+  and signs them when there is an identity. It fails the build when the download is for another pin: the
+  app would link one release and ship none. For a platform without frameworks (tvOS) it embeds nothing.
+- **Reading the theme on iOS:** the UIKit build reads the theme's colours as sRGB and finds fonts with
+  `UIFont(name:size:)` (`SourceEditorTheme.colorFromString` / `fontFromString`, 26.6.10), where the
+  AppKit build reads calibrated RGB. `SourceEditorThemeConversion` writes each platform's form, and the
+  monospaced system font, whose dotted name `UIFont(name:size:)` cannot find, as the Menlo face of the
+  same weight and slant.
 - **Tests and debug runs must find the reconstruction before Xcode's copies.** Run from Xcode or under
   XCTest, dyld searches `DYLD_FRAMEWORK_PATH` before any rpath, and for tests Xcode puts its own
   `SharedFrameworks` on it — which holds Xcode's SourceEditor, SourceModel and SourceModelSupport.
@@ -65,6 +102,8 @@ root `AGENTS.md` repeats the precondition and points here.
   through `FetchSourceEditorScript.sh` — putting the pin file back when that fails — and prints the
   Breaking section of every release it moved across. Adapt the bridge to those changes, run
   `RuntimeViewerSourceEditorBridgeTests`, and commit `PinnedRelease.txt` together with them.
+  `--platform ios` does the same with `PinnedRelease-iOS.txt`; the bridge tests run on macOS only, so an
+  iOS move is checked by building the iOS app for the simulator and a device.
 
 ## Hard precondition: read the reconstruction's sources, never infer
 
@@ -75,8 +114,9 @@ framework "must" do instead of reading what it does.
 
 - **Where**: the checkout of `Mx-Iris/SourceEditor` at
   `/Volumes/Repositories/Private/Personal/Library/macOS/SourceEditor`, the same path on both Macs.
-- **Which version**: the release the app links — the version in `PinnedRelease.txt`, which is a tag
-  of that repository. Read it at the tag, `git -C <checkout> show <version>:<path>` and
+- **Which version**: the release the app links — the version in `PinnedRelease.txt` for macOS, in
+  `PinnedRelease-iOS.txt` for iOS, each a tag of that repository; the UIKit layer is under
+  `SourceEditor/iOS/` there. Read it at the tag, `git -C <checkout> show <version>:<path>` and
   `git -C <checkout> grep <pattern> <version>`, not on `main`, which runs ahead of the pin; when the
   tag is missing, `git -C <checkout> fetch --tags`. Never check out, edit or commit in that checkout:
   it is where the reconstruction itself is worked on.

@@ -94,7 +94,8 @@ Background: `Documentations/Evolutions/0100-settings-storage-on-ios.md`.
   `RuntimeViewerSettingsUI`'s `SettingsViewController` as a form sheet, a fresh one each time.
 - **The pages are the macOS ones** — Appearance (the General page's appearance section,
   `AppearanceSettingsSection`), Theme, Generation Options (its global options only: an image's own
-  are set from the Mac's Editor menu, which iOS has no counterpart of), Transformer — hosted by UIFoundation's iOS
+  are set from the Mac's Editor menu, which iOS has no counterpart of), Transformer, and Editor where the
+  app carries SourceEditor (below; only the four options the UIKit build has) — hosted by UIFoundation's iOS
   `SettingsViewController`. A page joins the list when what it configures works on iOS; a page that
   reaches for AppKit gets a UIKit branch, as the Transformer page's template editor has
   (`TokenTemplateTextField+UIKit.swift`, with the placeholder rules shared with AppKit in
@@ -117,3 +118,26 @@ Background: `Documentations/Evolutions/0100-settings-storage-on-ios.md`.
   included.
 
 Background: `Documentations/Evolutions/0101-settings-screen-on-ios.md`.
+
+## The content pane in SourceEditor
+
+- **The iOS app shows interfaces in the UIKit build of the reconstructed SourceEditor** where it carries
+  it — a device, or the simulator on Apple silicon, once `./FetchSourceEditorScript.sh --platform ios`
+  has downloaded `PinnedRelease-iOS.txt`'s release: `ContentCoordinator` makes a
+  `ContentSourceEditorViewController` when `SourceEditorBridgeFactory.isAvailable`, the
+  `ContentTextViewController` (`UITextView`) otherwise. Both bind `ContentTextViewModel`.
+- **Only the iOS target links the bridge.** Its code is under `#if RUNTIME_VIEWER_SOURCE_EDITOR`, a
+  compilation condition that target alone sets (for the `iphone*` SDKs); the jailbroken variant (arm64e,
+  which the releases have no slice for) and the visionOS app compile the same files empty. Never test
+  `canImport(RuntimeViewerSourceEditorBridge)` instead: the jailbroken variant shares the iOS products
+  directory and would import the module, then fail to link it.
+- **What the pane shows:** the text with its semantic runs, the settings' theme (the framework's light or
+  dark default underneath, by appearance), line numbers, the minimap, mark separators and the insertion
+  point as Settings › Editor says, the highlight of a tapped identifier's other occurrences, the system
+  find navigator (the magnifying glass in the navigation bar, ⌘F with a keyboard) and the reader's place
+  when an object comes back. Tapping never brings up the keyboard (`ReadOnlySourceEditorView`).
+- **What it does not:** comment tags, folding, inline expansions and jumps. The UIKit build has no
+  folding or gaps; the view model does not fetch the comment structure on iOS; nothing on iOS follows a
+  selection route yet (the vision's fourth step), so the pane passes no clicks.
+- The bridge, the pins and the guards: `RuntimeViewerPrecompiledLibraries/SourceEditor/AGENTS.md`.
+  Background: `Documentations/Evolutions/draft-source-editor-on-ios.md`.

@@ -755,19 +755,22 @@ code or the corpus store's read phase** — it says why each part has the shape 
 
 ## SourceEditor Module
 
-<important if="you are touching the SourceEditor module: the RuntimeViewerSourceEditorBridge framework, RuntimeViewerSourceEditorBridgeTests, SourceEditorBridgeProvider, SourceEditorFrameworks, FetchSourceEditorScript.sh, UpdateSourceEditorScript.sh, the Embed SourceEditor Frameworks phase, ContentSourceEditorViewController or SourceEditorThemeConversion">
+<important if="you are touching the SourceEditor module: the RuntimeViewerSourceEditorBridge framework, RuntimeViewerSourceEditorBridgeTests, SourceEditorBridgeProvider, SourceEditorFrameworks, FetchSourceEditorScript.sh, UpdateSourceEditorScript.sh, PinnedRelease.txt or PinnedRelease-iOS.txt, the Embed SourceEditor Frameworks phase, ContentSourceEditorViewController (macOS or iOS), SourceEditorThemeConversion or SourceEditorSourceConversion">
 
 Everything that drives the `SourceEditor` framework family: the `RuntimeViewerSourceEditorBridge`
 framework, `RuntimeViewerSourceEditorBridgeTests`, `SourceEditorBridgeProvider`,
-`SourceEditorFrameworks`, `ContentSourceEditorViewController`, and `SourceEditorThemeConversion`.
-The app links the bridge framework and calls it directly; in official builds the bridge links the
-reconstruction released in the private `Mx-Iris/SourceEditor` repository — `FetchSourceEditorScript.sh`
-downloads the release pinned in `RuntimeViewerPrecompiledLibraries/SourceEditor/PinnedRelease.txt`
-and the app's Embed SourceEditor Frameworks phase copies it in; `UpdateSourceEditorScript.sh` moves
-the pin to another release. Any other build, and the Intel slice
-of a universal one, compiles the bridge without it (`#if arch(arm64) && canImport(SourceEditor)`) and
-shows interfaces in the built-in `NSTextView`. Nothing is loaded at run time, and nothing comes from
-an installed Xcode.
+`SourceEditorFrameworks`, `ContentSourceEditorViewController` (one per app), and AppUI's
+`SourceEditorThemeConversion` and `SourceEditorSourceConversion`.
+The macOS app and the iOS app link the bridge framework and call it directly; in official builds the
+bridge links the reconstruction released in the private `Mx-Iris/SourceEditor` repository —
+`FetchSourceEditorScript.sh` downloads the releases pinned in
+`RuntimeViewerPrecompiledLibraries/SourceEditor/PinnedRelease.txt` (macOS, the 27 line) and
+`PinnedRelease-iOS.txt` (iOS, the 26.6 line, the only one with the UIKit build) and each app's Embed
+SourceEditor Frameworks phase copies its platform's in; `UpdateSourceEditorScript.sh` moves a pin to
+another release. Any other build, and the Intel slice of a universal one or of the iOS simulator,
+compiles the bridge without it (`#if arch(arm64) && canImport(SourceEditor)`) and shows interfaces in
+the built-in text view; so do the jailbroken iOS variant and the visionOS app, which do not link the
+bridge. Nothing is loaded at run time, and nothing comes from an installed Xcode.
 
 **Hard precondition: read the reconstruction's sources, never infer.** The frameworks are our own
 reconstruction, so a bug or a feature here starts from its sources: the `Mx-Iris/SourceEditor` checkout at

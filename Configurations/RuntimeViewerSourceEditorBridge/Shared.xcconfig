@@ -31,12 +31,15 @@ LD_RUNPATH_SEARCH_PATHS[sdk=iphone*] = $(inherited) @executable_path/Frameworks 
 
 // Built for the app it is built for: the macOS app's macOS destination, the iOS app's iOS or simulator
 // one. Unlike the embedded non-macOS products in Configurations/AGENTS.md, which pin their platform,
-// this takes the host's. Not Mac Catalyst, and not visionOS: the frameworks have no slice for them.
+// this takes the host's. tvOS only because the iOS app's target lists it: there the bridge compiles
+// out, as nothing puts frameworks on a tvOS search path. Not Mac Catalyst, and not visionOS, whose app
+// does not link the bridge.
 SDKROOT = auto
-SUPPORTED_PLATFORMS = macosx iphoneos iphonesimulator
+SUPPORTED_PLATFORMS = macosx iphoneos iphonesimulator appletvos appletvsimulator
 SUPPORTS_MACCATALYST = NO
 IPHONEOS_DEPLOYMENT_TARGET = 18.0
-TARGETED_DEVICE_FAMILY = 1,2
+TVOS_DEPLOYMENT_TARGET = 18.0
+TARGETED_DEVICE_FAMILY = 1,2,3
 // `internal import` keeps a module's dependencies from its clients only when it is built with library
 // evolution: without it, the app's dependency scan asks for the SourceEditor modules and fails
 // ("Unable to resolve module dependency: 'SourceEditor'").

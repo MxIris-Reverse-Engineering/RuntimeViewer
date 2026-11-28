@@ -126,6 +126,17 @@ tried and withdrawn before this (evolution 0015). `Experiments/CatalystXPCServic
 recipes in a minimal project, and showed that a Mac Catalyst XPC service embedded in a macOS app launches
 and works, which is what `RuntimeViewerCatalystService` is built on; its README records what was measured.
 
+## The SourceEditor bridge, built for either app
+
+`RuntimeViewerSourceEditorBridge` is the opposite case of the products above: it has `SDKROOT = auto`
+(`RuntimeViewerSourceEditorBridge/Shared.xcconfig`), so the macOS app builds it for macOS and the iOS
+app (`RuntimeViewerUsingUIKit.xcodeproj`, which depends on it across projects) for iOS or the simulator,
+each with its own framework search path per SDK. Its supported platforms include tvOS only because the
+iOS app's target lists it. Do not pin its platform: one of the two apps would then build it for the
+other's. The iOS project keeps its settings in the project file, so the iOS target's part — the
+dependency, the two embed phases, `ENABLE_USER_SCRIPT_SANDBOXING = NO` for the script phase and the
+`RUNTIME_VIEWER_SOURCE_EDITOR` condition — is there. See `RuntimeViewerPrecompiledLibraries/SourceEditor/AGENTS.md`.
+
 ## The jailbroken iOS variant
 
 **It embeds the payload from `RuntimeViewerMobileServer` directly.** `RuntimeViewerUsingUIKit-JB` is

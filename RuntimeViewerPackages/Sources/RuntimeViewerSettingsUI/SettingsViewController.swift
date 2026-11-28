@@ -5,7 +5,10 @@ import RuntimeViewerSettings
 import UIFoundationSettingsUI
 
 /// RuntimeViewer's settings on iOS and visionOS: the pages whose settings act
-/// on something there, presented as UIFoundation's settings list.
+/// on something there, presented as UIFoundation's settings list. Editor is
+/// among them only where the app carries the reconstructed SourceEditor
+/// frameworks — the iOS app; not the jailbroken variant (arm64e, which the
+/// frameworks have no slice for) nor visionOS.
 ///
 /// The macOS window (`SettingsWindowController`) has more pages; the others
 /// join this list when what they configure comes to these platforms. A fresh
@@ -26,6 +29,11 @@ public final class SettingsViewController: UIFoundationSettingsUI.SettingsViewCo
             }
             SettingsPage("Transformer", id: "transformer", plainSymbol: "arrow.triangle.2.circlepath") {
                 TransformerSettingsView()
+            }
+            if case .available = SourceEditorFrameworks.availability {
+                SettingsPage("Editor", id: "editor", plainSymbol: "text.alignleft") {
+                    EditorSettingsView()
+                }
             }
         }
     }
