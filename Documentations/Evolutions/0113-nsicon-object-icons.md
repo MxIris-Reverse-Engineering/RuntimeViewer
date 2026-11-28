@@ -1,13 +1,13 @@
-# Draft - 对象图标改用 AppKitPlus 的 NSIcon 绘制
+# 0113 - 对象图标改用 AppKitPlus 的 NSIcon 绘制
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-11-27
 - **最后更新**: 2026-11-28
 - **所属愿景**: 无
 - **关联提案**: [0091 - AppCore / AppUI 拆分](0091-app-core-ui-split.md)（定下「AppCore 选字形、AppUI 画字形」的分工与 `runtimeObjectIconRendering`）
-- **实现分支 / PR**: `feature/nsicon-object-icons`（worktree `.worktrees/RuntimeViewer-NSIconObjectIcons`）
-- **配套文档**: 待定 —— 落地时登记实现说明 / 使用指南的链接
+- **实现分支 / PR**: `feature/nsicon-object-icons`（已合进 `next`）
+- **配套文档**: 无 —— 调用方契约没变，渲染器的取舍写在本提案与 `RuntimeViewerPackages/Sources/AGENTS.md`
 - **网页版**: 同目录同名的 `.html`
 
 ## 摘要
@@ -403,11 +403,11 @@ extension NSIconColor {
    - 行为：`simpleGlyphMatchesNSIcon` 等渲染器用例改写 `.pinkishPurple` 后照旧逐像素一致。
    - 构建：macOS 包测试通过；iOS 与 visionOS 的 App 编译通过。macOS App 里只改了 `SourceEditorLandmarkIcon` 一个值，没有单独编。
 
-**收尾时必须判断两件事**（判断结果写进决策日志，不允许沉默跳过）：
+**收尾时判断的两件事**（结论见决策日志的「配套文档与术语」与 Implemented 两行）：
 
-- **要不要配套专题文章** —— 预计不要：调用方契约（字形 → 图片、同一字形同一图片）没变，渲染器的取舍写在本提案与
+- **要不要配套专题文章** —— 不要：调用方契约（字形 → 图片、同一字形同一图片）没变，渲染器的取舍写在本提案与
   `Sources/AGENTS.md` 里已经够。
-- **有没有引入新术语** —— 预计没有。
+- **有没有引入新术语** —— 没有。
 
 ## 决策日志
 
@@ -429,3 +429,4 @@ extension NSIconColor {
 | 2026-11-28 | 第 4 步实现完成，待用户看过后收尾 | 渲染器测试 9 个全部通过，改过的 4 个先在 1pt 的实现上失败过；去掉整像素对齐时 1x 那条失败。iOS 与 visionOS 的 App 用本地依赖 workspace 编过，iOS 上的显示没在设备或模拟器上看过。 |
 | 2026-11-28 | 字形颜色照搬 `NSIconColor`，C++ 改用紫色 | 用户要求 `Glyph.Color` 直接用 `NSIconColor` 的那一套、不再沿用系统色的名字，并把 C++ 改成 `NSIcon` 的 purple。`Glyph.Color` 换成 `NSIconColor` 的全部 28 个值，同名同序；Objective-C 协议改写 `.pinkishPurple`（即原来的系统紫色），颜色不变。改的是 C++ 的三种对象（类、类模板、命名空间）；Find 里 C/C++ 函数的绿色 `f` 是函数的颜色，不动；小地图悬停标签只分 Swift 与非 Swift，C++ 界面照旧，记入非目标。 |
 | 2026-11-28 | 第 5 步实现完成，待用户看过后收尾 | C++ 两个用例先在旧实现上失败；图标相关的 9 个套件全部通过，其中颜色映射 28 个用例；把 `.purple` 映射成 `.pinkishPurple` 时映射用例失败。iOS 与 visionOS 的 App 用本地依赖 workspace 编过。macOS App 没有单独编。 |
+| 2026-11-28 | Implemented | 用户看过效果后收尾，落地为 0113。实现与最终方案一致，偏离最初方案的地方都记在上面各行。收尾验证沿用第 5 步在最终代码上的结果，之后只改了文档。没做的验证：iOS 与 visionOS 上的图标只经编译检查，没在设备或模拟器上看过，3x 屏是否发糊也没看；macOS App 没有单独编，只核对过 App target 里唯一用到字形颜色的 `SourceEditorLandmarkIcon` 用的都是保留下来的名字，源码里也不再有删掉的 `indigo`、`mint`、`cyan`。不配使用指南或实现说明、没有新术语，理由同「配套文档与术语」一行。选中行交给 `NSIconView` 反白、iOS 上目视、小地图悬停标签的 C++ 颜色三项记入提案索引的「暂缓的后续项」。 |

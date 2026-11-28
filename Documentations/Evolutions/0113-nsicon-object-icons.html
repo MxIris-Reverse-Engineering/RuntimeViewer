@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>Draft - 对象图标改用 AppKitPlus 的 NSIcon 绘制</title>
+<title>0113 - 对象图标改用 AppKitPlus 的 NSIcon 绘制</title>
 <style>
 /* Evolution proposal page, shared style (style A, "Apple documentation").
    Copy this whole <style> block verbatim. Page-specific rules, if any, go only
@@ -160,20 +160,20 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <div class="page">
 
 <header class="doc-header">
-  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">Draft</span></p>
-  <h1><span class="proposal-number">Draft</span> 对象图标改用 AppKitPlus 的 NSIcon 绘制</h1>
+  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">0113</span></p>
+  <h1><span class="proposal-number">0113</span> 对象图标改用 AppKitPlus 的 NSIcon 绘制</h1>
   <dl class="meta">
-    <div><dt>状态</dt><dd><span class="status status-in-progress">In Progress</span></dd></div>
+    <div><dt>状态</dt><dd><span class="status status-implemented">Implemented</span></dd></div>
     <div><dt>最后更新</dt><dd>2026-11-28</dd></div>
     <div><dt>项目类型</dt><dd>App</dd></div>
-    <div><dt>原文</dt><dd><code>draft-nsicon-object-icons.md</code></dd></div>
+    <div><dt>原文</dt><dd><code>0113-nsicon-object-icons.md</code></dd></div>
   </dl>
 </header>
 
 <nav class="toc" aria-label="目录">
   <ol>
     <li><a href="#summary">摘要</a></li>
-    <li><a href="#decide">要你定</a></li>
+    <li><a href="#landed">落地</a></li>
     <li><a href="#architecture">架构图</a></li>
     <li><a href="#map">改动地图</a></li>
     <li><a href="#design">详细设计</a></li>
@@ -192,13 +192,15 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
   <p>运行时对象前面的 Xcode 风格字母图标（橙色 <code>C</code>、紫色 <code>Pr</code>、蓝色 <code>Ex</code>……）目前由 UIFoundation 的 <code>IDEIcon</code> 画，它是开源项目 ide-icons 的移植，形状、字体和留边都不是 Xcode 的。本提案把唯一的渲染器 <code>IDEIconRuntimeObjectIconRenderer</code> 换成用 AppKitPlus 的 <code>NSIcon</code>（Xcode 27 <code>DVTGeneratedIconSpec</code> 的复刻）画，macOS 与 iOS / visionOS 共用同一份代码——iOS 一侧经 AppKitPlus-Release 同包发布的 UIKitPlus 拿到同名的 <code>NSIcon</code>。Xcode 图标尺寸（16pt 及以下）的框里底板铺满，与 Xcode 同一位置一样大；更大的框（侧栏 18、检查器 20、起始页与 iOS 列表 24）画小 1pt 的图标、对齐到整像素，字母与以前一样大（18pt 框里 12pt），底板比以前大 1pt。AppCore 的字形颜色改成 <code>NSIconColor</code> 的 28 种、名字照搬，C++ 对象的图标由绿色改为 <code>NSIcon</code> 的紫色（系统的 indigo），其余颜色不变。图标照旧作为一张图片交给各个视图，选中行的样子不变；随后去掉 UIFoundation 的 <code>IDEIcons</code> trait。</p>
 </section>
 
-<section id="decide">
-  <h2>要你定</h2>
-  <div class="callout">
-    <p class="callout-title">实现已完成，等你看过效果后收尾。</p>
-    <ol>
-      <li>字形颜色换成 <code>NSIconColor</code> 的那一套、C++ 的类与命名空间改成紫色，加上大框里字母回到 12pt，图标看着对吗？对就收尾（取号、改 Implemented、推送 next）。</li>
-    </ol>
+<section id="landed">
+  <h2>落地</h2>
+  <div class="callout callout-note">
+    <p class="callout-title">已落地为 0113，用户看过效果后收尾。</p>
+    <ul>
+      <li>没做的验证：iOS 与 visionOS 上的图标只经编译检查，没在设备或模拟器上看过；macOS App 没有单独编，只核对过 App 里唯一用到字形颜色的 <code>SourceEditorLandmarkIcon</code>。</li>
+      <li>不配使用指南或实现说明，没有新术语。</li>
+      <li>选中行交给 <code>NSIconView</code> 反白、iOS 上目视、小地图悬停标签的 C++ 颜色，记入提案索引的「暂缓的后续项」。</li>
+    </ul>
   </div>
 </section>
 
@@ -483,7 +485,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <section id="log">
   <h2>决策日志</h2>
   <details>
-    <summary>16 条，最近一条：第 5 步实现完成，待用户看过后收尾</summary>
+    <summary>17 条，最近一条：Implemented</summary>
     <div class="details-body">
       <div class="table-wrap">
       <table>
@@ -505,6 +507,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
           <tr><td class="numeric">2026-11-28</td><td>第 4 步实现完成，待用户看过后收尾</td><td>渲染器测试 9 个全部通过，改过的 4 个先在 1pt 的实现上失败过；去掉整像素对齐时 1x 那条失败；iOS 与 visionOS 的 App 编过。</td></tr>
           <tr><td class="numeric">2026-11-28</td><td>字形颜色照搬 <code>NSIconColor</code>，C++ 改用紫色</td><td>用户要求 <code>Glyph.Color</code> 直接用 <code>NSIconColor</code> 的那一套、不再沿用系统色的名字，并把 C++ 改成 <code>NSIcon</code> 的 purple。换成全部 28 个值，同名同序；Objective-C 协议改写 <code>.pinkishPurple</code>，颜色不变。改的是 C++ 的三种对象；Find 里 C/C++ 函数的绿色 <code>f</code> 不动，小地图悬停标签照旧。</td></tr>
           <tr><td class="numeric">2026-11-28</td><td>第 5 步实现完成，待用户看过后收尾</td><td>C++ 两个用例先在旧实现上失败；图标相关的 9 个套件全部通过，其中颜色映射 28 个用例；变异检查证明映射用例能抓到改错的名字；iOS 与 visionOS 的 App 编过；macOS App 没有单独编。</td></tr>
+          <tr><td class="numeric">2026-11-28</td><td>Implemented</td><td>用户看过效果后收尾，落地为 0113；收尾验证沿用第 5 步的结果。iOS 上没目视，macOS App 只核对过唯一用到字形颜色的文件；不配文档、没有新术语；三项后续记入提案索引。</td></tr>
         </tbody>
       </table>
       </div>
