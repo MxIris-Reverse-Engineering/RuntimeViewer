@@ -163,7 +163,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
   <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">Draft</span></p>
   <h1><span class="proposal-number">Draft</span> iOS 版内容区接入重建版 SourceEditor</h1>
   <dl class="meta">
-    <div><dt>状态</dt><dd><span class="status status-accepted">Accepted</span></dd></div>
+    <div><dt>状态</dt><dd><span class="status status-in-progress">In Progress</span></dd></div>
     <div><dt>最后更新</dt><dd>2026-11-29</dd></div>
     <div><dt>项目类型</dt><dd>App</dd></div>
     <div><dt>所属愿景</dt><dd>iOS 功能对齐（第五步）</dd></div>
@@ -233,13 +233,13 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
     <rect class="box-changed" x="525" y="154" width="215" height="46" rx="6"/><text x="535" y="173">CommentDecoration + 2</text><text class="caption" x="535" y="190">tags, expansions · #if os(macOS)</text>
     <rect class="box-added" x="755" y="154" width="220" height="46" rx="6"/><text x="765" y="173">ReadOnlySourceEditorView</text><text class="caption" x="765" y="190">#if os(iOS) · no keyboard</text>
     <rect class="box-changed" x="525" y="210" width="215" height="46" rx="6"/><text x="535" y="229">SemanticNodeTypeAdjuster + 2</text><text class="caption" x="535" y="246">shared by both platforms</text>
-    <rect class="box-changed" x="755" y="210" width="220" height="46" rx="6"/><text x="765" y="229">ReadingStateCache&lt;State&gt;</text><text class="caption" x="765" y="246">macOS folds+scroll · iOS offset</text>
+    <rect class="box-changed" x="755" y="210" width="220" height="46" rx="6"/><text x="765" y="229">ReadingStateCache&lt;State&gt;</text><text class="caption" x="765" y="246">macOS folds+scroll · iOS shared line</text>
     <text class="caption" x="525" y="290">SDKROOT = auto · SUPPORTED_PLATFORMS = macosx iphoneos iphonesimulator</text>
 
     <rect class="group" x="10" y="185" width="480" height="240" rx="10"/>
     <text class="group-label" x="22" y="205">RuntimeViewerPackages</text>
     <rect class="box-added" x="25" y="217" width="215" height="46" rx="6"/><text x="35" y="236">SourceEditorThemeConversion</text><text class="caption" x="35" y="253">AppUI/Theme · moved here</text>
-    <rect class="box-added" x="255" y="217" width="220" height="46" rx="6"/><text x="265" y="236">SourceEditorSourceDescription</text><text class="caption" x="265" y="253">AppUI/Content · text, language, runs</text>
+    <rect class="box-added" x="255" y="217" width="220" height="46" rx="6"/><text x="265" y="236">SourceEditorSourceConversion</text><text class="caption" x="265" y="253">AppUI/Content · language, semantic runs</text>
     <rect class="box-changed" x="25" y="273" width="215" height="46" rx="6"/><text x="35" y="292">SourceEditorFrameworks</text><text class="caption" x="35" y="309">Settings · shallow bundles on iOS</text>
     <rect class="box-changed" x="255" y="273" width="220" height="46" rx="6"/><text x="265" y="292">EditorSettingsView</text><text class="caption" x="265" y="309">SettingsUI · 4 options on iOS</text>
     <rect class="box-changed" x="25" y="329" width="215" height="46" rx="6"/><text x="35" y="348">SettingsViewController</text><text class="caption" x="35" y="365">SettingsUI · + Editor page (iOS)</text>
@@ -254,7 +254,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 
     <rect class="group" x="10" y="445" width="480" height="115" rx="10"/>
     <text class="group-label" x="22" y="465">RuntimeViewerUsingAppKit (macOS app)</text>
-    <rect class="box-changed" x="25" y="477" width="215" height="46" rx="6"/><text x="35" y="496">ContentSourceEditorVC</text><text class="caption" x="35" y="513">uses SourceEditorSourceDescription</text>
+    <rect class="box-changed" x="25" y="477" width="215" height="46" rx="6"/><text x="35" y="496">ContentSourceEditorVC</text><text class="caption" x="35" y="513">uses SourceEditorSourceConversion</text>
     <rect class="box-removed" x="255" y="477" width="220" height="46" rx="6"/><text class="strike" x="265" y="496">SourceEditorThemeConversion</text><text class="caption" x="265" y="513">moved to RuntimeViewerAppUI</text>
 
     <path class="arrow" d="M 475 121 L 508 121"/>
@@ -277,7 +277,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 
     <rect class="group" x="10" y="130" width="730" height="190" rx="10"/>
     <text class="group-label" x="22" y="150">ContentSourceEditorViewController binds</text>
-    <rect class="box-added" x="25" y="162" width="235" height="40" rx="6"/><text x="35" y="187">SourceEditorSourceDescription</text>
+    <rect class="box-added" x="25" y="162" width="235" height="40" rx="6"/><text x="35" y="187">SourceEditorSourceConversion</text>
     <rect class="box-changed" x="300" y="162" width="170" height="40" rx="6"/><text x="310" y="187">bridge.setSource</text>
     <rect class="box-kept" x="510" y="162" width="215" height="40" rx="6"/><text x="520" y="187">input.interfaceDisplayed</text>
     <rect class="box-added" x="25" y="214" width="235" height="40" rx="6"/><text x="35" y="239">SourceEditorThemeConversion</text>
@@ -317,19 +317,20 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
       <tr><td><code>ArchiveScript.sh</code></td><td><span class="tag tag-changed">修改</span></td><td>带 <code>--include-ios-simulator</code> 时取 <code>--platform all</code>，取不到就停</td><td>发版的 iOS 模拟器版要带框架</td><td class="numeric">1</td></tr>
       <tr><td><code>.github/workflows/release.yml</code></td><td><span class="tag tag-changed">修改</span></td><td>取框架一步传 <code>--platform all</code></td><td>同上</td><td class="numeric">1</td></tr>
       <tr><td><code>Configurations/RuntimeViewerSourceEditorBridge/Shared.xcconfig</code></td><td><span class="tag tag-changed">修改</span></td><td><code>SDKROOT = auto</code>、<code>SUPPORTED_PLATFORMS</code>、<code>IPHONEOS_DEPLOYMENT_TARGET = 18.0</code>、按 SDK 分开的搜索路径与 iOS runpath</td><td>桥接跟着宿主 App 的平台编</td><td class="numeric">2</td></tr>
-      <tr><td><code>RuntimeViewerUsingAppKit/Project.swift</code>、<code>Tuist/</code></td><td><span class="tag tag-changed">修改（按需）</span></td><td>让 Tuist 的桥接 target 与原生工程一致，<code>./TuistScript.sh check</code> 通过</td><td>根 <code>AGENTS.md</code> 要求同一 commit 更新 Tuist 描述</td><td class="numeric">2</td></tr>
+      <tr><td><code>RuntimeViewerUsingAppKit/Project.swift</code>、<code>Tuist/</code></td><td><span class="tag">不改</span></td><td>平台设置都在 xcconfig 里，Tuist 的桥接 target 照旧声明为 macOS；<code>./TuistScript.sh check</code> 的设置接线与 target 名单一致</td><td>根 <code>AGENTS.md</code> 要求同一 commit 更新 Tuist 描述，核对后不需要</td><td class="numeric">2</td></tr>
       <tr><td><code>RuntimeViewerSourceEditorBridge/SourceEditorBridging.swift</code> · <code>SourceEditorBridging</code> 等</td><td><span class="tag tag-changed">修改</span></td><td>平台类型成员按平台各写一份；macOS 独有成员与类型包进 <code>#if os(macOS)</code></td><td>让公开接口在 iOS 上编得过</td><td class="numeric">2</td></tr>
       <tr><td><code>RuntimeViewerSourceEditorBridge/SourceEditorBridgeFactory.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>按平台 import；<code>makeBridge()</code>、<code>builtInThemeDictionary(named:)</code> 按平台选实现</td><td>同上</td><td class="numeric">2、4</td></tr>
       <tr><td><code>SourceEditorBridge.swift</code>、<code>CommentDecorationController.swift</code>、<code>LineEndTagController.swift</code>、<code>InlineExpansionView.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>外层再包 <code>#if os(macOS)</code></td><td>它们只能在 AppKit 下编</td><td class="numeric">2</td></tr>
       <tr><td><code>SemanticNodeTypeAdjuster.swift</code>、<code>SymbolOccurrenceProvider.swift</code>、<code>SourceModelDeclarationShortCircuitOverride.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>import AppKit</code> 换成 Foundation</td><td>两边共用</td><td class="numeric">2</td></tr>
-      <tr><td><code>ReadingStateCache.swift</code> · <code>ReadingStateCache</code></td><td><span class="tag tag-changed">修改</span></td><td>按存储状态泛型（<code>ReadingStateCache&lt;ReadingState&gt;</code>）</td><td>iOS 存 <code>contentOffset</code></td><td class="numeric">2、4</td></tr>
+      <tr><td><code>ReadingStateCache.swift</code> · <code>ReadingStateCache</code></td><td><span class="tag tag-changed">修改</span></td><td>按存储状态泛型（<code>ReadingStateCache&lt;ReadingState&gt;</code>）</td><td>iOS 存一行（所有 iOS 桥共用一份）</td><td class="numeric">2、4、6</td></tr>
+      <tr><td><code>SourceEditorBridgeLookup.swift</code> · <code>SourceEditorBridgeLookup</code></td><td><span class="tag tag-added">新增</span></td><td>语言标识到 SourceModel 语言、<code>LandmarkType</code> 到地标种类的两个映射，从 macOS 桥里挪出</td><td>两个桥都用</td><td class="numeric">4</td></tr>
       <tr><td><code>UIKitSourceEditorBridge.swift</code> · <code>UIKitSourceEditorBridge</code></td><td><span class="tag tag-added">新增</span></td><td>iOS 的桥：数据源、语言服务与语义类型、主题与行号、四项显示选项、查找、同名高亮、阅读位置</td><td>iOS 的视图层</td><td class="numeric">4</td></tr>
       <tr><td><code>ReadOnlySourceEditorView.swift</code> · <code>ReadOnlySourceEditorView</code></td><td><span class="tag tag-added">新增</span></td><td><code>SourceEditorView</code> 子类，<code>inputView</code> 返回空视图、<code>isEditingEnabled = false</code></td><td>只读时点按不弹键盘</td><td class="numeric">4</td></tr>
       <tr><td><code>RuntimeViewerSourceEditorBridgeTests/</code></td><td><span class="tag tag-changed">修改</span></td><td>更新两处提到 <code>SourceEditorThemeConversion</code> 的注释；补 <code>ReadingStateCache</code> 泛型后的用例</td><td>搬家与泛型化</td><td class="numeric">2、3</td></tr>
       <tr><td><code>RuntimeViewerUsingAppKit/…/Content/SourceEditorThemeConversion.swift</code></td><td><span class="tag tag-moved">移动</span></td><td>搬到 <code>RuntimeViewerAppUI/Theme/SourceEditorThemeConversion.swift</code>，改用 <code>NSUIColor</code> / <code>NSUIFont</code>，UIKit 下另写颜色转字符串</td><td>两端共用</td><td class="numeric">3</td></tr>
-      <tr><td><code>RuntimeViewerAppUI/Content/SourceEditorSourceDescription.swift</code> · <code>SourceEditorSourceDescription</code></td><td><span class="tag tag-added">新增</span></td><td>由 <code>ContentInterface</code> 与对象种类算出文本、语言标识、语义区间、节点类型名</td><td>从 macOS 控制器抽出，两端共用</td><td class="numeric">3</td></tr>
-      <tr><td><code>RuntimeViewerUsingAppKit/…/Content/ContentSourceEditorViewController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>改用 <code>SourceEditorSourceDescription</code>，删掉 <code>semanticNodeTypes(of:)</code>、<code>languageIdentifier(for:interfaceLanguage:)</code></td><td>去重；macOS 行为不变</td><td class="numeric">3</td></tr>
-      <tr><td><code>RuntimeViewerAppUITests/SourceEditorThemeConversionTests.swift</code>、<code>SourceEditorSourceDescriptionTests.swift</code></td><td><span class="tag tag-added">新增</span></td><td>主题字典的键与值、UTF-16 区间、语言标识</td><td>共用逻辑在 macOS 上测</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerAppUI/Content/SourceEditorSourceConversion.swift</code> · <code>SourceEditorSourceConversion</code></td><td><span class="tag tag-added">新增</span></td><td><code>languageIdentifier(for:interfaceLanguage:)</code> 与 <code>semanticRuns(of:)</code>（输入是语义字符串，宏展开的片段也用它）</td><td>从 macOS 控制器抽出，两端共用</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerUsingAppKit/…/Content/ContentSourceEditorViewController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>改用 <code>SourceEditorSourceConversion</code>，删掉 <code>semanticNodeTypes(of:)</code>、<code>languageIdentifier(for:interfaceLanguage:)</code></td><td>去重；macOS 行为不变</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerAppUITests/SourceEditorThemeConversionTests.swift</code>、<code>SourceEditorSourceConversionTests.swift</code></td><td><span class="tag tag-added">新增</span></td><td>主题字典的键与值、UTF-16 区间、语言标识</td><td>共用逻辑在 macOS 上测</td><td class="numeric">3</td></tr>
       <tr><td><code>RuntimeViewerSettings/SourceEditorFrameworks.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>放开平台限定；iOS 的浅层 bundle 路径；路径拼法按布局参数化；「运行在哪份副本上」仍只在 macOS</td><td>iOS 判断框架是否嵌入</td><td class="numeric">3</td></tr>
       <tr><td><code>…/SourceEditorFrameworksTests.swift</code></td><td><span class="tag tag-added">新增</span></td><td>两种布局的二进制路径</td><td>在 macOS 上测 iOS 的路径</td><td class="numeric">3</td></tr>
       <tr><td><code>RuntimeViewerSettingsUI/Components/EditorSettingsView.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>放开平台限定，iOS 只列四项</td><td>iOS 的 Editor 页</td><td class="numeric">5</td></tr>
@@ -339,7 +340,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
       <tr><td><code>RuntimeViewerUsingUIKit/…/Content/SourceEditorBridgeProvider.swift</code></td><td><span class="tag tag-added">新增</span></td><td>可用性、建桥、内置主题；<code>@DependencyEntry</code></td><td>控制器经 <code>@Dependency</code> 取</td><td class="numeric">5</td></tr>
       <tr><td><code>RuntimeViewerUsingUIKit/…/Content/SourceEditorBridging+Settings.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>applyDisplayOptions(from:)</code></td><td>设置变化时一次传给桥</td><td class="numeric">5</td></tr>
       <tr><td><code>RuntimeViewerUsingUIKit/…/Content/ContentCoordinator.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>桥接可用时建 SourceEditor 内容页</td><td>选择显示方式</td><td class="numeric">5</td></tr>
-      <tr><td>三份 <code>AGENTS.md</code>（SourceEditor 模块、根、iOS）</td><td><span class="tag tag-changed">修改</span></td><td>两个 pin、iOS 布局与守卫、编译条件、iOS 内容页</td><td>规则跟着代码走</td><td class="numeric">6</td></tr>
+      <tr><td>四份 <code>AGENTS.md</code>（SourceEditor 模块、根、iOS、Configurations）</td><td><span class="tag tag-changed">修改</span></td><td>两个 pin、iOS 布局与守卫、编译条件、iOS 内容页、桥接跟随宿主平台</td><td>规则跟着代码走</td><td class="numeric">5</td></tr>
       <tr><td>愿景、两份索引</td><td><span class="tag tag-changed">修改</span></td><td>相关提案表加一行；索引；后续项</td><td>文档索引</td><td class="numeric">6</td></tr>
     </tbody>
   </table>
@@ -362,13 +363,13 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
     <li>守卫照旧 <code>#if arch(arm64) &amp;&amp; canImport(SourceEditor)</code>：模拟器通用构建的 x86_64 与 macOS 的 Intel 切片一样编空。只在 macOS 用的文件再加 <code>#if os(macOS)</code>，只在 iOS 用的加 <code>#if os(iOS)</code>。</li>
     <li>公开协议 <code>SourceEditorBridging</code> 按平台声明：同名成员、不同平台类型的各写一份；只有 macOS 能做的整个包进 <code>#if os(macOS)</code>。不引入新的公开别名，macOS 的调用点一行不改。</li>
     <li>iOS 的视图层是新类 <code>UIKitSourceEditorBridge</code>，用 <code>ReadOnlySourceEditorView</code>（压住软键盘的子类）做编辑器视图。Swift 不允许一个模块里有两个同名源文件，所以与 macOS 的 <code>SourceEditorBridge</code> 不同名。<code>SourceEditorBridgeFactory</code> 按平台选。</li>
-    <li>四个逻辑文件两边共用；<code>ReadingStateCache</code> 改成按存储状态泛型。</li>
+    <li>四个逻辑文件两边共用；<code>ReadingStateCache</code> 改成按存储状态泛型：macOS 存折叠与滚动状态，iOS 存「视图十分之一高处的那一行」，所有 iOS 桥共用一份、每次布局完成时记录（实现中改的，见决策日志）。</li>
   </ul>
   <h3>App 这边</h3>
   <ul>
-    <li>两端共用的值下沉到 AppUI：<code>SourceEditorThemeConversion</code> 搬到 <code>RuntimeViewerAppUI/Theme/</code>；新增 <code>SourceEditorSourceDescription</code>。macOS 的控制器改用它。</li>
+    <li>两端共用的值下沉到 AppUI：<code>SourceEditorThemeConversion</code> 搬到 <code>RuntimeViewerAppUI/Theme/</code>；新增 <code>SourceEditorSourceConversion</code>（语言标识与语义区间）。macOS 的控制器改用它。</li>
     <li>只有 iOS target 接入：跨工程依赖桥接、两个 embed phase、<code>ENABLE_USER_SCRIPT_SANDBOXING = NO</code>、编译条件 <code>RUNTIME_VIEWER_SOURCE_EDITOR</code>。新文件放在共用的 synchronized folder 里、整个包在这个条件中；越狱版与 visionOS 编出来是空文件。<strong>不用 <code>canImport(RuntimeViewerSourceEditorBridge)</code></strong>：越狱版与 iOS 版同在 <code>Debug-iphoneos</code> 产物目录，会 import 到却链接失败。</li>
-    <li>iOS 的 <code>ContentSourceEditorViewController</code>（<code>UIKitViewController&lt;ContentTextViewModel&gt;</code>）：<code>output.interface</code> → <code>SourceEditorSourceDescription</code> → <code>setSource</code> → <code>interfaceDisplayed</code>；<code>ContentTextRenderer.theme</code> → 主题字典（按 <code>traitCollection.userInterfaceStyle</code> 取内置的深浅主题作底）；<code>observe</code> <code>settings.editor</code> → <code>applyDisplayOptions(from:)</code>；导航栏右侧放大镜按钮 → <code>showFindInterface(query: "", pattern: .contains, isCaseSensitive: false)</code>。</li>
+    <li>iOS 的 <code>ContentSourceEditorViewController</code>（<code>UIKitViewController&lt;ContentTextViewModel&gt;</code>）：<code>output.interface</code> → <code>SourceEditorSourceConversion</code> → <code>setSource</code> → <code>interfaceDisplayed</code>；<code>ContentTextRenderer.theme</code> → 主题字典（按 <code>traitCollection.userInterfaceStyle</code> 取内置的深浅主题作底）；<code>observe</code> <code>settings.editor</code> → <code>applyDisplayOptions(from:)</code>；导航栏右侧放大镜按钮 → <code>showFindInterface(query: "", pattern: .contains, isCaseSensitive: false)</code>。</li>
     <li>iOS 的 <code>SourceEditorBridgeProvider</code> 与 <code>SourceEditorBridging+Settings</code> 各写一份，只做可用性、建桥与取内置主题，不做小地图预热。</li>
   </ul>
   <h3>设置</h3>
@@ -464,11 +465,12 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <span class="token-keyword">final class</span> <span class="token-type">UIKitSourceEditorBridge</span>: <span class="token-type">NSObject</span>, <span class="token-type">SourceEditorBridging</span> {
     <span class="token-keyword">private let</span> sourceEditorView = <span class="token-type">ReadOnlySourceEditorView</span>(frame: .zero)
     <span class="token-keyword">private let</span> gutter = <span class="token-type">SourceEditorGutter</span>()
-    <span class="token-keyword">private let</span> readingStateCache = <span class="token-type">ReadingStateCache</span>&lt;<span class="token-type">CGPoint</span>&gt;()
+    <span class="token-keyword">nonisolated</span>(unsafe) <span class="token-keyword">private static var</span> readingStates = <span class="token-type">ReadingStateCache</span>&lt;<span class="token-type">Int</span>&gt;()  <span class="token-comment">// shared by every iOS bridge</span>
     <span class="token-keyword">var</span> editorView: <span class="token-type">UIView</span> { sourceEditorView }
     <span class="token-comment">// setSource: new SourceEditorDataSource(usingMutableString:language:formattingOptions:) per text,
-    // the same SemanticNodeTypeAdjuster and declaration short circuit as macOS, then restores the
-    // cached contentOffset (or scrolls to the top) once the layout manager has laid the lines out.
+    // the same SemanticNodeTypeAdjuster and declaration short circuit as macOS, then scrolls back to
+    // the cached line with scrollToLine once the lines are laid out; every later layout records the
+    // line a tenth of the way down, where scrollToLine puts its line.
     // applyTheme: SourceEditorTheme(name:dictionary:fontSizeModifier:), setTheme(_:), then
     // gutter.lineNumberFont = lineNumberFont and enableLineNumbers() again.
     // applyDisplayOptions: gutter on/off, installMinimap()/uninstallMinimap() guarded by
@@ -483,7 +485,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 }
 <span class="token-keyword">#endif</span></code></pre>
       <ul>
-        <li>阅读位置：macOS 的缓存键与规则不变；iOS 的值是 <code>contentOffset</code>，在 <code>sourceEditorViewDidFinishLayingOutLines</code> 之后才设，避免被首次布局冲掉。</li>
+        <li>阅读位置：macOS 的缓存键与规则不变。iOS 存行号而不是 <code>contentOffset</code>：换数据源会把偏移与内容高度清零，<code>scrollToLine</code> 会自己补足高度。iOS 每个内容页一个桥、弹出页面时桥就释放，所以缓存所有 iOS 桥共用、每次布局完成时记录；记的是十分之一高处的那一行，正是 <code>scrollToLine</code> 放置目标行的位置，往返不漂移。</li>
         <li>压键盘的写法是推测；第 4 步编完、第 6 步在模拟器上验证，不成立就改用别的办法（例如框架的 <code>isInteractive</code>）。</li>
       </ul>
     </div>
@@ -491,16 +493,12 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
   <details>
     <summary>两端共用的值</summary>
     <div class="details-body">
-<pre><code><span class="token-comment">// RuntimeViewerAppUI/Content/SourceEditorSourceDescription.swift</span>
-<span class="token-keyword">public struct</span> <span class="token-type">SourceEditorSourceDescription</span>: <span class="token-type">Equatable</span> {
-    <span class="token-keyword">public let</span> source: <span class="token-type">String</span>
+<pre><code><span class="token-comment">// RuntimeViewerAppUI/Content/SourceEditorSourceConversion.swift</span>
+<span class="token-keyword">public enum</span> <span class="token-type">SourceEditorSourceConversion</span> {
     <span class="token-comment">/// `"swift"`, `"objc"` or `"cpp"`.</span>
-    <span class="token-keyword">public let</span> languageIdentifier: <span class="token-type">String</span>
-    <span class="token-comment">/// UTF-16 ranges into `source`, parallel to `semanticNodeTypeNames`.</span>
-    <span class="token-keyword">public let</span> semanticRanges: [<span class="token-type">NSRange</span>]
-    <span class="token-keyword">public let</span> semanticNodeTypeNames: [<span class="token-type">String</span>]
-
-    <span class="token-keyword">public init</span>(interface: <span class="token-type">ContentInterface</span>, objectKind: <span class="token-type">RuntimeObjectKind</span>)
+    <span class="token-keyword">public static func</span> languageIdentifier(for kind: <span class="token-type">RuntimeObjectKind</span>, interfaceLanguage: <span class="token-type">RuntimeInterfaceLanguage</span>?) -&gt; <span class="token-type">String</span>
+    <span class="token-comment">/// UTF-16 ranges and the node type of each, parallel.</span>
+    <span class="token-keyword">public static func</span> semanticRuns(of semanticString: <span class="token-type">FrozenSemanticString</span>) -&gt; (ranges: [<span class="token-type">NSValue</span>], nodeTypeNames: [<span class="token-type">String</span>])
 }
 
 <span class="token-comment">// RuntimeViewerAppUI/Theme/SourceEditorThemeConversion.swift (moved, same members)</span>
@@ -558,7 +556,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
         <li><strong>共享、无平台条件</strong>：<code>SourceEditorDataSource</code>、<code>SourceModelLanguageService.nodeTypeAdjuster</code> / <code>hostExtension</code>、<code>tokenRangeAtPosition</code>、<code>SourceEditorTheme(name:dictionary:fontSizeModifier:)</code>、布局覆盖与 <code>LayoutVisualization</code>。</li>
         <li><strong>换了签名</strong>：<code>selectTextRange(_:scrollIfNeeded:)</code>、<code>positionAtPoint(_:absolute:)</code>、<code>perform(TextFindAction)</code>；<code>setSelection(…scrollPlacement:)</code> 与 <code>scrollTo(position:…)</code> 在 iOS 上是空壳。</li>
         <li><strong>没有</strong>：<code>scrollView</code>、<code>enableCmdClickMultiCursor</code>、<code>contextualMenuItemProvider</code>、<code>addCursorRectOverrideProvider</code>、滚动状态保存与恢复、<code>defaultScrollViewContentInsets</code>、缩进参考线、折叠条、吸顶标题、<code>editorGapController</code>、<code>foldingController</code>。</li>
-        <li>四个逻辑文件能原样编（只换 import）；<code>ReadingStateCache</code> 存的东西在 iOS 上取不到，改存 <code>contentOffset</code>。</li>
+        <li>四个逻辑文件能原样编（只换 import）；<code>ReadingStateCache</code> 存的东西在 iOS 上取不到，iOS 另存行号。</li>
         <li>注释标签与行尾标签画得出来，但「可折叠」靠 <code>FoldingController</code>，点击靠 AppKit 的 event consumer；iOS 的事件管理器只收间接指针，<code>SEEvent</code> 的字段不公开。</li>
         <li>26.6.10 与 27.2.0-alpha.2 之间，桥接用到的共享 API 签名没有一处不同。</li>
       </ul>
@@ -633,7 +631,8 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
     <li>点一个标识符，同名的其他出现一起高亮；切到别的对象再回来，回到上次读到的位置。</li>
     <li>内容页导航栏右侧多一个放大镜按钮，打开系统查找；接了硬件键盘时 ⌘F、⌘G 可用。</li>
     <li>Settings 多一页「Editor」，列上面四项。</li>
-    <li>原来 <code>UITextView</code> 能选中文字、拷贝；SourceEditor 实现了 <code>UITextInput</code>，预计同样能选中与拷贝，只是不弹键盘（未实测，第 6 步在模拟器上看）。</li>
+    <li>原来 <code>UITextView</code> 能选中文字、拷贝；SourceEditor 里点一下会选中单词并弹出「拷贝 / 全选」菜单，不弹键盘（iPhone 模拟器上看过）。</li>
+    <li>长行在窄屏上自动折行，续行缩进对齐（UIKit 版框架的默认行为）。</li>
     <li>越狱版与 visionOS 不变。</li>
   </ul>
   <h3>可发现性</h3>
@@ -649,12 +648,12 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <section id="steps">
   <h2>落地步骤</h2>
   <ol>
-    <li><strong>下载与嵌入两个 pin</strong>：pin 文件、<code>.gitignore</code>、Fetch、Update、Embed、RunScript、TuistScript、ArchiveScript、release.yml。行为：<code>fetchWithPlatformIOSPutsDeviceAndSimulatorSlicesUnderFrameworksIOS</code>、<code>fetchWithPlatformMacOSLeavesFrameworksIOSUntouched</code>、<code>fetchSkipsAPlatformWhoseMarkerMatchesItsPin</code>、<code>embedPicksFrameworksByPlatformName</code>、<code>embedFailsWhenFrameworksIOSHoldsAnotherPin</code>、<code>updateWithPlatformIOSStaysOnThe26Line</code>。验证：<code>RunScript.sh --no-launch</code> 照旧编过；手动跑 Fetch 的三种 <code>--platform</code> 与 Update 的 <code>--dry-run</code>。</li>
-    <li><strong>桥接框架改成双平台（还没有 iOS 实现）</strong>：xcconfig、Tuist、协议、Factory、四个 macOS 文件、三个共用文件、<code>ReadingStateCache</code>。行为：<code>macOSBridgeTestsPassUnchanged</code>、<code>bridgeBuildsForIPhoneOSAndSimulatorWithAndWithoutFrameworks</code>、<code>simulatorX86SliceCompilesOutAndReportsUnavailable</code>、<code>readingStateCacheRestoresTheStateOfTheTextItWasRecordedFor</code>。验证：<code>./TuistScript.sh check</code>；SourceEditor 模块的 AGENTS.md 要求守卫改动在同一 DerivedData 连编两次 Release universal（半小时级，跑之前先说一声）。</li>
-    <li><strong>两端共用的值下沉到 AppUI 与 Settings</strong>。行为：<code>themeDictionaryMatchesTheMacOSConversion</code>、<code>semanticRangesCountUTF16OutsideTheBasicPlane</code>、<code>languageIdentifierIsSwiftForAGeneratedSwiftInterfaceOfAnObjCObject</code>、<code>languageIdentifierIsCppForCPlusPlusObjects</code>、<code>shallowLayoutBinaryURLHasNoVersionsDirectory</code>。验证：AppUI 与 Settings 测试全过；macOS App 编过。</li>
-    <li><strong>iOS 的桥</strong>。行为：<code>iOSBridgeAppliesSemanticRunsThroughTheSharedNodeTypeAdjuster</code>、<code>iOSBridgeReappliesLineNumbersAfterATheme</code>、<code>iOSBridgeInstallsTheMinimapOnce</code>、<code>iOSBridgeIgnoresTheOptionsUIKitDoesNotHave</code>。验证：只编译（iOS 真机与模拟器，Debug 与 Release）；这些行为在第 6 步的模拟器验证里看。</li>
-    <li><strong>iOS App 接入</strong>。行为：<code>iOSContentPaneUsesSourceEditorWhenTheBridgeIsAvailable</code>、<code>iOSContentPaneFallsBackToTextViewWithoutFrameworks</code>、<code>iOSContentPaneReportsInterfaceDisplayedAfterSetSource</code>、<code>editorSettingsPageAppearsOnIOSOnlyWithEmbeddedFrameworks</code>、<code>jailbrokenAndVisionOSBuildsDoNotLinkTheBridge</code>。验证：iOS 版真机与模拟器编过（有框架、没框架各一次）；越狱版（<code>BuildJailbrokenIPAScript.sh</code>，只产出 ipa、不装机）与 visionOS 编过；macOS 包测试与 <code>RunScript.sh --no-launch</code> 照旧。</li>
-    <li><strong>文档与验收</strong>。行为：<code>readOnlyTapDoesNotShowTheKeyboard</code>、<code>findButtonPresentsTheSystemFindNavigator</code>（模拟器）。验证：在 iPhone 与 iPad 模拟器上看效果——<strong>要用户另外同意才能启动模拟器</strong>。</li>
+    <li><strong>下载与嵌入两个 pin</strong>（已完成）：pin 文件、<code>.gitignore</code>、Fetch、Update、Embed、RunScript、TuistScript、ArchiveScript、release.yml。行为：<code>fetchWithPlatformIOSPutsDeviceAndSimulatorSlicesUnderFrameworksIOS</code>、<code>fetchWithPlatformMacOSLeavesFrameworksIOSUntouched</code>、<code>fetchSkipsAPlatformWhoseMarkerMatchesItsPin</code>、<code>embedPicksFrameworksByPlatformName</code>、<code>embedFailsWhenFrameworksIOSHoldsAnotherPin</code>、<code>updateWithPlatformIOSStaysOnThe26Line</code>。验证：<code>RunScript.sh --no-launch</code> 照旧编过；手动跑 Fetch 的三种 <code>--platform</code> 与 Update 的 <code>--dry-run</code>。</li>
+    <li><strong>桥接框架改成双平台（还没有 iOS 实现）</strong>（已完成）：xcconfig、Tuist、协议、Factory、四个 macOS 文件、三个共用文件、<code>ReadingStateCache</code>。行为：<code>macOSBridgeTestsPassUnchanged</code>、<code>bridgeBuildsForIPhoneOSAndSimulatorWithAndWithoutFrameworks</code>、<code>simulatorX86SliceCompilesOutAndReportsUnavailable</code>、<code>readingStateCacheRestoresTheStateOfTheTextItWasRecordedFor</code>。验证：<code>./TuistScript.sh check</code>；SourceEditor 模块的 AGENTS.md 要求守卫改动在同一 DerivedData 连编两次 Release universal（半小时级，跑之前先说一声）。</li>
+    <li><strong>两端共用的值下沉到 AppUI 与 Settings</strong>（已完成）。行为：<code>themeDictionaryMatchesTheMacOSConversion</code>、<code>semanticRangesCountUTF16OutsideTheBasicPlane</code>、<code>languageIdentifierIsSwiftForAGeneratedSwiftInterfaceOfAnObjCObject</code>、<code>languageIdentifierIsCppForCPlusPlusObjects</code>、<code>shallowLayoutBinaryURLHasNoVersionsDirectory</code>。验证：AppUI 与 Settings 测试全过；macOS App 编过。</li>
+    <li><strong>iOS 的桥</strong>（已完成）。行为：<code>iOSBridgeAppliesSemanticRunsThroughTheSharedNodeTypeAdjuster</code>、<code>iOSBridgeReappliesLineNumbersAfterATheme</code>、<code>iOSBridgeInstallsTheMinimapOnce</code>、<code>iOSBridgeIgnoresTheOptionsUIKitDoesNotHave</code>。验证：只编译（iOS 真机与模拟器，Debug 与 Release）；这些行为在第 6 步的模拟器验证里看。</li>
+    <li><strong>iOS App 接入</strong>（已完成）。行为：<code>iOSContentPaneUsesSourceEditorWhenTheBridgeIsAvailable</code>、<code>iOSContentPaneFallsBackToTextViewWithoutFrameworks</code>、<code>iOSContentPaneReportsInterfaceDisplayedAfterSetSource</code>、<code>editorSettingsPageAppearsOnIOSOnlyWithEmbeddedFrameworks</code>、<code>jailbrokenAndVisionOSBuildsDoNotLinkTheBridge</code>。验证：iOS 版真机与模拟器编过（有框架、没框架各一次）；越狱版（<code>BuildJailbrokenIPAScript.sh</code>，只产出 ipa、不装机）与 visionOS 编过；macOS 包测试与 <code>RunScript.sh --no-launch</code> 照旧。</li>
+    <li><strong>文档与验收</strong>（已完成，iPad 未验）。行为：<code>readOnlyTapDoesNotShowTheKeyboard</code>、<code>findButtonPresentsTheSystemFindNavigator</code>（模拟器）。验证：在 iPhone 与 iPad 模拟器上看效果——<strong>要用户另外同意才能启动模拟器</strong>。</li>
   </ol>
   <div class="callout callout-note">
     <p class="callout-title">收尾时判断</p>
@@ -668,13 +667,15 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
     <li>小地图的地标图标（<code>SourceEditorLandmarkIcon</code> 下沉到 AppUI，iOS 用 UIKitPlus 的 <code>NSIcon</code>）。</li>
     <li>不可见字符（自带 SF Mono 的授权问题）。</li>
     <li>重建版 27 线有了 UIKit 后合成一个 pin；越狱版要等重建版带 arm64e 切片。</li>
+    <li>越狱版自 0113 起链接不了：AppKitPlus-Release 的 <code>UIKitPlus.xcframework</code> 没有 arm64e 切片（与本提案无关，调研时发现）。</li>
+    <li>iPad 模拟器上的目视验收（唯一的 iPad 模拟器被别处的 RuntimeViewer 占着，没装）。</li>
   </ul>
 </section>
 
 <section id="log">
   <h2>决策日志</h2>
   <details>
-    <summary>6 条，最近一条：Accepted</summary>
+    <summary>13 条，最近一条：实现完成，待用户看过后收尾</summary>
     <div class="details-body">
       <div class="table-wrap">
       <table>
@@ -683,9 +684,16 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
           <tr><td class="numeric">2026-11-28</td><td>Created as Draft</td><td>用户要给 iOS 版接入 SourceEditor。调研发现重建版的 UIKit 层只在 26.6 线（最新 26.6.10），macOS 钉的 27.2.0-alpha.2 没有 iOS 切片；框架只有 arm64。</td></tr>
           <tr><td class="numeric">2026-11-28</td><td>iOS 单钉 26.6.10，macOS 不动</td><td>用户定。两端都退回 26.6.10 会让 macOS 丢掉 27 线的修复；等 27 线合 UIKit 没有日期。</td></tr>
           <tr><td class="numeric">2026-11-28</td><td>越狱版与 visionOS 先不接</td><td>用户定。越狱版是 arm64e，框架没有这个切片；visionOS 上游不支持。两者照旧用 <code>UITextView</code>。</td></tr>
-          <tr><td class="numeric">2026-11-28</td><td>点击跳转、注释标签移出第一版</td><td>iOS 没有任何代码跟随 <code>SelectionRoute</code>，<code>ContentTextViewModel</code> 在 iOS 上也不取注释结构；两者都属于愿景第四步的放开平台限定。</td></tr>
+          <tr><td class="numeric">2026-11-28</td><td>点击跳转、注释标签移出第一版</td><td>调研发现 iOS 没有任何代码跟随 <code>SelectionRoute</code>，<code>ContentTextViewModel</code> 在 iOS 上也不取注释结构；两者都属于愿景第四步的放开平台限定，放在这里做会和那一步重叠。</td></tr>
           <tr><td class="numeric">2026-11-28</td><td>不做不可见字符</td><td>框架画不可见字符要 App 自带 SF Mono 三个字重，缺了会崩，自带又涉及字体授权；另议。</td></tr>
           <tr><td class="numeric">2026-11-29</td><td>Accepted</td><td>用户批准，开始实现；同时同意第 6 步在 iPhone 与 iPad 模拟器上启动 App 看效果。</td></tr>
+          <tr><td class="numeric">2026-11-29</td><td>In Progress；第 1 步完成</td><td><code>FetchSourceEditorScript.sh</code> 每个平台在自己的子 shell 里取，子 shell 自己开 errexit：放在 <code>||</code> 左边时 bash 会在里面关掉 errexit，<code>ditto</code>、<code>mv</code> 失败也不会停。<code>ArchiveScript.sh</code> 带 <code>--include-ios-simulator</code> 时在 macOS 归档之前就取 iOS，缺 iOS 的框架在长时间的归档之前就停。实测：两个平台各取一次、<code>--check</code> 前后退出码 2 与 0、嵌入脚本对模拟器与 macOS 拷贝成功、标记过期与不支持的平台都报错退出 1；iOS 两片分别是 <code>IOS</code> 与 <code>IOSSIMULATOR</code> 平台、arm64、minos 18.0。</td></tr>
+          <tr><td class="numeric">2026-11-29</td><td>第 2 步完成</td><td>桥接单独为 <code>iphonesimulator</code>、<code>iphoneos</code>、<code>macosx</code> 各编一次都过；产物目录已有框架后再编模拟器的 arm64 + x86_64，x86_64 照旧编空。iOS 上导入 SourceEditor 模块会带出框架头文件 <code>PlaygroundMenuController.h</code> 的两条 <code>UIMenuController</code> / <code>UIMenuItem</code> 废弃警告，来自重建版、不是桥接的代码，不处理。Tuist 描述不用改：平台设置都在 xcconfig 里，<code>./TuistScript.sh check</code> 的设置接线、target 名单与 trait 都一致；它报的锁文件不符（swift-type-indexing：Tuist 0.2.0、原生 0.1.1）与本次无关，这条分支没动任何锁文件与清单。macOS 桥接测试 37 条里 35 条过，红的两条是 <code>SourceEditorScroller</code> 的滚动条自动隐藏，基线上早就红（见 0064、0072）；新增 <code>ReadingStateCacheTests</code> 三条。<code>ReadingStateCache</code> 的 macOS 状态挪成 <code>SourceEditorBridge.ReadingState</code>。同一 DerivedData 连编两次 Release universal 放到第 5 步的完整验证一起跑。</td></tr>
+          <tr><td class="numeric">2026-11-29</td><td>第 3 步完成；共用值改名为 <code>SourceEditorSourceConversion</code></td><td>提案原写的 <code>SourceEditorSourceDescription(interface:objectKind:)</code> 以整份接口为输入，但 macOS 的宏展开片段也要从一个语义字符串算语义区间，所以改成与主题转换并列的 <code>SourceEditorSourceConversion.semanticRuns(of:)</code> 加 <code>languageIdentifier(for:interfaceLanguage:)</code>。读了重建版 26.6.10 的 <code>SourceEditorTheme.colorFromString</code> / <code>fontFromString</code>：UIKit 版用 <code>UIColor(red:green:blue:alpha:)</code> 读颜色（sRGB，不是 AppKit 版的 calibrated），用 <code>UIFont(name:size:)</code> 找字体、找不到就退回 12pt 系统等宽字体。主题的字体都是 <code>monospacedSystemFont</code>，它的名字以 <code>.</code> 开头、<code>UIFont(name:)</code> 找不到（Core Text 会换成 Times），所以 UIKit 下把它写成同字重、同斜体的 Menlo 面（<code>systemFontStandInName(isBold:isItalic:)</code>），字号照用户设置；这条在第 6 步的模拟器上确认。macOS 的未聚焦变暗（<code>dimmedColorTheme</code>）只在 AppKit 下编，iOS 只有一栏，主题转换在 UIKit 下不做变暗。包级测试：<code>SourceEditorFrameworksTests</code> 9 条、新增两组 7 条全过。<strong>基线问题</strong>：三份锁文件钉的 MachOSwiftSection <code>947d5321</code> 要用 MachOKitExtensions 3.3.0 之后才有的 <code>recordsFunctionAddressReferences</code>，照锁文件解析的包级与 App 构建在 <code>next</code> 上本来就编不过（记忆里记过：等 MachOKitExtensions 发版再抬锁）；所以包级测试用 <code>USING_LOCAL_DEPENDENCIES=1</code>、macOS App 用 <code>RuntimeViewer-Local.xcworkspace</code> 原地编，都过，警告全出自没改动的文件。</td></tr>
+          <tr><td class="numeric">2026-11-29</td><td>第 4 步完成；iOS 的阅读位置改存第一可见行</td><td>读了 26.6.10 的 <code>iOS/SourceEditorView.swift</code>：换数据源时 <code>willReplaceDataSource()</code> 把 <code>contentOffset.y</code> 归零、<code>didReplaceDataSource()</code> 把 <code>contentSize</code> 清零，内容高度要等布局完成（<code>layoutManager(_:didFinishLayoutInContentView:)</code> → <code>updateContentSizeIfNeeded()</code> → 委托的 <code>sourceEditorViewDidFinishLayingOutLines</code>）才回来，所以 iOS 不存 <code>contentOffset</code>，改存 <code>visibleLineRange.lowerBound</code>，在换源后的第一次布局完成回调里用 <code>scrollToLine(_:column:animated:forceFullView:)</code> 滚回去（它会补足内容高度，代价是把那行放在离顶部十分之一视图高处）。语言与地标映射挪进共用的 <code>SourceEditorBridgeLookup</code>。只读不弹键盘靠 <code>ReadOnlySourceEditorView</code> 覆写 <code>inputView</code> 返回空视图（框架没有覆写它，只覆写了 <code>inputViewController</code>），未实测，第 6 步在模拟器上看。桥在 <code>iphonesimulator</code>、<code>iphoneos</code> 都编过，没有出自桥接代码的警告；macOS 桥接测试 84 条里只有 <code>SourceEditorScroller</code> 两条基线红。</td></tr>
+          <tr><td class="numeric">2026-11-29</td><td>第 5 步完成</td><td>iOS target 照越狱版的先例在工程文件里加编译条件（<code>SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphone*]</code>）、对 AppKit 工程桥接 target 的跨工程依赖、「Embed SourceEditor Bridge」与「Embed SourceEditor Frameworks」两个阶段和 <code>ENABLE_USER_SCRIPT_SANDBOXING = NO</code>；越狱版与 visionOS 不变。iOS target 的平台里还列着 tvOS，所以桥接也声明支持 tvOS（框架不在 tvOS 的搜索路径上，桥接编空），嵌入脚本对没有框架的平台改为放行而不是报错。<code>ContentCoordinator</code> 用 <code>SourceEditorBridgeFactory.isAvailable</code> 判断而不是 provider：协调器不是主 actor 隔离的，而这只是构建期常量；iOS 的 provider 因此只负责建桥与取内置主题。Editor 设置页在 iOS 上只在 <code>SourceEditorFrameworks.availability</code> 可用时注册，只列四项。内容页的阅读位置、主题跟随外观（<code>registerForTraitChanges</code>）、设置跟随（<code>withObservationTracking</code>，照 <code>AppearanceController</code>）都在 iOS 控制器里。验证（都用 <code>RuntimeViewer-Local.xcworkspace</code>，理由见第 3 步那行）：iOS 模拟器版（arm64 + x86_64）与真机版都编过，两个产物都嵌了桥接和四个框架，模拟器的桥是两片；visionOS 编过且不碰桥接；macOS App 编过；Tuist check 的设置接线仍一致。<strong>基线问题</strong>：越狱版在这条分支上链接失败，缺的是 <code>UIKitPlus</code> 的符号（<code>NSIconColorGetColor</code>、<code>UIPLIcon</code>……）——AppKitPlus-Release 的 <code>UIKitPlus.xcframework</code> 只有 <code>ios-arm64</code> 切片，越狱版要 arm64e，而 <code>RuntimeViewerAppUI</code> 自提案 0113（对象图标改用 NSIcon，2026-11-28 进 next）起在 iOS 上链接它；越狱版不链接桥接，这条与本提案无关，记为后续项。</td></tr>
+          <tr><td class="numeric">2026-11-29</td><td>第 6 步：iPhone 模拟器验收；iOS 阅读位置改为共用缓存</td><td>用户同意在模拟器上看效果。iPhone 18 Pro（iOS 27.2）模拟器上：AVKit 的 <code>AVPlayerViewController</code> 以 SourceEditor 显示，行号、主题配色、语义着色与等宽字体正常（字体不是 Times），长行自动折行；点一下选中单词、出现「拷贝 / 全选」菜单，<strong>不弹键盘</strong>；导航栏放大镜打开系统查找栏，所有匹配高亮；设置里出现 Editor 页、只有四项，打开 Minimap 后内容页右侧出现小地图。<strong>阅读位置第一次验收没恢复</strong>：每个内容页一个桥，弹出页面时桥被释放，而桥只在换下一份文本时才记录位置——iOS 的页面一份桥只显示一份文本，从来走不到那一步。改为所有 iOS 桥共用一份缓存、每次布局完成时记录，并且记「十分之一高处的那一行」而不是第一可见行（<code>scrollToLine</code> 把目标行放在那里，记第一可见行会每次重开都往上漂）；重测滚到第 22～23 行离开、重开回到第 22 行附近（长行折成几排，差一两排是行内偏差）。<strong>iPad 没验</strong>：唯一的 iPad 模拟器上正开着别处装的 RuntimeViewer，装上会覆盖它，留给用户决定。macOS Release universal 在同一构建目录连编两次都过，桥是 x86_64 + arm64 两片。没跑会开窗口的 AppUI 全量测试（这台是用户在用的机器），改动到的 AppUI 与 Settings 代码由新增与相关的测试组覆盖。</td></tr>
+          <tr><td class="numeric">2026-11-29</td><td>实现完成，待用户看过后收尾</td><td>文档：SourceEditor 模块、根、iOS 与 Configurations 四份 AGENTS.md 已随代码更新；不另写实现说明，规则都在 AGENTS.md 里。没有新术语。</td></tr>
         </tbody>
       </table>
       </div>

@@ -30,22 +30,30 @@ final class UIKitSourceEditorBridge: NSObject, SourceEditorBridging {
     /// appears. Every new language service gets it as its host, which holds it weakly.
     private let symbolOccurrenceProvider = SymbolOccurrenceProvider()
 
-    /// The first visible line of each interface this view has shown.
+    /// Where the reader was in each interface any iOS bridge has shown: the line a tenth of the view's
+    /// height below its top.
+    ///
+    /// **Shared by every bridge**, unlike the macOS bridge's own cache: each iOS content page is a
+    /// controller of its own with a bridge of its own, made when the object is opened and released
+    /// when the page is popped, so a cache per bridge would never see the same text twice. Recorded
+    /// after every layout (`sourceEditorViewDidFinishLayingOutLines`), which scrolling causes, since a
+    /// page is popped without a call that could save it. Only touched on the main thread, where the
+    /// editor lays out and the content page sets its source.
     ///
     /// A line rather than a content offset: replacing the data source puts `contentOffset.y` back to
     /// zero and `contentSize` to zero (`willReplaceDataSource()` and `didReplaceDataSource()`,
     /// reconstruction 26.6.10), and the height is known again only once the lines are laid out, so an
     /// offset could not be put back before that, while `scrollToLine` grows the content to reach its
-    /// line. It places the line a tenth of the view's height below the top, so a text comes back a
-    /// few lines higher than it was left.
-    private var readingStates = ReadingStateCache<Int>()
+    /// line. That line is the one a tenth of the way down because `scrollToLine` puts its line there:
+    /// recording the first visible line instead would bring the text back higher every time.
+    nonisolated(unsafe) private static var readingStates = ReadingStateCache<Int>()
 
-    /// Identifies the text currently in the view, so its reading state can be filed under the
-    /// right key when the next one arrives. Nil until the first `setSource`.
+    /// Identifies the text currently in the view, so its reading position is filed under the right
+    /// key. Nil until the first `setSource`.
     private var displayedSourceKey: ReadingStateCache<Int>.Key?
 
     /// The line `setSource` will scroll back to once the new text is laid out, nil for none.
-    private var pendingFirstVisibleLine: Int?
+    private var pendingReadingLine: Int?
 
     /// How long the insertion point rests on an identifier before its other occurrences are
     /// highlighted; the macOS bridge's value.
@@ -135,19 +143,18 @@ final class UIKitSourceEditorBridge: NSObject, SourceEditorBridging {
         }
         symbolOccurrenceProvider.load(source: source)
 
-        if let displayedSourceKey {
-            readingStates.store(sourceEditorView.visibleLineRange.lowerBound, for: displayedSourceKey)
-        }
-
+        // Cleared first: the assignment lays nothing out yet, but nothing may file the old text's
+        // position under the new text's key.
+        displayedSourceKey = nil
         sourceEditorView.dataSource = dataSource
 
         let sourceKey = ReadingStateCache<Int>.Key(source: source, isDecorated: false)
+        let savedReadingLine = Self.readingStates.state(for: sourceKey)
         displayedSourceKey = sourceKey
-        let savedFirstVisibleLine = readingStates.state(for: sourceKey)
         // Any other text starts at the top, where replacing the data source has already put the
         // view. A reveal is never asked for on iOS, but the contract is the macOS one: no restore
         // when the caller says so.
-        pendingFirstVisibleLine = restoresScrollPosition ? savedFirstVisibleLine.flatMap { $0 > 0 ? $0 : nil } : nil
+        pendingReadingLine = restoresScrollPosition ? savedReadingLine.flatMap { $0 > 0 ? $0 : nil } : nil
     }
 
     func applyTheme(name: String, dictionary: NSDictionary, fontSizeModifier: Int, lineNumberFont: UIFont) {
@@ -240,11 +247,30 @@ final class UIKitSourceEditorBridge: NSObject, SourceEditorBridging {
 // MARK: - Reading Position
 
 extension UIKitSourceEditorBridge: SourceEditorViewDelegate {
-    /// The first layout after `setSource` is when the new text has lines to scroll to.
+    /// The first layout after `setSource` is when the new text has lines to scroll back to; every
+    /// later one, scrolling included, records where the reader is.
     func sourceEditorViewDidFinishLayingOutLines(_ editor: SourceEditorView) {
-        guard let firstVisibleLine = pendingFirstVisibleLine else { return }
-        pendingFirstVisibleLine = nil
-        _ = sourceEditorView.scrollToLine(firstVisibleLine, column: 0, animated: false, forceFullView: true)
+        if let readingLine = pendingReadingLine {
+            pendingReadingLine = nil
+            _ = sourceEditorView.scrollToLine(readingLine, column: 0, animated: false, forceFullView: true)
+            return
+        }
+        guard let displayedSourceKey else { return }
+        Self.readingStates.store(currentReadingLine(), for: displayedSourceKey)
+    }
+
+    /// The line a tenth of the view's height below the top of its content area — where
+    /// `scrollToLine` puts the line it scrolls to (`clampedContentOffsetY(targetOffsetY -
+    /// bounds.height / 10)`, reconstruction 26.6.10) — or the first visible line where no line is
+    /// under that point. A point in the view's own space: its bounds start at the content offset.
+    private func currentReadingLine() -> Int {
+        let bounds = sourceEditorView.bounds
+        let readingPoint = CGPoint(
+            x: bounds.midX,
+            y: bounds.minY + sourceEditorView.adjustedContentInset.top + bounds.height / 10 + 1
+        )
+        return sourceEditorView.positionAtPoint(readingPoint, absolute: false)?.line
+            ?? sourceEditorView.visibleLineRange.lowerBound
     }
 }
 
