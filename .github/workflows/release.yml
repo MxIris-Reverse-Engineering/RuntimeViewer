@@ -135,10 +135,11 @@ jobs:
         # Official builds carry the reconstructed SourceEditor frameworks, released in the private
         # repository Mx-Iris/SourceEditor. The job's own token cannot read that repository, so this
         # step runs with one that can; ArchiveScript.sh then finds the frameworks in place, and stops
-        # when they are not.
+        # when they are not. Both platforms: the release also builds the iOS Simulator app, whose pin
+        # (PinnedRelease-iOS.txt) is on another line than the macOS one.
         env:
           GH_TOKEN: ${{ secrets.SOURCE_EDITOR_RELEASES_TOKEN }}
-        run: ./FetchSourceEditorScript.sh
+        run: ./FetchSourceEditorScript.sh --platform all
 
       - name: Run ArchiveScript
         env:

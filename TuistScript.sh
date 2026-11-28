@@ -1847,7 +1847,7 @@ PYTHON
 # this file. Once per command, not in generate_workspace: `build` and `check` generate a second time
 # on the way out, and the warning would come twice.
 fetch_source_editor() {
-    if ! run "$PROJECT_DIR/FetchSourceEditorScript.sh"; then
+    if ! run "$PROJECT_DIR/FetchSourceEditorScript.sh" --platform macos; then
         warn "going on without SourceEditor: the app will show interfaces in the built-in text view"
     fi
 }

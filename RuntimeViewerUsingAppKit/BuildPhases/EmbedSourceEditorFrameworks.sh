@@ -1,10 +1,13 @@
 #!/bin/sh
 # Copies the reconstructed SourceEditor frameworks into the app's Frameworks directory and signs
-# them, when FetchSourceEditorScript.sh has downloaded the release pinned in
-# RuntimeViewerPrecompiledLibraries/SourceEditor/PinnedRelease.txt. The bridge framework links them
-# directly from that download (FRAMEWORK_SEARCH_PATHS); without it the bridge compiles without
-# SourceEditor, nothing is linked, and the app shows interfaces in the built-in text view. Run as a
-# build phase by both RuntimeViewerUsingAppKit.xcodeproj and the Tuist-generated RuntimeViewer-Tuist.xcodeproj.
+# them, when FetchSourceEditorScript.sh has downloaded the release pinned for the platform being
+# built: RuntimeViewerPrecompiledLibraries/SourceEditor/PinnedRelease.txt into Frameworks/ for macOS,
+# PinnedRelease-iOS.txt into Frameworks-iOS/<PLATFORM_NAME>/ for iOS and its simulator. The bridge
+# framework links them directly from that download (FRAMEWORK_SEARCH_PATHS); without it the bridge
+# compiles without SourceEditor, nothing is linked, and the app shows interfaces in the built-in text
+# view. Run as a build phase by RuntimeViewerUsingAppKit.xcodeproj, RuntimeViewerUsingUIKit.xcodeproj
+# and the Tuist-generated RuntimeViewer-Tuist.xcodeproj; SRCROOT is one level below the repository in
+# each.
 #
 # Usage: EmbedSourceEditorFrameworks.sh [destination directory]
 #
@@ -16,8 +19,24 @@
 set -eu
 
 SOURCE_EDITOR_DIRECTORY="${SRCROOT}/../RuntimeViewerPrecompiledLibraries/SourceEditor"
-PIN_FILE="${SOURCE_EDITOR_DIRECTORY}/PinnedRelease.txt"
-FETCHED_DIRECTORY="${SOURCE_EDITOR_DIRECTORY}/Frameworks"
+case "${PLATFORM_NAME:-macosx}" in
+    macosx)
+        PIN_FILE="${SOURCE_EDITOR_DIRECTORY}/PinnedRelease.txt"
+        FETCHED_DIRECTORY="${SOURCE_EDITOR_DIRECTORY}/Frameworks"
+        FETCHED_PIN_FILE="${FETCHED_DIRECTORY}/PinnedRelease.txt"
+        FETCH_COMMAND="./FetchSourceEditorScript.sh --platform macos"
+        ;;
+    iphoneos|iphonesimulator)
+        PIN_FILE="${SOURCE_EDITOR_DIRECTORY}/PinnedRelease-iOS.txt"
+        FETCHED_DIRECTORY="${SOURCE_EDITOR_DIRECTORY}/Frameworks-iOS/${PLATFORM_NAME}"
+        FETCHED_PIN_FILE="${SOURCE_EDITOR_DIRECTORY}/Frameworks-iOS/PinnedRelease-iOS.txt"
+        FETCH_COMMAND="./FetchSourceEditorScript.sh --platform ios"
+        ;;
+    *)
+        echo "error: the reconstructed SourceEditor frameworks have no build for ${PLATFORM_NAME}"
+        exit 1
+        ;;
+esac
 DESTINATION_DIRECTORY="${1:-${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}}"
 
 # Every line of the pin but the version and the comments names one framework.
@@ -34,14 +53,14 @@ remove_embedded_copies() {
 # copy an earlier build may have left in the product, which would ship frameworks nothing uses.
 if [ ! -d "${FETCHED_DIRECTORY}" ]; then
     remove_embedded_copies
-    echo "note: SourceEditor ${VERSION} has not been downloaded, so this build shows interfaces in the built-in text view. Run ./FetchSourceEditorScript.sh to include it."
+    echo "note: SourceEditor ${VERSION} has not been downloaded, so this build shows interfaces in the built-in text view. Run ${FETCH_COMMAND} to include it."
     exit 0
 fi
 
 # A download for another pin: the app has just been compiled and linked against it, and embedding it
 # would ship a release the pin no longer names, so stop instead.
-if ! cmp -s "${PIN_FILE}" "${FETCHED_DIRECTORY}/PinnedRelease.txt"; then
-    echo "error: ${FETCHED_DIRECTORY} holds a SourceEditor download for another pin than ${VERSION}. Run ./FetchSourceEditorScript.sh, then build again."
+if ! cmp -s "${PIN_FILE}" "${FETCHED_PIN_FILE}"; then
+    echo "error: ${FETCHED_DIRECTORY} holds a SourceEditor download for another pin than ${VERSION}. Run ${FETCH_COMMAND}, then build again."
     exit 1
 fi
 

@@ -395,8 +395,13 @@ verify_application_archive() {
 # them the app would quietly show interfaces in the built-in text view, so
 # stop here instead. CI downloads them in a step of its own, with a token
 # that can read that repository; this then finds them in place.
+# With --include-ios-simulator the iOS app's pin is fetched too (PinnedRelease-iOS.txt, the 26.6
+# line), here rather than before that build, so a missing iOS release stops the run before the long
+# macOS archive instead of after it.
 log "Fetching SourceEditor frameworks"
-run "$PROJECT_DIR/FetchSourceEditorScript.sh" \
+SOURCE_EDITOR_PLATFORM=macos
+$INCLUDE_IOS_SIMULATOR && SOURCE_EDITOR_PLATFORM=all
+run "$PROJECT_DIR/FetchSourceEditorScript.sh" --platform "$SOURCE_EDITOR_PLATFORM" \
     || fail "official builds must carry SourceEditor, and FetchSourceEditorScript.sh could not put the pinned release in place"
 
 log "Archiving main app"

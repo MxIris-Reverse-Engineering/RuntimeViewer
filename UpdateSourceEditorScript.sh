@@ -3,7 +3,9 @@
 # reconstructed SourceEditor frameworks.
 #
 # RuntimeViewerPrecompiledLibraries/SourceEditor/PinnedRelease.txt pins the release official builds
-# carry: its version and the SHA-256 of each framework's zip. This script takes the release asked
+# of the macOS app carry, and PinnedRelease-iOS.txt beside it the one the iOS app carries (the UIKit
+# build of the frameworks is only on the 26.6 line): each its version and the SHA-256 of each
+# framework's zip. --platform picks the pin, macOS by default. This script takes the release asked
 # for or, when none is named, the newest release of the private repository Mx-Iris/SourceEditor on
 # the pinned release's line — the same major version, 26 or 27 — prereleases included, and reads
 # the checksum of every pinned framework from the Package.swift at that release's tag. Without a
@@ -17,9 +19,10 @@
 # change before it builds again.
 #
 # Usage:
-#   ./UpdateSourceEditorScript.sh              # move to the newest release on the pinned line
-#   ./UpdateSourceEditorScript.sh 26.6.3       # move to that release, on any line, forward or back
-#   ./UpdateSourceEditorScript.sh --dry-run    # print what would change in the pin file; change nothing
+#   ./UpdateSourceEditorScript.sh                  # move to the newest release on the pinned line
+#   ./UpdateSourceEditorScript.sh 26.6.3           # move to that release, on any line, forward or back
+#   ./UpdateSourceEditorScript.sh --platform ios   # the iOS pin instead of the macOS one
+#   ./UpdateSourceEditorScript.sh --dry-run        # print what would change in the pin file; change nothing
 #   ./UpdateSourceEditorScript.sh --help
 #
 # It needs `gh`, logged in to github.com with read access to Mx-Iris/SourceEditor.
@@ -32,8 +35,6 @@
 set -euo pipefail
 
 SCRIPT_DIRECTORY="$(cd "$(dirname "$0")" && pwd)"
-PIN_FILE_RELATIVE_PATH="RuntimeViewerPrecompiledLibraries/SourceEditor/PinnedRelease.txt"
-PIN_FILE="$SCRIPT_DIRECTORY/$PIN_FILE_RELATIVE_PATH"
 FETCH_SCRIPT="$SCRIPT_DIRECTORY/FetchSourceEditorScript.sh"
 REPOSITORY="Mx-Iris/SourceEditor"
 
@@ -59,16 +60,27 @@ version_is_after() {
 
 requested_version=""
 DRY_RUN=false
+PLATFORM=macos
 while [ $# -gt 0 ]; do
     case "$1" in
         --dry-run) DRY_RUN=true; shift;;
-        -h|--help) sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit 0;;
+        --platform)
+            [ $# -ge 2 ] || fail "--platform needs a value: macos or ios"
+            PLATFORM="$2"; shift 2;;
+        -h|--help) sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'; exit 0;;
         -*) fail "unknown argument: $1 (see --help)";;
         *)
             [ -z "$requested_version" ] || fail "more than one version given: $requested_version and $1"
             requested_version="$1"; shift;;
     esac
 done
+
+case "$PLATFORM" in
+    macos) PIN_FILE_RELATIVE_PATH="RuntimeViewerPrecompiledLibraries/SourceEditor/PinnedRelease.txt";;
+    ios) PIN_FILE_RELATIVE_PATH="RuntimeViewerPrecompiledLibraries/SourceEditor/PinnedRelease-iOS.txt";;
+    *) fail "unknown platform: $PLATFORM (macos or ios)";;
+esac
+PIN_FILE="$SCRIPT_DIRECTORY/$PIN_FILE_RELATIVE_PATH"
 
 [ -f "$PIN_FILE" ] || fail "missing $PIN_FILE"
 
@@ -182,7 +194,7 @@ report_breaking_changes() {
 if cmp -s "$PIN_FILE" "$new_pin_file"; then
     log "SourceEditor $target_version is already pinned"
     $DRY_RUN && exit 0
-    "$FETCH_SCRIPT"
+    "$FETCH_SCRIPT" --platform "$PLATFORM"
     exit 0
 fi
 
@@ -203,7 +215,7 @@ cp "$PIN_FILE" "$previous_pin_file"
 cat "$new_pin_file" > "$PIN_FILE"
 pin_file_replaced=true
 log "Pinned SourceEditor $target_version (was $pinned_version); downloading it"
-"$FETCH_SCRIPT"
+"$FETCH_SCRIPT" --platform "$PLATFORM"
 pin_file_replaced=false
 
 release_url="$(gh release view "$target_version" --repo "$REPOSITORY" --json url --jq .url 2>/dev/null || true)"

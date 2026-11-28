@@ -1,0 +1,19 @@
+# The release of the reconstructed SourceEditor frameworks that official builds of RuntimeViewer's
+# iOS app carry. Its UIKit layer, rebuilt from the iOS build of the same editor in Swift Playgrounds
+# 4.7, only exists on the 26.6 line (26.6.7 and later), while the macOS app follows the 27 line in
+# PinnedRelease.txt; the two pins become one once the 27 line has the UIKit layer too.
+#
+# FetchSourceEditorScript.sh downloads this release into Frameworks-iOS/ beside this file — the
+# iphoneos and iphonesimulator slices, each in a directory of that name — and the iOS app's Embed
+# SourceEditor Frameworks build phase copies the one for the platform being built into the app. A
+# build without them shows interfaces in the built-in text view. The slices are arm64 only: the
+# jailbroken variant (arm64e) and the x86_64 simulator slice build without them.
+#
+# To move to another release, run ./UpdateSourceEditorScript.sh --platform ios [<version>]. It writes
+# the version and the four SHA-256 values, each the checksum that release's own Package.swift gives
+# for the framework's zip, and downloads the release.
+version 26.6.10
+SourceEditor 24a740f0f47a651be41ab338b66a7b81b52cf5cde47b42a732c540bc2d3646fb
+SourceModel 921305e678b544f3354ca6d3fcc3f23b447c072fdc670ce2206a4e4f109016ba
+SourceModelSupport 51aea1c9d210f64bdeefd45ba265e66e04170bbcfea9a5ced7284b3e7f0b5884
+_CodeCompletionFoundation 658f262f1ddfd38d239931188e194d7bc67a575852b9f4834304be9e7cb29885

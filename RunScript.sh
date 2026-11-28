@@ -214,7 +214,7 @@ log "build_metadata commit=$GIT_COMMIT branch=$GIT_BRANCH date=$BUILD_DATE"
 
 # Official builds carry the reconstructed SourceEditor frameworks; the app's
 # Embed SourceEditor Frameworks phase copies in whatever this put in place.
-if ! run "$PROJECT_DIR/FetchSourceEditorScript.sh"; then
+if ! run "$PROJECT_DIR/FetchSourceEditorScript.sh" --platform macos; then
     log "Building without SourceEditor: the app will show interfaces in the built-in text view"
 fi
 

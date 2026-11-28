@@ -53,9 +53,11 @@ RuntimeViewer-iOS-Simulator.zip
 # `tuist install` caches each local package's evaluated manifest in its .build directory; the other
 # four packages already ignore theirs.
 /RuntimeViewerPrecompiledLibraries/swift-syntax/.build/
-# FetchSourceEditorScript.sh downloads the reconstructed SourceEditor frameworks here, and works in a
-# scratch directory beside them; only PinnedRelease.txt is committed.
+# FetchSourceEditorScript.sh downloads the reconstructed SourceEditor frameworks here — the macOS app's
+# into Frameworks/, the iOS app's into Frameworks-iOS/ — and works in a scratch directory beside them;
+# only the two PinnedRelease files are committed.
 /RuntimeViewerPrecompiledLibraries/SourceEditor/Frameworks/
+/RuntimeViewerPrecompiledLibraries/SourceEditor/Frameworks-iOS/
 /RuntimeViewerPrecompiledLibraries/SourceEditor/.Fetch.*/
 /Tuist/.build/
 # The local dependency mode's dependency checkouts when /Volumes/DerivedData is not mounted, and the

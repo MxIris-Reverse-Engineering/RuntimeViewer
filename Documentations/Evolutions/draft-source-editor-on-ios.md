@@ -1,6 +1,6 @@
 # Draft - iOS 版内容区接入重建版 SourceEditor
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-28
 - **最后更新**: 2026-11-29
@@ -438,7 +438,7 @@ public enum SourceEditorFrameworks {
 
 ## 落地步骤
 
-1. **下载与嵌入两个 pin** —— 改动地图里的 `PinnedRelease-iOS.txt`、`.gitignore`、`FetchSourceEditorScript.sh`、`UpdateSourceEditorScript.sh`、`EmbedSourceEditorFrameworks.sh`、`RunScript.sh`、`TuistScript.sh`、`ArchiveScript.sh`、`release.yml`
+1. **下载与嵌入两个 pin**（已完成）—— 改动地图里的 `PinnedRelease-iOS.txt`、`.gitignore`、`FetchSourceEditorScript.sh`、`UpdateSourceEditorScript.sh`、`EmbedSourceEditorFrameworks.sh`、`RunScript.sh`、`TuistScript.sh`、`ArchiveScript.sh`、`release.yml`
    - 行为：`fetchWithPlatformIOSPutsDeviceAndSimulatorSlicesUnderFrameworksIOS`
    - 行为：`fetchWithPlatformMacOSLeavesFrameworksIOSUntouched`
    - 行为：`fetchSkipsAPlatformWhoseMarkerMatchesItsPin`
@@ -501,3 +501,4 @@ public enum SourceEditorFrameworks {
 | 2026-11-28 | 点击跳转、注释标签移出第一版 | 调研发现 iOS 没有任何代码跟随 `SelectionRoute`，`ContentTextViewModel` 在 iOS 上也不取注释结构；两者都属于愿景第四步的放开平台限定，放在这里做会和那一步重叠。 |
 | 2026-11-28 | 不做不可见字符 | 框架画不可见字符要 App 自带 SF Mono 三个字重，缺了会崩，自带又涉及字体授权；另议。 |
 | 2026-11-29 | Accepted | 用户批准，开始实现；同时同意第 6 步在 iPhone 与 iPad 模拟器上启动 App 看效果。 |
+| 2026-11-29 | In Progress；第 1 步完成 | `FetchSourceEditorScript.sh` 每个平台在自己的子 shell 里取，子 shell 自己开 errexit：放在 `\|\|` 左边时 bash 会在里面关掉 errexit，`ditto`、`mv` 失败也不会停。`ArchiveScript.sh` 带 `--include-ios-simulator` 时在 macOS 归档之前就取 iOS，缺 iOS 的框架在长时间的归档之前就停。实测：两个平台各取一次、`--check` 前后退出码 2 与 0、嵌入脚本对模拟器与 macOS 拷贝成功、标记过期与不支持的平台都报错退出 1；iOS 两片分别是 `IOS` 与 `IOSSIMULATOR` 平台、arm64、minos 18.0。 |
