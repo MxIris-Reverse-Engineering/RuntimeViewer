@@ -1,7 +1,7 @@
 # 愿景：iOS 版功能对齐
 
 - **状态**: Active
-- **最后更新**: 2026-11-21
+- **最后更新**: 2026-11-28
 - **相关提案**: [0099-engine-management-on-ios](../Evolutions/0099-engine-management-on-ios.md)（第一步，已落地）、[0100-settings-storage-on-ios](../Evolutions/0100-settings-storage-on-ios.md)（第二步，已落地）、[0101-settings-screen-on-ios](../Evolutions/0101-settings-screen-on-ios.md)（第五步里的设置页，提前做，已落地）、[0102-window-model-on-ios](../Evolutions/0102-window-model-on-ios.md)（第三步，已落地）
 
 愿景**不做具体决定**，它划定一个方向的边界与取舍原则，让后续每个提案不必重新论证一遍。
@@ -238,6 +238,7 @@ MachInjector）、文件引擎给不给凭据，收进几道平台接缝；其�
 | [0100-settings-storage-on-ios](../Evolutions/0100-settings-storage-on-ios.md) | Implemented | 第二步：iOS 上的设置真正存盘（上游 UIFoundation 放开设置存储的平台限定）；设置页与派生数据不在这一步 |
 | [0101-settings-screen-on-ios](../Evolutions/0101-settings-screen-on-ios.md) | Implemented | 第五步里的设置页，提前做：外观、主题、转换选项三页，复用 Mac 版页面；外观一节照 iOS「显示与亮度」画 |
 | [0102-window-model-on-ios](../Evolutions/0102-window-model-on-ios.md) | Implemented | 第三步：每个窗口一份共用的文档会话、iPad 多窗口，iOS 能打开磁盘上的文件；`MainViewModel` / `MainRoute` 的合并挪到第四步 |
+| [draft-source-editor-on-ios](../Evolutions/draft-source-editor-on-ios.md) | Accepted | 第五步里的一项：iOS 普通版的内容区换成重建版 SourceEditor（iOS 单钉 26.6 线）；点击跳转与注释标签仍等第四步 |
 
 ---
 
