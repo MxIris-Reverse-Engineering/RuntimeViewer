@@ -84,9 +84,11 @@ supplies, because that package depends on RuntimeViewerAppCore and so this modul
 (`Presentation/IconDescriptor.swift`, `ColorDescriptor.swift`; drawn by `IconDescriptor.image` and
 `ColorDescriptor.color` in AppUI's `Presentation/`): a system symbol (`SystemSymbol`, names only), a kind of
 image, an object's glyph or a letter badge (`RuntimeObjectIcon.Glyph`, which AppCore picks and AppUI draws through
-`runtimeObjectIconRendering` as Xcode draws a code symbol's icon — the letters on a squircle filling the image, in
-the system colour the glyph's colour is named after — with AppKitPlus's `NSIcon`, UIKitPlus's on iOS and visionOS:
-`NSIconRuntimeObjectIconRenderer`, one file for every platform but its import), one of the Find navigator's row symbols, or an
+`runtimeObjectIconRendering` as Xcode draws a code symbol's icon — the letters on a squircle in the system colour
+the glyph's colour is named after, filling a frame of Xcode's icon sizes (16 points and smaller) and keeping a point
+of room on each side of a larger one — with AppKitPlus's `NSIcon`, UIKitPlus's on iOS and visionOS:
+`NSIconRuntimeObjectIconRenderer`, one file for every platform, which differs only in its imports and in how it
+draws that room around an icon), one of the Find navigator's row symbols, or an
 engine by its `engineID` (AppUI's `RuntimeEngineIconProvider.icon(forEngineID:)` and
 `sourcePickerIcon(forEngineID:)` find it among the manager's engines, and for an engine the manager no longer
 holds answer with the icon they last drew for it — what the runtime source picker shows for a window whose
