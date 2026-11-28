@@ -17,7 +17,7 @@
 `IDEIconRuntimeObjectIconRenderer` 换成用 AppKitPlus 的 `NSIcon`（Xcode 27 `DVTGeneratedIconSpec` 的复刻）画，
 macOS 与 iOS / visionOS 共用同一份代码——iOS 一侧经 AppKitPlus-Release 同包发布的 UIKitPlus 拿到同名的
 `NSIcon`。Xcode 图标尺寸（16pt 及以下）的框里底板铺满，与 Xcode 同一位置一样大；更大的框（侧栏 18、检查器 20、
-起始页与 iOS 列表 24）四周留 1pt，底板保持以前的大小。图标照旧作为一张图片交给各个视图，选中行的样子不变；
+起始页与 iOS 列表 24）画小 1pt 的图标、对齐到整像素，字母与以前一样大（18pt 框里 12pt），底板比以前大 1pt。图标照旧作为一张图片交给各个视图，选中行的样子不变；
 随后去掉 UIFoundation 的 `IDEIcons` trait。
 
 ## 动机
@@ -87,8 +87,10 @@ macOS 与 iOS / visionOS 共用同一份代码——iOS 一侧经 AppKitPlus-Rel
    的 `image(of:)`，`.simpleHighlighted` 取 `highlightedImage(of:)`。图片尺寸都是 `glyph.size`：
    - `glyph.size` 不超过 16pt（`largestFilledFrameSize`）时直接取 `NSIcon` 这个尺寸的图，底板铺满。这些是 RV 照
      Xcode 度量取框的地方：Find 导航器、跳转栏、历史菜单、来源弹窗（16），检查器 References 页（14）。
-   - 更大的框是 RV 自己定的：侧栏与特化选择器（18）、检查器（20）、起始页与 iOS 列表（24）。这些框里画小 2pt 的
-     `NSIcon`，居中，四周各留 1pt（`margin`）透明边，底板与 `IDEIcon` 时一样大。
+   - 更大的框是 RV 自己定的：侧栏与特化选择器（18）、检查器（20）、起始页与 iOS 列表（24）。这些框里画小 1pt 的
+     `NSIcon`，四周各留 0.5pt（`margin`）透明边，再把图标挪到整像素上（2x 屏正好居中，1x 与 3x 屏偏 1 像素）。
+     `NSIcon` 的字号只由图标边长查表决定：17pt 图标配 12pt 字母，与 `IDEIcon` 在 18pt 框里的字母一样大；16pt 图标
+     只配 11pt。
    照旧经 `RuntimeObjectIconImageCache` 每个字形只画一次、永远返回同一张图。
 2. 这个文件按平台分的只有两处：`import`（`AppKitPlus` / `UIKitPlus`），以及给大框留边的那段绘制——macOS 用
    `NSImage` 的绘制回调，iOS 与 visionOS 把四种外观各画一张、收进 `UIImageAsset`。其余代码两个平台一字不差。
@@ -127,8 +129,8 @@ macOS 与 iOS / visionOS 共用同一份代码——iOS 一侧经 AppKitPlus-Rel
 | `RuntimeViewerPackages/Sources/AGENTS.md` | 修改 | 图标一段的 `IDEIcon` 改成 `NSIcon`；「`IDEIcon` 没加锁所以测试在主线程」改成按现状描述 | 文档与代码同批 | 2 |
 | `RuntimeViewerPackages/Tests/AGENTS.md` | 修改 | 对照 UI 库的测试清单里换成新测试名 | 同上 | 2 |
 | `AGENTS.md`（根）· *Dependency floors* | 修改 | AppKitPlus `0.24.0` 一句补上「也是第一个带 UIKitPlus 的版本，iOS 与 visionOS 的对象图标用它的 `NSIcon` 画」 | 记下下限的又一个理由 | 2 |
-| `RuntimeViewerAppUI/RuntimeObject/NSIconRuntimeObjectIconRenderer.swift` · `NSIconRuntimeObjectIconRenderer` | 修改 | 加 `largestFilledFrameSize`（16）与 `margin`（1）；大于 16pt 的框画小 2pt 的 `NSIcon` 并居中，macOS 经 `NSImage` 绘制回调、iOS 与 visionOS 经四种外观的 `UIImageAsset` | 用户看过后觉得侧栏等处图标变大，大框回到以前的底板大小 | 3 |
-| `RuntimeViewerPackages/Tests/RuntimeViewerAppUITests/NSIconRuntimeObjectIconRendererTests.swift` | 修改 | 铺满只对 14、16pt 断言；新增 18、20、24pt 留 1pt 边，中间是小 2pt 的 `NSIcon`，留边的图跟随深浅色 | 守住新规则 | 3 |
+| `RuntimeViewerAppUI/RuntimeObject/NSIconRuntimeObjectIconRenderer.swift` · `NSIconRuntimeObjectIconRenderer` | 修改 | 加 `largestFilledFrameSize`（16）与 `margin`（0.5）；大于 16pt 的框画小 1pt 的 `NSIcon`，放在整像素上（`origin(ofIconOf:centeredInFrameOf:pixelsPerPoint:)`），macOS 经 `NSImage` 绘制回调、iOS 与 visionOS 经四种外观的 `UIImageAsset` | 用户看过后觉得侧栏等处图标变大，改小后又觉得字母比以前小；17pt 图标的字母与以前一样大 | 3、4 |
+| `RuntimeViewerPackages/Tests/RuntimeViewerAppUITests/NSIconRuntimeObjectIconRendererTests.swift` | 修改 | 铺满只对 14、16pt 断言；新增 18、20、24pt 留 0.5pt 边、中间是小 1pt 的 `NSIcon`、1x 屏上落在整像素、留边的图跟随深浅色 | 守住新规则 | 3、4 |
 | `RuntimeViewerPackages/Sources/AGENTS.md` | 修改 | 图标一段写明铺满与留边的分界，以及文件里按平台分的两处 | 文档与代码同批 | 3 |
 | `Documentations/Evolutions/README.md`、`Documentations/README.md` | 修改 | 登记本提案 | 索引 | 0 |
 
@@ -165,12 +167,14 @@ cell view: appearance.primaryIcon?.image            (IconDescriptor.glyph)
             ├── glyph.size <= 16 (Xcode's icon sizes): the plate fills the image
             │   └── .simple            → icon.image(of: CGSize(width: glyph.size, height: glyph.size))
             │       .simpleHighlighted → icon.highlightedImage(of: …)
-            └── glyph.size > 16 (RuntimeViewer's own frames: 18, 20, 24): 1pt of room on each side
+            └── glyph.size > 16 (RuntimeViewer's own frames: 18, 20, 24): 0.5pt of room on each side
+                ├── origin(ofIconOf:centeredInFrameOf:pixelsPerPoint:)   centred, rounded to whole pixels
                 ├── macOS          → NSImage(size: glyph.size, drawingHandler:)
-                │                    └── draws icon.image(of: glyph.size - 2) inset by 1pt, at each draw
+                │                    └── draws icon.image(of: glyph.size - 1) at that origin, at each draw,
+                │                        pixels from the drawing context's device scale
                 └── iOS, visionOS  → UIImageAsset of 4 variants (light / dark × normal / high contrast)
-                                     └── each: icon.image(of: glyph.size - 2, compatibleWith: variant)
-                                         drawn inset by 1pt with UIGraphicsImageRenderer
+                                     └── each: icon.image(of: glyph.size - 1, compatibleWith: variant)
+                                         drawn at that origin with UIGraphicsImageRenderer
 ```
 
 ## 详细设计
@@ -192,7 +196,7 @@ final class NSIconRuntimeObjectIconRenderer: RuntimeObjectIconRendering {
     static let largestFilledFrameSize: CGFloat = 16
 
     /// The room a larger frame keeps on each side of its icon.
-    static let margin: CGFloat = 1
+    static let margin: CGFloat = 0.5
 
     private let imageCache = RuntimeObjectIconImageCache()
 
@@ -219,19 +223,35 @@ final class NSIconRuntimeObjectIconRenderer: RuntimeObjectIconRendering {
         isHighlighted ? icon.highlightedImage(of: size) : icon.image(of: size)
     }
 
+    // In the middle, moved onto whole pixels: NSIcon lines its plate and letters up with the pixel grid from
+    // its own origin, so an icon half a pixel off (half a point at 1x and at 3x) would draw them blurred.
+    private static func origin(ofIconOf iconSize: CGSize, centeredInFrameOf frameSize: CGSize, pixelsPerPoint: CGFloat) -> CGPoint {
+        func onWholePixels(_ length: CGFloat) -> CGFloat {
+            (length * pixelsPerPoint).rounded() / pixelsPerPoint
+        }
+        return CGPoint(
+            x: onWholePixels((frameSize.width - iconSize.width) / 2),
+            y: onWholePixels((frameSize.height - iconSize.height) / 2)
+        )
+    }
+
     #if os(macOS)
-    // Draws NSIcon's image each time it is drawn itself, so the icon takes the appearance it is drawn in.
+    // Draws NSIcon's image each time it is drawn itself, so the icon takes the appearance it is drawn in and
+    // lands on the pixels of what it is drawn into.
     private static func image(of icon: NSIcon, size iconSize: CGSize, isHighlighted: Bool, centeredInFrameOf frameSize: CGSize) -> NSImage {
         let iconImage = image(of: icon, size: iconSize, isHighlighted: isHighlighted)
         return NSImage(size: frameSize, flipped: false) { frame in
-            iconImage.draw(in: frame.insetBy(dx: (frame.width - iconSize.width) / 2, dy: (frame.height - iconSize.height) / 2))
+            let deviceScale = NSGraphicsContext.current.map { abs($0.cgContext.userSpaceToDeviceSpaceTransform.a) } ?? 0
+            let iconOrigin = Self.origin(ofIconOf: iconSize, centeredInFrameOf: frame.size, pixelsPerPoint: deviceScale > 0 ? deviceScale : 2)
+            iconImage.draw(in: CGRect(x: frame.minX + iconOrigin.x, y: frame.minY + iconOrigin.y, width: iconSize.width, height: iconSize.height))
             return true
         }
     }
     #else
     // One image for each appearance NSIcon draws an icon for (light / dark × normal / high contrast), at the
     // current trait collection's scale (2 when it has none, as NSIcon does), gathered in a UIImageAsset as
-    // NSIcon's own image is: icon.image(of:compatibleWith:) per variant, drawn inset with
+    // NSIcon's own image is: icon.image(of:compatibleWith:) per variant, drawn at
+    // origin(ofIconOf:centeredInFrameOf:pixelsPerPoint: displayScale) with
     // UIGraphicsImageRenderer(format: UIGraphicsImageRendererFormat(for: variant)).
     private static func image(of icon: NSIcon, size iconSize: CGSize, isHighlighted: Bool, centeredInFrameOf frameSize: CGSize) -> UIImage { … }
     #endif
@@ -273,6 +293,9 @@ extension NSIconColor {
 - **所有尺寸都铺满。** 最初选的就是它，实现后又改掉了：用户看过后觉得侧栏等处的图标变大了。18pt 的框里底板
   从 16pt 变成 18pt，字母还按 Xcode 的字号表从 12pt 跳到 14pt（`NSIcon` 取边长的 0.875 作内容区，18pt 图标的内容区
   是 16pt，表里对应 14pt；16pt 图标对应 11pt）。
+- **大于 16pt 的框留 1pt 边（画小 2pt 的图标）。** 实现后又改掉了：底板回到以前的 16pt，但 16pt 的 `NSIcon` 只配 11pt
+  字母，用户看过后觉得字比以前（12pt）小。改为留 0.5pt、画 17pt 的图标，字母回到 12pt，底板比以前大 1pt。
+- **给 AppKitPlus 加指定字号的接口，16pt 底板配 12pt 字母。** 否：要改上游并发版，`NSIcon` 也就不再照 Xcode 的字号表画。
 - **所有尺寸都留 1pt 边（`IDEIcon` 的做法）。** 否：Find、跳转栏这些照 Xcode 取 16pt 框的地方，铺满才和 Xcode
   一样大。留边要在渲染器里按平台各写一段画图代码，iOS 上直接重画会丢掉 `imageAsset` 里的深浅色变体，所以 iOS
   一侧按 `NSIcon` 的做法把四种外观各画一张、重新收进 `UIImageAsset`。
@@ -289,8 +312,8 @@ extension NSIconColor {
 ### 用户可见变化
 
 - 所有运行时对象的字母图标改成 Xcode 的样子：连续圆角的 squircle、SF Pro Rounded 字母，颜色不变。
-- 侧栏与特化选择器（18pt）、检查器（20pt）、起始页与 iOS 列表（24pt）里底板与以前一样大，四周照旧留 1pt；字母按
-  Xcode 的字号表取，18pt 框里是 11pt（以前 12pt）。
+- 侧栏与特化选择器（18pt）、检查器（20pt）、起始页与 iOS 列表（24pt）里画小 1pt 的图标：字母按 Xcode 的字号表取，
+  18pt 框里是 12pt，与以前一样；底板比以前大 1pt。2x 屏上居中，1x 与 3x 屏上为了落在整像素上偏 1 像素。
 - Find、跳转栏、来源弹窗、历史菜单（16pt）与检查器 References 页（14pt）里底板铺满，比以前大 2pt，与 Xcode
   同一位置一样大。图标框本身与行布局不变。
 - iOS / visionOS 上图标随系统深浅色切换（之前停在第一次画时的颜色）。
@@ -337,7 +360,7 @@ extension NSIconColor {
    - 构建：macOS 包测试通过；iOS 与 visionOS 的 App 编译通过。
 2. **文档**（已完成）—— 两份子目录 `AGENTS.md`、根 `AGENTS.md` 的依赖下限
    - 行为：文档里描述的渲染器、测试名、线程说明与代码一致。
-3. **大于 16pt 的框留 1pt 边**（已完成）—— 改动地图里步骤为 3 的各行
+3. **大于 16pt 的框留 1pt 边**（已完成，第 4 步改为 0.5pt，下面的测试在那一步改名、改参数）—— 改动地图里步骤为 3 的各行
    - 行为：`plateFillsAFrameOfXcodesIconSizes`——14、16pt 的图片尺寸等于 `glyph.size`，四条边的中点都是底板。
    - 行为：`largerFrameKeepsAPointOfRoomAroundThePlate`——18、20、24pt 的图片尺寸等于 `glyph.size`；2x 位图里四条边
      中点向内的头两个像素透明（不透明度小于 0.05），第三个像素起是底板（大于 0.9）。
@@ -346,6 +369,15 @@ extension NSIconColor {
    - 行为：`largerFrameFollowsTheAppearance`——18pt 的图在浅色、深色外观下画出的像素，分别与 16pt `NSIcon` 在同一外观下
      的一致；两种外观下 `NSIcon` 本身画得不同，所以这条能分辨出不跟外观的实现（改成只画一次的位图时它失败）。
    - 构建：macOS 包测试通过；iOS 与 visionOS 的 App 编译通过（iOS 一侧的绘制只经编译检查，没有在设备或模拟器上看过）。
+4. **留边改为 0.5pt，图标放在整像素上**（已完成）—— 改动地图里步骤为 4 的各行
+   - 行为：`largerFrameKeepsHalfAPointOfRoomAroundThePlate`——18、20、24pt 的图片尺寸等于 `glyph.size`；2x 位图里四条边
+     中点最外一个像素透明，第二个像素起是底板。
+   - 行为：`largerFrameHoldsTheIconAPointSmaller`——18pt 的图在 2x 位图里向内 1 像素处，与 17pt 的 `NSIcon` 主图、选中图
+     逐像素一致。
+   - 行为：`largerFramePutsTheIconOnWholePixels`——18pt 的图在 1x 位图里离左边 1 像素、离上边 0 像素处，与 17pt 的
+     `NSIcon` 逐像素一致；去掉整像素对齐时它失败（图标落在半个像素上，整张重画）。
+   - 行为：`largerFrameFollowsTheAppearance`——改为对照 17pt 的 `NSIcon`。
+   - 构建：macOS 包测试通过；iOS 与 visionOS 的 App 编译通过。
 
 **收尾时必须判断两件事**（判断结果写进决策日志，不允许沉默跳过）：
 
@@ -369,3 +401,5 @@ extension NSIconColor {
 | 2026-11-28 | 大于 16pt 的框四周留 1pt | 用户在常驻检出里看过后觉得图标变大了。原因有三：底板铺满后 18pt 框里大了 2pt；字母按 Xcode 的字号表从 12pt 跳到 14pt（定「铺满」时提案只写了底板大 2pt，没写字母也会变大）；连续圆角的四个角切得少，色块更满。用户选定：16pt 及以下照旧铺满，与 Xcode 一致；更大的框画小 2pt 的 `NSIcon`，居中留 1pt，底板回到以前的大小。18pt 之外，检查器的 20pt、起始页与 iOS 列表的 24pt 同样是 RV 自己定的框，也照此处理，用户批准了这个范围。否掉了「保持铺满」与「默认尺寸改 16」。 |
 | 2026-11-28 | iOS 留边保住深浅色 | 直接把 `NSIcon` 的图重画到大一圈的画布上，会丢掉它 `imageAsset` 里的深浅色与高对比度变体。改为照 `NSIcon` 自己的做法：按当前 trait 的倍率（没有时取 2），把浅色、深色各分普通与高对比度的四种外观各画一张，收进新的 `UIImageAsset`。macOS 用 `NSImage` 的绘制回调，每次绘制按当时的外观取色。 |
 | 2026-11-28 | 第 3 步实现完成，待用户看过后收尾 | 渲染器测试 8 个全部通过，新增的 3 个在旧实现上先失败过；把留边的图改成只画一次的位图时，深浅色那条测试失败，说明它能抓到不跟外观的实现。iOS 与 visionOS 的 App 用本地依赖 workspace 编过。iOS 上的留边图没在设备或模拟器上看过。 |
+| 2026-11-28 | 留边改为 0.5pt，图标放在整像素上 | 用户看过留 1pt 的版本后觉得字母比以前小：底板回到 16pt，但 `NSIcon` 的字号只由图标边长查表决定，16pt 图标配 11pt，以前 `IDEIcon` 是 12pt。用户选定画 17pt 的图标（表里配 12pt），底板比以前大 1pt；否掉了「保持 11pt」与「给 AppKitPlus 加字号接口」。0.5pt 在 1x 屏与 iOS 的 3x 屏上是半个像素，图标放在那里会整张重画、连字母都发虚，所以位置按绘制时的像素密度取整：2x 屏正好居中，1x 与 3x 屏偏 1 像素。 |
+| 2026-11-28 | 第 4 步实现完成，待用户看过后收尾 | 渲染器测试 9 个全部通过，改过的 4 个先在 1pt 的实现上失败过；去掉整像素对齐时 1x 那条失败。iOS 与 visionOS 的 App 用本地依赖 workspace 编过，iOS 上的显示没在设备或模拟器上看过。 |
