@@ -156,7 +156,7 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
             .driveOnNext { [weak self] interface, runtimeObject in
                 guard let self else { return }
                 displayedInterface = interface
-                displayedLanguageIdentifier = Self.languageIdentifier(for: runtimeObject.kind, interfaceLanguage: interfaceLanguage)
+                displayedLanguageIdentifier = SourceEditorSourceConversion.languageIdentifier(for: runtimeObject.kind, interfaceLanguage: interfaceLanguage)
                 showDisplayedSource()
                 // In the editor: the view model's loading for it ends.
                 interfaceDisplayedRelay.accept(interface.id)
@@ -208,7 +208,7 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
 
         // The parse the editor makes of this text cannot tell what an identifier is;
         // these runs can, so they are handed over to correct it.
-        let (semanticRanges, nodeTypeNames) = Self.semanticNodeTypes(of: interface.semanticString)
+        let (semanticRanges, nodeTypeNames) = SourceEditorSourceConversion.semanticRuns(of: interface.semanticString)
         let commentDecorations = settings.editor.showsCommentTags
             ? interface.commentDecorations.flatMap { $0.isEmpty ? nil : SourceEditorCommentDecorations($0) }
             : nil
@@ -331,7 +331,7 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
     private func showInlineExpansion(_ showableExpansion: ShowableMacroExpansion, with bridge: SourceEditorBridging) {
         let expansion = showableExpansion.expansion
         let parts = expansion.parts.map { part in
-            let (semanticRanges, nodeTypeNames) = Self.semanticNodeTypes(of: part.content)
+            let (semanticRanges, nodeTypeNames) = SourceEditorSourceConversion.semanticRuns(of: part.content)
             let placement: SourceEditorBridgingInlineExpansionPlacement = switch part.placement {
             case .belowLine: .belowLine
             case .aboveLine: .aboveLine
@@ -426,47 +426,6 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
             bridge.applyBackgroundColor(backgroundColor)
             containerView._backgroundColor = backgroundColor
             commonLoadingView.backgroundColor = backgroundColor
-        }
-    }
-
-    /// Walks the generator's semantic runs into the two parallel arrays the bridge takes.
-    ///
-    /// The node type names are the same strings as the theme's syntax keys, so
-    /// `SourceEditorThemeConversion`'s table serves both directions — it maps a `SemanticType`
-    /// to a key for coloring, and to a node type name here.
-    ///
-    /// Offsets are accumulated in UTF-16 because that is what the editor, `NSRange` and
-    /// `NSAttributedString` all index by; counting `Character`s would drift on anything
-    /// outside the basic plane.
-    private static func semanticNodeTypes(of semanticString: FrozenSemanticString) -> (ranges: [NSValue], nodeTypeNames: [String]) {
-        var ranges: [NSValue] = []
-        var nodeTypeNames: [String] = []
-        var location = 0
-
-        semanticString.enumerateSpans { spanText, semanticType, _ in
-            let length = spanText.utf16.count
-            defer { location += length }
-            guard length > 0 else { return }
-            ranges.append(NSValue(range: NSRange(location: location, length: length)))
-            nodeTypeNames.append(SourceEditorThemeConversion.syntaxColorKey(for: semanticType))
-        }
-
-        return (ranges, nodeTypeNames)
-    }
-
-    /// The language the editor highlights an interface as: the language it is asked for in, or the
-    /// object's own — an Objective-C object's Generated Interface is Swift. C++ is `cpp`, which the
-    /// bridge maps to the reconstruction's C++ language (`SourceEditorBridge.language(forIdentifier:)`).
-    /// An identifier the bridge has no language for leaves the whole interface uncoloured: without a
-    /// language the data source has no language service to retype the semantic runs on.
-    private static func languageIdentifier(for kind: RuntimeObjectKind, interfaceLanguage: RuntimeInterfaceLanguage?) -> String {
-        if interfaceLanguage == .swift {
-            return "swift"
-        }
-        return switch kind {
-        case .swift: "swift"
-        case .objc, .c: "objc"
-        case .cPlusPlus: "cpp"
         }
     }
 }

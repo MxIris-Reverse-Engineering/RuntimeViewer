@@ -32,7 +32,7 @@ struct SemanticRetypingTests {
     """
 
     /// What the app assigns to every type-name semantic; see
-    /// `SourceEditorThemeConversion.syntaxColorKey(for:)`.
+    /// `SourceEditorThemeConversion.syntaxColorKey(for:)` (RuntimeViewerAppUI).
     private static let typeReferenceNodeTypeName = "xcode.syntax.identifier.class"
 
     @Test
@@ -132,7 +132,7 @@ struct SemanticRetypingTests {
     }
 
     /// What the app assigns to every macro semantic; see
-    /// `SourceEditorThemeConversion.syntaxColorKey(for:)`.
+    /// `SourceEditorThemeConversion.syntaxColorKey(for:)` (RuntimeViewerAppUI).
     private static let systemMacroNodeTypeName = "xcode.syntax.identifier.macro.system"
 }
 

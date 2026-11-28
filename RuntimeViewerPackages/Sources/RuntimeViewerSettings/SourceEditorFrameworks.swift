@@ -1,5 +1,3 @@
-#if os(macOS)
-
 import Foundation
 import MachO
 
@@ -8,8 +6,10 @@ import MachO
 /// They come from the releases of the private `Mx-Iris/SourceEditor` repository, a rebuild of the
 /// Xcode 26.6 frameworks of the same names: `FetchSourceEditorScript.sh` downloads the pinned
 /// release, the app links it directly, and the app's *Embed SourceEditor Frameworks* phase copies
-/// it into `Contents/Frameworks`. A build made without access to that repository carries none of
-/// them, compiles its SourceEditor code out, and shows interfaces in the built-in `NSTextView`.
+/// it into `Contents/Frameworks` — on iOS into the app's `Frameworks`, from a pin of its own. A build
+/// made without access to that repository carries none of them, compiles its SourceEditor code out,
+/// and shows interfaces in the built-in text view; so do the jailbroken iOS variant (arm64e, which
+/// the releases have no slice for) and the visionOS app.
 ///
 /// Read by the code outside the app target that has to know which editor this build uses — the
 /// Settings UI and the comment tags — without importing anything from it.
@@ -40,8 +40,30 @@ public enum SourceEditorFrameworks {
     /// Resolved once per process: the app bundle does not change while it runs.
     public static let availability = resolveAvailability(in: .main)
 
-    public static func binaryURL(of frameworkName: String, in directory: URL) -> URL {
-        directory.appending(path: "\(frameworkName).framework/Versions/A/\(frameworkName)")
+    /// Where a framework bundle keeps its binary.
+    public enum BundleLayout: Sendable {
+        /// `<Name>.framework/Versions/A/<Name>`, the macOS layout.
+        case versioned
+        /// `<Name>.framework/<Name>`, the iOS layout.
+        case shallow
+
+        /// This platform's layout.
+        public static var current: BundleLayout {
+            #if os(macOS)
+            .versioned
+            #else
+            .shallow
+            #endif
+        }
+    }
+
+    public static func binaryURL(of frameworkName: String, in directory: URL, layout: BundleLayout = .current) -> URL {
+        switch layout {
+        case .versioned:
+            directory.appending(path: "\(frameworkName).framework/Versions/A/\(frameworkName)")
+        case .shallow:
+            directory.appending(path: "\(frameworkName).framework/\(frameworkName)")
+        }
     }
 
     static func resolveAvailability(in bundle: Bundle) -> Availability {
@@ -77,6 +99,7 @@ public enum SourceEditorFrameworks {
         #endif
     }
 
+    #if os(macOS)
     // MARK: - The Loaded Copy
 
     /// Which copy of the frameworks a process runs on.
@@ -139,6 +162,5 @@ public enum SourceEditorFrameworks {
         }
         return .other(directory: directory)
     }
+    #endif
 }
-
-#endif

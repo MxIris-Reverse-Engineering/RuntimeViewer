@@ -26,6 +26,14 @@ struct SourceEditorFrameworksTests {
         #expect(!SourceEditorFrameworks.containsAllFrameworks(in: directory))
     }
 
+    @Test("an iOS framework keeps its binary at the top of the bundle, a macOS one under Versions/A")
+    func binaryURLFollowsTheBundleLayout() {
+        let directory = URL(fileURLWithPath: "/Frameworks", isDirectory: true)
+        #expect(SourceEditorFrameworks.binaryURL(of: "SourceModel", in: directory, layout: .shallow).path == "/Frameworks/SourceModel.framework/SourceModel")
+        #expect(SourceEditorFrameworks.binaryURL(of: "SourceModel", in: directory, layout: .versioned).path == "/Frameworks/SourceModel.framework/Versions/A/SourceModel")
+        #expect(SourceEditorFrameworks.BundleLayout.current == .versioned)
+    }
+
     @Test("a bundle that carries none of the frameworks is not embedded")
     func bundleWithoutFrameworksIsNotEmbedded() {
         // The test runner carries no SourceEditor frameworks.

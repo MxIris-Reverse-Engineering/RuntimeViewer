@@ -1,17 +1,26 @@
+#if canImport(AppKit) && !targetEnvironment(macCatalyst)
 import AppKit
-import RuntimeViewerApplication
+#endif
+
+#if canImport(UIKit)
+import UIKit
+#endif
+
+import Foundation
 import Semantic
 
 /// Renders a RuntimeViewer `ThemeProfile` into the `.xccolortheme` dictionary that
 /// `SourceEditorTheme` consumes, so the SourceEditor content view uses the colors configured
-/// in Settings rather than the theme the framework ships.
+/// in Settings rather than the theme the framework ships. The macOS and the iOS content panes both
+/// use it; the two builds of the framework read the dictionary differently, and the strings are
+/// written for the build of this platform (`themeString(for:)`).
 ///
 /// **It overwrites a copy of the framework's own theme instead of building one from nothing.**
 /// The format has around fifty keys — console colors, markup fonts, scrollbar markers — and
 /// most of them have no counterpart in `ThemeProfile`. Starting from a complete, valid
 /// dictionary means the unmapped keys keep working, and a future release adding a key does not
 /// produce a theme with a hole in it.
-enum SourceEditorThemeConversion {
+public enum SourceEditorThemeConversion {
     /// The app's theme resolves every `SemanticType` to one of eight text styles, so eight
     /// colors are all there are to distribute. The editor's theme has twenty-eight syntax keys.
     ///
@@ -74,7 +83,7 @@ enum SourceEditorThemeConversion {
     /// the theme says. The name is also the framework's node type name, so this same table
     /// tells `SemanticNodeTypeAdjuster` what to retype a node to — that is the point of it being
     /// a table rather than a `switch`.
-    static func syntaxColorKey(for semanticType: SemanticType) -> String {
+    public static func syntaxColorKey(for semanticType: SemanticType) -> String {
         switch semanticType {
         case .comment:
             "xcode.syntax.comment"
@@ -101,11 +110,14 @@ enum SourceEditorThemeConversion {
     ///     profile does not overwrite, such as the invisibles and markup — for an editor pane
     ///     without the focus (`UnfocusedEditorPaneDimming.dimmedColorTheme(_:colorScheme:)`,
     ///     proposal `dim-unfocused-editor-panes`); `nil` keeps them. The profile's own colours
-    ///     arrive dimmed already and overwrite theirs as usual, so nothing is dimmed twice.
+    ///     arrive dimmed already and overwrite theirs as usual, so nothing is dimmed twice. Ignored
+    ///     on iOS, which has a single editor pane and so never one without the focus.
     /// - Returns: `nil` if `baseTheme` is not shaped like a theme, in which case the caller
     ///   should keep using it unmodified rather than hand the editor something malformed.
-    static func themeDictionary(from themeProfile: ThemeProfile, basedOn baseTheme: NSDictionary, baseThemeDimming: UnfocusedEditorPaneDimming.ColorScheme?) -> NSDictionary? {
+    public static func themeDictionary(from themeProfile: ThemeProfile, basedOn baseTheme: NSDictionary, baseThemeDimming: UnfocusedEditorPaneDimming.ColorScheme?) -> NSDictionary? {
+        #if canImport(AppKit) && !targetEnvironment(macCatalyst)
         let baseTheme = baseThemeDimming.map { UnfocusedEditorPaneDimming.dimmedColorTheme(baseTheme, colorScheme: $0) } ?? baseTheme
+        #endif
         guard let converted = baseTheme.mutableCopy() as? NSMutableDictionary,
               let baseSyntaxColors = baseTheme["DVTSourceTextSyntaxColors"] as? NSDictionary,
               let syntaxColors = baseSyntaxColors.mutableCopy() as? NSMutableDictionary,
@@ -128,6 +140,7 @@ enum SourceEditorThemeConversion {
         return converted
     }
 
+    #if canImport(AppKit) && !targetEnvironment(macCatalyst)
     /// `"red green blue alpha"`, components in 0…1.
     ///
     /// **Components must be in generic (calibrated) RGB, not sRGB.** The framework builds its
@@ -147,5 +160,45 @@ enum SourceEditorThemeConversion {
     /// `"PostScriptName - Size"`.
     private static func themeString(for font: NSFont) -> String {
         "\(font.fontName) - \(font.pointSize)"
+    }
+    #else
+    /// `"red green blue alpha"`, components in 0…1, **in sRGB**: the UIKit build of the framework
+    /// reads the string with `UIColor(red:green:blue:alpha:)`, where the AppKit build takes
+    /// calibrated RGB (`SourceEditorTheme.colorFromString`, reconstruction 26.6.10). A dynamic
+    /// colour resolves against `UITraitCollection.current`, so the caller converts inside the trait
+    /// collection of the view it themes (`performAsCurrent`).
+    private static func themeString(for color: UIColor) -> String {
+        guard let sRGBColorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+              let sRGBColor = color.cgColor.converted(to: sRGBColorSpace, intent: .defaultIntent, options: nil),
+              let components = sRGBColor.components, components.count == 4
+        else { return "0 0 0 1" }
+        return "\(components[0]) \(components[1]) \(components[2]) \(components[3])"
+    }
+
+    /// `"PostScriptName - Size"`, which the UIKit build looks up with `UIFont(name:size:)`
+    /// (`SourceEditorTheme.fontFromString`, reconstruction 26.6.10). The system font's name starts
+    /// with a dot and is not one `UIFont(name:size:)` finds — Core Text hands back Times instead —
+    /// so the theme's monospaced system font is written as the Menlo face of the same weight and
+    /// slant, at the theme's size (``systemFontStandInName(isBold:isItalic:)``).
+    private static func themeString(for font: UIFont) -> String {
+        guard font.fontName.hasPrefix(".") else { return "\(font.fontName) - \(font.pointSize)" }
+        let traits = font.fontDescriptor.object(forKey: .traits) as? [UIFontDescriptor.TraitKey: Any]
+        let weight = (traits?[.weight] as? CGFloat) ?? UIFont.Weight.regular.rawValue
+        let isBold = weight >= UIFont.Weight.semibold.rawValue || font.fontDescriptor.symbolicTraits.contains(.traitBold)
+        let isItalic = font.fontDescriptor.symbolicTraits.contains(.traitItalic)
+        return "\(systemFontStandInName(isBold: isBold, isItalic: isItalic)) - \(font.pointSize)"
+    }
+    #endif
+
+    /// The PostScript name of the Menlo face that stands in for the monospaced system font in a theme
+    /// for the UIKit build of the framework, which cannot look the system font up by name. The four
+    /// faces are the ones iOS ships. Compiled on every platform so that it is tested on the Mac.
+    static func systemFontStandInName(isBold: Bool, isItalic: Bool) -> String {
+        switch (isBold, isItalic) {
+        case (false, false): "Menlo-Regular"
+        case (true, false): "Menlo-Bold"
+        case (false, true): "Menlo-Italic"
+        case (true, true): "Menlo-BoldItalic"
+        }
     }
 }
