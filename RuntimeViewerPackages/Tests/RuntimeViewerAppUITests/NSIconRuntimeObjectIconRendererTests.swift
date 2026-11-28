@@ -5,9 +5,10 @@ import RuntimeViewerAppCore
 @testable import RuntimeViewerAppUI
 
 /// RuntimeViewerAppUI draws the glyphs RuntimeViewerAppCore picks as Xcode draws a code symbol's icon,
-/// with AppKitPlus's `NSIcon` (proposal `nsicon-object-icons`): the glyph's letters on a squircle that
-/// fills the whole image, in the system colour the glyph's colour is named after. The glyphs themselves
-/// are RuntimeViewerAppCore's, tested in `RuntimeObjectIconGlyphTests`.
+/// with AppKitPlus's `NSIcon` (proposal `nsicon-object-icons`): the glyph's letters on a squircle, in the
+/// system colour the glyph's colour is named after. The squircle fills a frame of Xcode's icon sizes, 16
+/// points and smaller, and keeps a point of room on each side of a larger one. The glyphs themselves are
+/// RuntimeViewerAppCore's, tested in `RuntimeObjectIconGlyphTests`.
 ///
 /// On the main actor because the images are drawn with AppKit, as the cell views draw them.
 @Suite("NSIcon object icon renderer")
@@ -41,11 +42,11 @@ struct NSIconRuntimeObjectIconRendererTests {
 
     @Test("A glyph is drawn as NSIcon draws its letters on a squircle of its colour")
     func simpleGlyphMatchesNSIcon() {
-        let glyph = RuntimeObjectIcon.Glyph(text: "Pr", color: .purple, style: .simple, size: 18)
+        let glyph = RuntimeObjectIcon.Glyph(text: "Pr", color: .purple, style: .simple, size: 16)
 
         let drawnIcon = NSIconRuntimeObjectIconRenderer().image(for: glyph)
 
-        let expectedIcon = Self.icon(letters: "Pr", color: .pinkishPurple).image(of: NSSize(width: 18, height: 18))
+        let expectedIcon = Self.icon(letters: "Pr", color: .pinkishPurple).image(of: NSSize(width: 16, height: 16))
         #expect(drawnIcon.tiffRepresentation == expectedIcon.tiffRepresentation)
     }
 
@@ -59,8 +60,8 @@ struct NSIconRuntimeObjectIconRendererTests {
         #expect(drawnIcon.tiffRepresentation == expectedIcon.tiffRepresentation)
     }
 
-    @Test("The image is the glyph's size and its plate reaches every edge of it", arguments: [14.0, 16.0, 18.0, 24.0] as [CGFloat])
-    func plateFillsTheGlyphsSize(size: CGFloat) {
+    @Test("In a frame of Xcode's icon sizes the image is the glyph's size and its plate reaches every edge of it", arguments: [14.0, 16.0] as [CGFloat])
+    func plateFillsAFrameOfXcodesIconSizes(size: CGFloat) {
         let glyph = RuntimeObjectIcon.Glyph(text: "C", color: .blue, style: .simple, size: size)
 
         let drawnIcon = NSIconRuntimeObjectIconRenderer().image(for: glyph)
@@ -74,6 +75,70 @@ struct NSIconRuntimeObjectIconRendererTests {
                 (bitmap.colorAt(x: pixelColumn, y: pixelRow)?.alphaComponent ?? 0) > 0.9,
                 "pixel (\(pixelColumn), \(pixelRow)) of a \(size)-point icon"
             )
+        }
+    }
+
+    @Test("In a larger frame the image is the glyph's size and its plate keeps a point of room on every side", arguments: [18.0, 20.0, 24.0] as [CGFloat])
+    func largerFrameKeepsAPointOfRoomAroundThePlate(size: CGFloat) {
+        let glyph = RuntimeObjectIcon.Glyph(text: "C", color: .blue, style: .simple, size: size)
+
+        let drawnIcon = NSIconRuntimeObjectIconRenderer().image(for: glyph)
+
+        #expect(drawnIcon.size == NSSize(width: size, height: size))
+        let bitmap = Self.bitmap(of: drawnIcon, scale: 2)
+        let middle = bitmap.pixelsWide / 2
+        let last = bitmap.pixelsWide - 1
+        // At 2x the point of room is two pixels, and the plate starts on the third.
+        let roomPixels = [(0, middle), (1, middle), (last, middle), (last - 1, middle), (middle, 0), (middle, 1), (middle, last), (middle, last - 1)]
+        for (pixelColumn, pixelRow) in roomPixels {
+            #expect(
+                (bitmap.colorAt(x: pixelColumn, y: pixelRow)?.alphaComponent ?? 1) < 0.05,
+                "pixel (\(pixelColumn), \(pixelRow)) of a \(size)-point icon"
+            )
+        }
+        for (pixelColumn, pixelRow) in [(2, middle), (last - 2, middle), (middle, 2), (middle, last - 2)] {
+            #expect(
+                (bitmap.colorAt(x: pixelColumn, y: pixelRow)?.alphaComponent ?? 0) > 0.9,
+                "pixel (\(pixelColumn), \(pixelRow)) of a \(size)-point icon"
+            )
+        }
+    }
+
+    @Test("A larger frame holds, in its middle, the icon NSIcon draws two points smaller", arguments: [RuntimeObjectIcon.Glyph.Style.simple, .simpleHighlighted])
+    func largerFrameHoldsTheIconTwoPointsSmaller(style: RuntimeObjectIcon.Glyph.Style) {
+        let glyph = RuntimeObjectIcon.Glyph(text: "Pr", color: .purple, style: style, size: 18)
+
+        let drawnIcon = NSIconRuntimeObjectIconRenderer().image(for: glyph)
+
+        let icon = Self.icon(letters: "Pr", color: .pinkishPurple)
+        let iconSize = NSSize(width: 16, height: 16)
+        let expectedIcon = style == .simple ? icon.image(of: iconSize) : icon.highlightedImage(of: iconSize)
+        let mismatchedPixelCount = Self.mismatchedPixelCount(
+            in: Self.bitmap(of: drawnIcon, scale: 2),
+            offsetBy: 2,
+            comparedWith: Self.bitmap(of: expectedIcon, scale: 2)
+        )
+        #expect(mismatchedPixelCount == 0)
+    }
+
+    @Test("A larger frame draws its icon in the appearance it is drawn in, as NSIcon's own image does")
+    func largerFrameFollowsTheAppearance() {
+        let glyph = RuntimeObjectIcon.Glyph(text: "C", color: .blue, style: .simple, size: 18)
+
+        let drawnIcon = NSIconRuntimeObjectIconRenderer().image(for: glyph)
+
+        let expectedIcon = Self.icon(letters: "C", color: .blue).image(of: NSSize(width: 16, height: 16))
+        let lightIcon = Self.bitmap(of: expectedIcon, scale: 2, in: .aqua)
+        let darkIcon = Self.bitmap(of: expectedIcon, scale: 2, in: .darkAqua)
+        // Otherwise the two appearances could not tell a drawing that follows them from one that does not.
+        #expect(Self.mismatchedPixelCount(in: lightIcon, offsetBy: 0, comparedWith: darkIcon) > 0)
+        for (appearanceName, expectedPixels) in [(NSAppearance.Name.aqua, lightIcon), (.darkAqua, darkIcon)] {
+            let mismatchedPixelCount = Self.mismatchedPixelCount(
+                in: Self.bitmap(of: drawnIcon, scale: 2, in: appearanceName),
+                offsetBy: 2,
+                comparedWith: expectedPixels
+            )
+            #expect(mismatchedPixelCount == 0, "\(appearanceName.rawValue)")
         }
     }
 
@@ -95,7 +160,9 @@ struct NSIconRuntimeObjectIconRendererTests {
         return components
     }
 
-    private static func bitmap(of image: NSImage, scale: Int) -> NSBitmapImageRep {
+    /// `image` drawn into a bitmap of `scale` pixels a point, in the appearance named `appearanceName` when
+    /// there is one.
+    private static func bitmap(of image: NSImage, scale: Int, in appearanceName: NSAppearance.Name? = nil) -> NSBitmapImageRep {
         let bitmap = NSBitmapImageRep(
             bitmapDataPlanes: nil,
             pixelsWide: Int(image.size.width) * scale,
@@ -109,10 +176,35 @@ struct NSIconRuntimeObjectIconRendererTests {
             bitsPerPixel: 0
         )!
         bitmap.size = image.size
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
-        image.draw(in: NSRect(origin: .zero, size: image.size))
-        NSGraphicsContext.restoreGraphicsState()
+        let draw = {
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
+            image.draw(in: NSRect(origin: .zero, size: image.size))
+            NSGraphicsContext.restoreGraphicsState()
+        }
+        if let appearanceName, let appearance = NSAppearance(named: appearanceName) {
+            appearance.performAsCurrentDrawingAppearance(draw)
+        } else {
+            draw()
+        }
         return bitmap
+    }
+
+    /// How many pixels of `expectedBitmap` differ, by more than two levels in a channel, from the pixels of
+    /// `bitmap` `pixelOffset` pixels in from its top and left edges.
+    private static func mismatchedPixelCount(in bitmap: NSBitmapImageRep, offsetBy pixelOffset: Int, comparedWith expectedBitmap: NSBitmapImageRep) -> Int {
+        var mismatchedPixelCount = 0
+        var samples = [Int](repeating: 0, count: 4)
+        var expectedSamples = [Int](repeating: 0, count: 4)
+        for pixelRow in 0 ..< expectedBitmap.pixelsHigh {
+            for pixelColumn in 0 ..< expectedBitmap.pixelsWide {
+                bitmap.getPixel(&samples, atX: pixelColumn + pixelOffset, y: pixelRow + pixelOffset)
+                expectedBitmap.getPixel(&expectedSamples, atX: pixelColumn, y: pixelRow)
+                if zip(samples, expectedSamples).contains(where: { abs($0 - $1) > 2 }) {
+                    mismatchedPixelCount += 1
+                }
+            }
+        }
+        return mismatchedPixelCount
     }
 }

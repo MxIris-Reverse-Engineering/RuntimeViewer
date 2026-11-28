@@ -16,8 +16,9 @@
 画，它是对开源项目 ide-icons 的移植，形状、字体和留边都不是 Xcode 的。本提案把唯一的渲染器
 `IDEIconRuntimeObjectIconRenderer` 换成用 AppKitPlus 的 `NSIcon`（Xcode 27 `DVTGeneratedIconSpec` 的复刻）画，
 macOS 与 iOS / visionOS 共用同一份代码——iOS 一侧经 AppKitPlus-Release 同包发布的 UIKitPlus 拿到同名的
-`NSIcon`。底板铺满图标框，图标按原样作为一张图片交给各个视图，选中行的样子不变；随后去掉 UIFoundation 的
-`IDEIcons` trait。
+`NSIcon`。Xcode 图标尺寸（16pt 及以下）的框里底板铺满，与 Xcode 同一位置一样大；更大的框（侧栏 18、检查器 20、
+起始页与 iOS 列表 24）四周留 1pt，底板保持以前的大小。图标照旧作为一张图片交给各个视图，选中行的样子不变；
+随后去掉 UIFoundation 的 `IDEIcons` trait。
 
 ## 动机
 
@@ -83,9 +84,14 @@ macOS 与 iOS / visionOS 共用同一份代码——iOS 一侧经 AppKitPlus-Rel
 1. AppUI 新增渲染器 `NSIconRuntimeObjectIconRenderer`，取代 `IDEIconRuntimeObjectIconRenderer` 成为
    `runtimeObjectIconRendering` 的 live 值。每个字形画成
    `NSIcon(generatedIconSpecification: NSGeneratedIconSpecification(letters: glyph.text, shape: .squircle, backgroundColor: NSIconColor(glyph.color).color, glyphColor: nil))`
-   的 `image(of:)`，尺寸就是 `glyph.size`，底板铺满；`.simpleHighlighted` 取 `highlightedImage(of:)`。照旧经
-   `RuntimeObjectIconImageCache` 每个字形只画一次、永远返回同一张图。
-2. 这个文件只有 `import` 一处按平台分（`AppKitPlus` / `UIKitPlus`），其余代码两个平台一字不差。
+   的 `image(of:)`，`.simpleHighlighted` 取 `highlightedImage(of:)`。图片尺寸都是 `glyph.size`：
+   - `glyph.size` 不超过 16pt（`largestFilledFrameSize`）时直接取 `NSIcon` 这个尺寸的图，底板铺满。这些是 RV 照
+     Xcode 度量取框的地方：Find 导航器、跳转栏、历史菜单、来源弹窗（16），检查器 References 页（14）。
+   - 更大的框是 RV 自己定的：侧栏与特化选择器（18）、检查器（20）、起始页与 iOS 列表（24）。这些框里画小 2pt 的
+     `NSIcon`，居中，四周各留 1pt（`margin`）透明边，底板与 `IDEIcon` 时一样大。
+   照旧经 `RuntimeObjectIconImageCache` 每个字形只画一次、永远返回同一张图。
+2. 这个文件按平台分的只有两处：`import`（`AppKitPlus` / `UIKitPlus`），以及给大框留边的那段绘制——macOS 用
+   `NSImage` 的绘制回调，iOS 与 visionOS 把四种外观各画一张、收进 `UIImageAsset`。其余代码两个平台一字不差。
 3. `Package.swift`：`RuntimeViewerAppUI` 在 iOS、visionOS 上依赖 AppKitPlus-Release 的 `UIKitPlus` 产品；
    `uiFoundationTraits` 去掉 `"IDEIcons"`。
 4. AppCore 的 `Glyph.Color` 删掉 `.monochrome`，`Glyph.Style` 删掉 `.default`、`.outline`：生产代码没用过它们，
@@ -96,8 +102,7 @@ macOS 与 iOS / visionOS 共用同一份代码——iOS 一侧经 AppKitPlus-Rel
 
 - **不做选中行反白。** `NSIcon` 能在选中行显示白底镂空的图标，但那要把各列表的图标视图换成 `NSIconView`（iOS
   按选中状态换图），涉及十几个 cell；这次各处仍拿一张图片，选中时样子不变。
-- **不改图标框尺寸。** `defaultIconSize`（18 / 24）和各处的 16、14 都不动；底板铺满后，侧栏这类 18pt 的框里
-  底板比现在大 2pt，这是选定的结果。
+- **不改图标框尺寸。** `defaultIconSize`（18 / 24）、检查器的 20、起始页的 24 和各处的 16、14 都不动，行布局不变。
 - **不用 `NSIcon` 现成的代码符号图标**（`NSIcon.codeSymbolIcon(named: .class)` 等）。RV 的配色与 Xcode 的不同
   （Objective-C 类是橙色、Swift 类型是蓝色，Xcode 的类一律紫色），字母与颜色仍由 AppCore 的 `glyphContent(for:)` 决定。
 - **不接入非焦点编辑栏的图标变灰**（`NSIcon.forInactivePane()`）。
@@ -122,6 +127,9 @@ macOS 与 iOS / visionOS 共用同一份代码——iOS 一侧经 AppKitPlus-Rel
 | `RuntimeViewerPackages/Sources/AGENTS.md` | 修改 | 图标一段的 `IDEIcon` 改成 `NSIcon`；「`IDEIcon` 没加锁所以测试在主线程」改成按现状描述 | 文档与代码同批 | 2 |
 | `RuntimeViewerPackages/Tests/AGENTS.md` | 修改 | 对照 UI 库的测试清单里换成新测试名 | 同上 | 2 |
 | `AGENTS.md`（根）· *Dependency floors* | 修改 | AppKitPlus `0.24.0` 一句补上「也是第一个带 UIKitPlus 的版本，iOS 与 visionOS 的对象图标用它的 `NSIcon` 画」 | 记下下限的又一个理由 | 2 |
+| `RuntimeViewerAppUI/RuntimeObject/NSIconRuntimeObjectIconRenderer.swift` · `NSIconRuntimeObjectIconRenderer` | 修改 | 加 `largestFilledFrameSize`（16）与 `margin`（1）；大于 16pt 的框画小 2pt 的 `NSIcon` 并居中，macOS 经 `NSImage` 绘制回调、iOS 与 visionOS 经四种外观的 `UIImageAsset` | 用户看过后觉得侧栏等处图标变大，大框回到以前的底板大小 | 3 |
+| `RuntimeViewerPackages/Tests/RuntimeViewerAppUITests/NSIconRuntimeObjectIconRendererTests.swift` | 修改 | 铺满只对 14、16pt 断言；新增 18、20、24pt 留 1pt 边，中间是小 2pt 的 `NSIcon`，留边的图跟随深浅色 | 守住新规则 | 3 |
+| `RuntimeViewerPackages/Sources/AGENTS.md` | 修改 | 图标一段写明铺满与留边的分界，以及文件里按平台分的两处 | 文档与代码同批 | 3 |
 | `Documentations/Evolutions/README.md`、`Documentations/README.md` | 修改 | 登记本提案 | 索引 | 0 |
 
 ## 架构图
@@ -154,8 +162,15 @@ cell view: appearance.primaryIcon?.image            (IconDescriptor.glyph)
             ├── NSGeneratedIconSpecification(letters: glyph.text, shape: .squircle,
             │                                backgroundColor: NSIconColor(glyph.color).color, glyphColor: nil)
             ├── NSIcon(generatedIconSpecification:)
-            └── .simple            → icon.image(of: CGSize(width: glyph.size, height: glyph.size))
-                .simpleHighlighted → icon.highlightedImage(of: …)
+            ├── glyph.size <= 16 (Xcode's icon sizes): the plate fills the image
+            │   └── .simple            → icon.image(of: CGSize(width: glyph.size, height: glyph.size))
+            │       .simpleHighlighted → icon.highlightedImage(of: …)
+            └── glyph.size > 16 (RuntimeViewer's own frames: 18, 20, 24): 1pt of room on each side
+                ├── macOS          → NSImage(size: glyph.size, drawingHandler:)
+                │                    └── draws icon.image(of: glyph.size - 2) inset by 1pt, at each draw
+                └── iOS, visionOS  → UIImageAsset of 4 variants (light / dark × normal / high contrast)
+                                     └── each: icon.image(of: glyph.size - 2, compatibleWith: variant)
+                                         drawn inset by 1pt with UIGraphicsImageRenderer
 ```
 
 ## 详细设计
@@ -173,6 +188,12 @@ import UIKitPlus
 /// Xcode's icon colours — with AppKitPlus's `NSIcon` (UIKitPlus's on iOS and visionOS), and keeps each
 /// image it drew: the same glyph always gives back the same image.
 final class NSIconRuntimeObjectIconRenderer: RuntimeObjectIconRendering {
+    /// The largest frame an icon fills: Xcode's code symbol icons are this size and smaller.
+    static let largestFilledFrameSize: CGFloat = 16
+
+    /// The room a larger frame keeps on each side of its icon.
+    static let margin: CGFloat = 1
+
     private let imageCache = RuntimeObjectIconImageCache()
 
     func image(for glyph: RuntimeObjectIcon.Glyph) -> NSUIImage {
@@ -184,13 +205,36 @@ final class NSIconRuntimeObjectIconRenderer: RuntimeObjectIconRendering {
                 glyphColor: nil
             )
             let icon = NSIcon(generatedIconSpecification: specification)
-            let imageSize = CGSize(width: glyph.size, height: glyph.size)
-            switch glyph.style {
-            case .simple: return icon.image(of: imageSize)
-            case .simpleHighlighted: return icon.highlightedImage(of: imageSize)
+            let isHighlighted = glyph.style == .simpleHighlighted
+            let frameSize = CGSize(width: glyph.size, height: glyph.size)
+            guard glyph.size > Self.largestFilledFrameSize else {
+                return Self.image(of: icon, size: frameSize, isHighlighted: isHighlighted)
             }
+            let iconSize = CGSize(width: glyph.size - 2 * Self.margin, height: glyph.size - 2 * Self.margin)
+            return Self.image(of: icon, size: iconSize, isHighlighted: isHighlighted, centeredInFrameOf: frameSize)
         }
     }
+
+    private static func image(of icon: NSIcon, size: CGSize, isHighlighted: Bool) -> NSUIImage {
+        isHighlighted ? icon.highlightedImage(of: size) : icon.image(of: size)
+    }
+
+    #if os(macOS)
+    // Draws NSIcon's image each time it is drawn itself, so the icon takes the appearance it is drawn in.
+    private static func image(of icon: NSIcon, size iconSize: CGSize, isHighlighted: Bool, centeredInFrameOf frameSize: CGSize) -> NSImage {
+        let iconImage = image(of: icon, size: iconSize, isHighlighted: isHighlighted)
+        return NSImage(size: frameSize, flipped: false) { frame in
+            iconImage.draw(in: frame.insetBy(dx: (frame.width - iconSize.width) / 2, dy: (frame.height - iconSize.height) / 2))
+            return true
+        }
+    }
+    #else
+    // One image for each appearance NSIcon draws an icon for (light / dark × normal / high contrast), at the
+    // current trait collection's scale (2 when it has none, as NSIcon does), gathered in a UIImageAsset as
+    // NSIcon's own image is: icon.image(of:compatibleWith:) per variant, drawn inset with
+    // UIGraphicsImageRenderer(format: UIGraphicsImageRendererFormat(for: variant)).
+    private static func image(of icon: NSIcon, size iconSize: CGSize, isHighlighted: Bool, centeredInFrameOf frameSize: CGSize) -> UIImage { … }
+    #endif
 }
 
 extension NSIconColor {
@@ -226,8 +270,12 @@ extension NSIconColor {
 
 ## 替代方案考量
 
-- **底板保持现在的大小（框内留 1pt 透明边）。** 否：要在渲染器里按平台各写一段补边的画图代码，iOS 上重画
-  会丢掉 `imageAsset` 里的深浅色变体；而且 Find、跳转栏这些照 Xcode 取 16pt 框的地方，铺满后才和 Xcode 一样大。
+- **所有尺寸都铺满。** 最初选的就是它，实现后又改掉了：用户看过后觉得侧栏等处的图标变大了。18pt 的框里底板
+  从 16pt 变成 18pt，字母还按 Xcode 的字号表从 12pt 跳到 14pt（`NSIcon` 取边长的 0.875 作内容区，18pt 图标的内容区
+  是 16pt，表里对应 14pt；16pt 图标对应 11pt）。
+- **所有尺寸都留 1pt 边（`IDEIcon` 的做法）。** 否：Find、跳转栏这些照 Xcode 取 16pt 框的地方，铺满才和 Xcode
+  一样大。留边要在渲染器里按平台各写一段画图代码，iOS 上直接重画会丢掉 `imageAsset` 里的深浅色变体，所以 iOS
+  一侧按 `NSIcon` 的做法把四种外观各画一张、重新收进 `UIImageAsset`。
 - **铺满并把默认尺寸 18 改 16（iOS 24 改 22）。** 否：侧栏图标框变窄，标题左移 2pt，牵动所有用默认尺寸的
   视图布局；本次只换绘制。
 - **连同选中行反白一起做（`NSIconView`）。** 否，留作以后：改动面是十几个 cell 与 iOS 的选中状态处理，与「换
@@ -241,8 +289,10 @@ extension NSIconColor {
 ### 用户可见变化
 
 - 所有运行时对象的字母图标改成 Xcode 的样子：连续圆角的 squircle、SF Pro Rounded 字母，颜色不变。
-- 底板铺满图标框：侧栏、检查器、特化选择器（18pt）与 iOS 列表（24pt）里比现在大 2pt；Find、跳转栏、来源弹窗、
-  历史菜单（16pt）与 Xcode 同一位置一样大；检查器 References 页 14pt。图标框本身与行布局不变。
+- 侧栏与特化选择器（18pt）、检查器（20pt）、起始页与 iOS 列表（24pt）里底板与以前一样大，四周照旧留 1pt；字母按
+  Xcode 的字号表取，18pt 框里是 11pt（以前 12pt）。
+- Find、跳转栏、来源弹窗、历史菜单（16pt）与检查器 References 页（14pt）里底板铺满，比以前大 2pt，与 Xcode
+  同一位置一样大。图标框本身与行布局不变。
 - iOS / visionOS 上图标随系统深浅色切换（之前停在第一次画时的颜色）。
 - 选中行里的图标样子不变（非目标）。
 
@@ -278,15 +328,24 @@ extension NSIconColor {
    三个无用值不删就编不过，而删了它们旧渲染器又编不过，所以合成一步）
    - 行为：`glyphColourIsTheSystemColourOfTheSameName`——13 种字形颜色各自画在同名系统色上（浅色与深色外观下
      解析出的 sRGB 分量与系统色一致）。
-   - 行为：`simpleGlyphMatchesNSIcon`——与同规格 `NSIcon.image(of:)` 的输出逐字节相同。
+   - 行为：`simpleGlyphMatchesNSIcon`——与同规格 `NSIcon.image(of:)` 的输出逐字节相同（第 3 步起用 16pt 的字形）。
    - 行为：`highlightedGlyphMatchesNSIconsHighlightedImage`——与 `highlightedImage(of:)` 的输出逐字节相同。
    - 行为：`plateFillsTheGlyphsSize`——14、16、18、24pt 的图片尺寸都等于 `glyph.size`，四条边的中点都是底板
-     （不透明度大于 0.9；`IDEIcon` 留的 1pt 边在那里是透明的）。
+     （不透明度大于 0.9；`IDEIcon` 留的 1pt 边在那里是透明的）。第 3 步把它改成只对 14、16pt 成立，见下。
    - 行为：`liveRendererIsTheNSIconOne`——`RuntimeObjectIconRenderingKey.liveValue` 是 `NSIconRuntimeObjectIconRenderer`。
    - 行为：`RuntimeObjectIconGlyphTests` 原有用例照旧通过（同一字形同一图片）；源码与清单里不再出现 `IDEIcon`。
    - 构建：macOS 包测试通过；iOS 与 visionOS 的 App 编译通过。
 2. **文档**（已完成）—— 两份子目录 `AGENTS.md`、根 `AGENTS.md` 的依赖下限
    - 行为：文档里描述的渲染器、测试名、线程说明与代码一致。
+3. **大于 16pt 的框留 1pt 边**（已完成）—— 改动地图里步骤为 3 的各行
+   - 行为：`plateFillsAFrameOfXcodesIconSizes`——14、16pt 的图片尺寸等于 `glyph.size`，四条边的中点都是底板。
+   - 行为：`largerFrameKeepsAPointOfRoomAroundThePlate`——18、20、24pt 的图片尺寸等于 `glyph.size`；2x 位图里四条边
+     中点向内的头两个像素透明（不透明度小于 0.05），第三个像素起是底板（大于 0.9）。
+   - 行为：`largerFrameHoldsTheIconTwoPointsSmaller`——18pt 的图在 2x 位图里向内 2 像素处，与 16pt 的 `NSIcon` 主图、
+     选中图逐像素一致（每个通道相差不超过 2）。
+   - 行为：`largerFrameFollowsTheAppearance`——18pt 的图在浅色、深色外观下画出的像素，分别与 16pt `NSIcon` 在同一外观下
+     的一致；两种外观下 `NSIcon` 本身画得不同，所以这条能分辨出不跟外观的实现（改成只画一次的位图时它失败）。
+   - 构建：macOS 包测试通过；iOS 与 visionOS 的 App 编译通过（iOS 一侧的绘制只经编译检查，没有在设备或模拟器上看过）。
 
 **收尾时必须判断两件事**（判断结果写进决策日志，不允许沉默跳过）：
 
@@ -307,3 +366,6 @@ extension NSIconColor {
 | 2026-11-27 | 包测试走本地依赖模式 | 按锁文件远端解析编不过（基线如此：next 钉的 MachOSwiftSection 要 MachOKitExtensions 未发版的接口，`extra argument 'recordsFunctionAddressReferences'`），包级构建与测试用 `USING_LOCAL_DEPENDENCIES=1` 原地跑，iOS 与 visionOS 的 App 用 `RuntimeViewer-Local.xcworkspace` 编。 |
 | 2026-11-28 | 实现完成，待用户看过后收尾 | macOS 包测试中本提案的两个套件通过，AppCore 与 AppUI 整包跑出的 7 条失败都是记录在案的既有红灯（其中两条单独重跑通过）；iOS 与 visionOS 的 App 用本地依赖 workspace 编过，两个 App 包都嵌入了 `UIKitPlus.framework`。iOS 3x 屏是否发糊没有在设备或模拟器上看过。macOS App 没有单独编：App 代码只用到保留下来的颜色与样式。 |
 | 2026-11-28 | 配套文档与术语 | 不配使用指南或实现说明：调用方契约（字形 → 图片、同一字形同一图片）没变，渲染器的取舍写在本提案与 `RuntimeViewerPackages/Sources/AGENTS.md`；没有新术语。 |
+| 2026-11-28 | 大于 16pt 的框四周留 1pt | 用户在常驻检出里看过后觉得图标变大了。原因有三：底板铺满后 18pt 框里大了 2pt；字母按 Xcode 的字号表从 12pt 跳到 14pt（定「铺满」时提案只写了底板大 2pt，没写字母也会变大）；连续圆角的四个角切得少，色块更满。用户选定：16pt 及以下照旧铺满，与 Xcode 一致；更大的框画小 2pt 的 `NSIcon`，居中留 1pt，底板回到以前的大小。18pt 之外，检查器的 20pt、起始页与 iOS 列表的 24pt 同样是 RV 自己定的框，也照此处理，用户批准了这个范围。否掉了「保持铺满」与「默认尺寸改 16」。 |
+| 2026-11-28 | iOS 留边保住深浅色 | 直接把 `NSIcon` 的图重画到大一圈的画布上，会丢掉它 `imageAsset` 里的深浅色与高对比度变体。改为照 `NSIcon` 自己的做法：按当前 trait 的倍率（没有时取 2），把浅色、深色各分普通与高对比度的四种外观各画一张，收进新的 `UIImageAsset`。macOS 用 `NSImage` 的绘制回调，每次绘制按当时的外观取色。 |
+| 2026-11-28 | 第 3 步实现完成，待用户看过后收尾 | 渲染器测试 8 个全部通过，新增的 3 个在旧实现上先失败过；把留边的图改成只画一次的位图时，深浅色那条测试失败，说明它能抓到不跟外观的实现。iOS 与 visionOS 的 App 用本地依赖 workspace 编过。iOS 上的留边图没在设备或模拟器上看过。 |

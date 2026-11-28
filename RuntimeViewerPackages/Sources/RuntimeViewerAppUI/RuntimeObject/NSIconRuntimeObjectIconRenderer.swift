@@ -1,19 +1,33 @@
 import Foundation
 import RuntimeViewerAppCore
 #if os(macOS)
+import AppKit
 import AppKitPlus
 #else
+import UIKit
 import UIKitPlus
 #endif
 
 /// Draws an object's icon as Xcode draws a code symbol's — the glyph's letters on a squircle of one of
-/// Xcode's icon colours, filling the whole image — with AppKitPlus's `NSIcon`, UIKitPlus's on iOS and
-/// visionOS (the same type there; only the module differs). Keeps each image it drew: the same glyph
-/// always gives back the same image.
+/// Xcode's icon colours — with AppKitPlus's `NSIcon`, UIKitPlus's on iOS and visionOS (the same type
+/// there; only the module differs). Keeps each image it drew: the same glyph always gives back the same
+/// image.
+///
+/// The squircle fills a frame of Xcode's icon sizes, `largestFilledFrameSize` and smaller: those are the
+/// places RuntimeViewer takes Xcode's metrics — the Find navigator, the jump bar, the history menu, the
+/// Inspector's References tab. A larger frame is RuntimeViewer's own — the sidebar's and the
+/// specialization picker's 18 points, the Inspector's 20, the start page's and the iOS lists' 24 — and
+/// keeps `margin` of room on each side of the icon, the size the icons have always had there.
 ///
 /// `NSIcon` caches its images only while they are in use, so the identity a view compares images by is
 /// `RuntimeObjectIconImageCache`'s.
 final class NSIconRuntimeObjectIconRenderer: RuntimeObjectIconRendering {
+    /// The largest frame an icon fills: Xcode's code symbol icons are this size and smaller.
+    static let largestFilledFrameSize: CGFloat = 16
+
+    /// The room a larger frame keeps on each side of its icon.
+    static let margin: CGFloat = 1
+
     private let imageCache = RuntimeObjectIconImageCache()
 
     func image(for glyph: RuntimeObjectIcon.Glyph) -> NSUIImage {
@@ -25,15 +39,65 @@ final class NSIconRuntimeObjectIconRenderer: RuntimeObjectIconRendering {
                 glyphColor: nil
             )
             let icon = NSIcon(generatedIconSpecification: specification)
-            let imageSize = CGSize(width: glyph.size, height: glyph.size)
-            switch glyph.style {
-            case .simple:
-                return icon.image(of: imageSize)
-            case .simpleHighlighted:
-                return icon.highlightedImage(of: imageSize)
+            let isHighlighted = glyph.style == .simpleHighlighted
+            let frameSize = CGSize(width: glyph.size, height: glyph.size)
+            guard glyph.size > Self.largestFilledFrameSize else {
+                return Self.image(of: icon, size: frameSize, isHighlighted: isHighlighted)
             }
+            let iconSize = CGSize(width: glyph.size - 2 * Self.margin, height: glyph.size - 2 * Self.margin)
+            return Self.image(of: icon, size: iconSize, isHighlighted: isHighlighted, centeredInFrameOf: frameSize)
         }
     }
+
+    private static func image(of icon: NSIcon, size: CGSize, isHighlighted: Bool) -> NSUIImage {
+        isHighlighted ? icon.highlightedImage(of: size) : icon.image(of: size)
+    }
+
+    #if os(macOS)
+    /// Draws `NSIcon`'s image each time it is drawn itself, so the icon takes the appearance it is drawn
+    /// in, as `NSIcon`'s own image does.
+    private static func image(of icon: NSIcon, size iconSize: CGSize, isHighlighted: Bool, centeredInFrameOf frameSize: CGSize) -> NSImage {
+        let iconImage = image(of: icon, size: iconSize, isHighlighted: isHighlighted)
+        return NSImage(size: frameSize, flipped: false) { frame in
+            iconImage.draw(in: frame.insetBy(dx: (frame.width - iconSize.width) / 2, dy: (frame.height - iconSize.height) / 2))
+            return true
+        }
+    }
+    #else
+    /// One image for each appearance `NSIcon` draws an icon for — light and dark, each at normal and high
+    /// contrast — gathered in an image asset as `NSIcon`'s own image is, so the icon follows the traits of
+    /// the view it is in.
+    private static func image(of icon: NSIcon, size iconSize: CGSize, isHighlighted: Bool, centeredInFrameOf frameSize: CGSize) -> UIImage {
+        let currentTraitCollection = UITraitCollection.current
+        // What NSIcon draws at when the trait collection has no scale.
+        let displayScale = currentTraitCollection.displayScale > 0 ? currentTraitCollection.displayScale : 2
+        let iconFrame = CGRect(
+            origin: CGPoint(x: (frameSize.width - iconSize.width) / 2, y: (frameSize.height - iconSize.height) / 2),
+            size: iconSize
+        )
+        let imageAsset = UIImageAsset()
+        for userInterfaceStyle in [UIUserInterfaceStyle.light, .dark] {
+            for accessibilityContrast in [UIAccessibilityContrast.normal, .high] {
+                let variantTraitCollection = UITraitCollection { mutableTraits in
+                    mutableTraits.userInterfaceStyle = userInterfaceStyle
+                    mutableTraits.accessibilityContrast = accessibilityContrast
+                    mutableTraits.displayScale = displayScale
+                }
+                let iconImage = isHighlighted
+                    ? icon.highlightedImage(of: iconSize, compatibleWith: variantTraitCollection)
+                    : icon.image(of: iconSize, compatibleWith: variantTraitCollection)
+                let renderer = UIGraphicsImageRenderer(size: frameSize, format: UIGraphicsImageRendererFormat(for: variantTraitCollection))
+                let variantImage = renderer.image { _ in
+                    iconImage.draw(in: iconFrame)
+                }
+                imageAsset.register(variantImage, with: variantTraitCollection)
+            }
+        }
+        return imageAsset.image(with: currentTraitCollection.modifyingTraits { mutableTraits in
+            mutableTraits.displayScale = displayScale
+        })
+    }
+    #endif
 }
 
 extension NSIconColor {
