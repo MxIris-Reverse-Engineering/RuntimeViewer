@@ -20,7 +20,15 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
     @RxObserved public private(set) var filter: NavigatorTextFilter = .empty
     @RxObserved public private(set) var nodes: [SidebarRuntimeObjectCellViewModel] = []
     @RxObserved public private(set) var filteredNodes: [SidebarRuntimeObjectCellViewModel] = []
+    /// Whether anything narrows the list: the filter field's text or tokens,
+    /// or the Filter Scope. While it holds, the bookmarks cannot be moved and
+    /// every filtered list reloads the outline (`Output.didChangeFiltering`).
     @RxObserved public private(set) var isFiltering: Bool = false
+    /// Whether the filter field narrows the list with text or tokens — the
+    /// filtering that has the outline expand every row so that each match
+    /// shows (`Output.didBeginFilteringByText`). A Filter Scope alone narrows
+    /// the list without it, and the rows stay expanded as the user left them.
+    @RxObserved private(set) var isFilteringByText: Bool = false
     /// Mirrors the search field's "Match Case" toggle: `true` matches case
     /// sensitively. `FilterContext` carries the inverse
     /// (`isCaseInsensitive`); `scheduleRefilter()` is the only place the two
@@ -292,9 +300,18 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         public let loadingProgress: Driver<Double>
         public let loadingDescription: Driver<String>
         public let loadingItemCount: Driver<String>
-        public let didBeginFiltering: Signal<Void>
+        /// The filter field started to narrow the list with text or tokens:
+        /// the outline keeps which rows are expanded and expands every row
+        /// until the text filtering ends. A Filter Scope alone never sends it.
+        public let didBeginFilteringByText: Signal<Void>
+        /// A filtered list is out, or the first list after a filter ended: the
+        /// outline reloads it in full, since the adapter compares only the top
+        /// level and would leave the children a filter hid or brought back as
+        /// they were.
         public let didChangeFiltering: Signal<Void>
-        public let didEndFiltering: Signal<Void>
+        /// The text filtering ended, right before the list it leaves is out:
+        /// the outline expands again the rows the user had expanded.
+        public let didEndFilteringByText: Signal<Void>
         public let reloadRow: Signal<SidebarRuntimeObjectCellViewModel>
         /// The view model dropped its filter and scope on its own (a reveal
         /// whose row they hid). The filter field's content is the view's, so
@@ -505,9 +522,15 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
             loadingProgress: $loadingProgress.asDriver(),
             loadingDescription: $loadingDescription.asDriver(),
             loadingItemCount: $loadingItemCount.asDriver(),
-            didBeginFiltering: $isFiltering.asSignal(onErrorJustReturn: false).filter { $0 }.mapToVoid(),
-            didChangeFiltering: $filteredNodes.asSignal(onErrorJustReturn: []).withLatestFrom($isFiltering.asSignal(onErrorJustReturn: false)).filter { $0 }.mapToVoid(),
-            didEndFiltering: $isFiltering.skip(1).asSignal(onErrorJustReturn: false).filter { !$0 }.mapToVoid(),
+            didBeginFilteringByText: $isFilteringByText.asSignal(onErrorJustReturn: false).filter { $0 }.mapToVoid(),
+            didChangeFiltering: $filteredNodes.asSignal(onErrorJustReturn: [])
+                .withLatestFrom($isFiltering.asSignal(onErrorJustReturn: false))
+                .scan((wasFiltering: false, isFiltering: false)) { previous, isFiltering in
+                    (wasFiltering: previous.isFiltering, isFiltering: isFiltering)
+                }
+                .filter { $0.wasFiltering || $0.isFiltering }
+                .mapToVoid(),
+            didEndFilteringByText: $isFilteringByText.skip(1).asSignal(onErrorJustReturn: false).filter { !$0 }.mapToVoid(),
             reloadRow: reloadRowRelay.asSignal(),
             filterCleared: filterClearedRelay.asSignal()
         )
@@ -682,15 +705,21 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         )
         let activeScope = scope
 
-        // Drive `isFiltering` off the union of text + terms + scope. This
-        // flag controls the outline view's beginFiltering / endFiltering
-        // auto-expand path, so scoping (without a text query) still
-        // surfaces matching descendants automatically. Must be set
-        // *before* `filteredNodes` is reassigned so `didChangeFiltering`
-        // (`withLatestFrom($isFiltering)`) sees the new value.
-        let shouldFilter = !context.query.isEmpty || !nameMatcher.isEmpty || activeScope.isActive
+        // `isFiltering` covers text, terms and scope; `isFilteringByText`,
+        // which has the outline expand every row, covers text and terms only,
+        // so changing the scope leaves the rows expanded as the user had them.
+        // Both are set *before* `filteredNodes` is reassigned: the outline
+        // keeps its expanded rows before the first filtered list arrives, and
+        // `didChangeFiltering` (`withLatestFrom($isFiltering)`) sees the new
+        // value. The one exception is text filtering that ends under a scope
+        // still on, which ends with the scope's list (in the task below).
+        let isTextFilterActive = !context.query.isEmpty || !nameMatcher.isEmpty
+        let shouldFilter = isTextFilterActive || activeScope.isActive
         if shouldFilter != isFiltering {
             isFiltering = shouldFilter
+        }
+        if isTextFilterActive, !isFilteringByText {
+            isFilteringByText = true
         }
 
         // Fast path — an empty query with an inactive scope is the
@@ -702,6 +731,9 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         // it. The guarded didSets still skip every unchanged row.
         if !shouldFilter {
             currentFilterTask = nil
+            if isFilteringByText {
+                isFilteringByText = false
+            }
             SidebarRuntimeObjectFilterPipeline.resetToUnfiltered(nodes, context: context, scope: activeScope)
             filteredNodes = nodes
             return
@@ -717,6 +749,14 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
             let verdictForest = await Self.computeVerdictsOffMain(for: snapshotForest, context: context, nameMatcher: nameMatcher)
             guard !Task.isCancelled, let self else { return }
             guard self.currentFilterGeneration == generation else { return }
+            // Text filtering left under a scope ends here, with the scope's
+            // list: the outline expands the user's rows again at its next
+            // reload, which has to be this list's and not that of the text
+            // filter still shown — a row only the text hid would come back
+            // collapsed.
+            if !isTextFilterActive, self.isFilteringByText {
+                self.isFilteringByText = false
+            }
             if let filtered = SidebarRuntimeObjectFilterPipeline.apply(verdictForest, to: self.nodes, context: context, scope: activeScope, nameMatcher: nameMatcher) {
                 self.filteredNodes = filtered
             }

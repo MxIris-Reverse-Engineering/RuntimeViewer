@@ -89,6 +89,80 @@ struct SidebarRuntimeObjectListViewModelTests {
         #expect(harness.viewModel.isFiltering)
     }
 
+    @Test("a scope alone narrows the list without having the outline expand every row")
+    func scopeAloneDoesNotExpandEveryRow() async throws {
+        let harness = try await makeHarness()
+        defer { withExtendedLifetime(harness.viewModel) {} }
+        _ = try await harness.loadedRows()
+
+        async let expansionRequests = values(from: harness.baseOutput.didBeginFilteringByText, during: 1)
+        async let reload: Void = nextValue(from: harness.baseOutput.didChangeFiltering)
+        try await settleMainQueue()
+
+        harness.viewModel.$scope.accept(Self.protocolsOnlyScope)
+
+        try await reload
+        #expect(try await expansionRequests.isEmpty)
+        #expect(harness.viewModel.isFiltering)
+    }
+
+    @Test("resetting a scope has the outline reload once more, so the children it hid are listed again")
+    func resettingScopeReloadsOutline() async throws {
+        let harness = try await makeHarness()
+        defer { withExtendedLifetime(harness.viewModel) {} }
+        _ = try await harness.loadedRows()
+        harness.viewModel.$scope.accept(Self.protocolsOnlyScope)
+        _ = try await nextValue(from: harness.baseOutput.runtimeObjects) { rows in
+            !rows.isEmpty && rows.allSatisfy { $0.runtimeObject.kind == .objc(.type(.protocol)) }
+        }
+
+        // Only the reload of the list the reset leaves counts: a reload of a
+        // list the scope still filters can arrive late from setting it.
+        let viewModel = harness.viewModel
+        async let reloadOfUnfilteredList: Void = nextValue(from: harness.baseOutput.didChangeFiltering) { _ in
+            MainActor.assumeIsolated { !viewModel.isFiltering }
+        }
+        try await settleMainQueue()
+
+        harness.viewModel.$scope.accept(RuntimeObjectScope())
+
+        try await reloadOfUnfilteredList
+    }
+
+    @Test("text typed over a scope expands every row, and emptying the field returns the rows while the scope stays")
+    func textOverScopeExpandsUntilEmptied() async throws {
+        let harness = try await makeHarness()
+        defer { withExtendedLifetime(harness.viewModel) {} }
+        _ = try await harness.loadedRows()
+        var classesOnly = RuntimeObjectScope()
+        classesOnly.includedKinds = [.objc(.type(.class))]
+        harness.viewModel.$scope.accept(classesOnly)
+        let scopedRows = try await nextValue(from: harness.baseOutput.runtimeObjects) { rows in
+            !rows.isEmpty && rows.allSatisfy { $0.runtimeObject.kind == .objc(.type(.class)) }
+        }
+        try #require(scopedRows.count > 1)
+
+        async let expansionBegan: Void = nextValue(from: harness.baseOutput.didBeginFilteringByText)
+        async let listFilteredByText = nextValue(from: harness.baseOutput.runtimeObjects) { rows in
+            !rows.isEmpty && rows.count < scopedRows.count
+        }
+        try await settleMainQueue()
+        searchStringRelay.accept("NSObject")
+        try await expansionBegan
+        _ = try await listFilteredByText
+
+        async let expansionEnded: Void = nextValue(from: harness.baseOutput.didEndFilteringByText)
+        async let listAfterText = nextValue(from: harness.baseOutput.runtimeObjects) { rows in
+            rows.count == scopedRows.count
+        }
+        try await settleMainQueue()
+        searchStringRelay.accept("")
+        try await expansionEnded
+        let rows = try await listAfterText
+        #expect(rows.allSatisfy { $0.runtimeObject.kind == .objc(.type(.class)) })
+        #expect(harness.viewModel.isFiltering)
+    }
+
     @Test("selectCell resolves the document's selected object to its sidebar cell")
     func selectCellResolvesSelection() async throws {
         let harness = try await makeHarness()
@@ -275,6 +349,13 @@ struct SidebarRuntimeObjectListViewModelTests {
     }
 
     // MARK: - Helpers
+
+    /// A scope that lists Objective-C protocols alone.
+    private static var protocolsOnlyScope: RuntimeObjectScope {
+        var scope = RuntimeObjectScope()
+        scope.includedKinds = [.objc(.type(.protocol))]
+        return scope
+    }
 
     private struct Harness {
         let environment: ViewModelTestEnvironment

@@ -264,7 +264,7 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
 
         output.isEmpty.drive(imageLoadedView.scrollView.rx.isHidden).disposed(by: rx.disposeBag)
 
-        output.didBeginFiltering.emitOnNext { [weak self] in
+        output.didBeginFilteringByText.emitOnNext { [weak self] in
             guard let self else { return }
             imageLoadedView.outlineView.beginFiltering()
         }
@@ -276,7 +276,7 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
         }
         .disposed(by: rx.disposeBag)
 
-        output.didEndFiltering.emitOnNext { [weak self] in
+        output.didEndFilteringByText.emitOnNext { [weak self] in
             guard let self else { return }
             imageLoadedView.outlineView.endFiltering()
         }
